@@ -16,7 +16,8 @@ import { ComponentsModule } from './components/components.module';
         password: process.env.DB_PASS,
         database: process.env.DB_NAME,
         autoLoadEntities: true,
-        synchronize: true, // ❗ only for local dev
+        synchronize: true,
+        logging: true,
       }),
     }),
     ComponentsModule,
