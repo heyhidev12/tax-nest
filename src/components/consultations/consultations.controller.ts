@@ -8,21 +8,27 @@ import {
   Query,
   Delete,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { ConsultationsService } from './consultations.service';
 import { CreateConsultationDto } from 'src/libs/dto/consultation/create-consultation.dto';
 import { CheckPasswordDto } from 'src/libs/dto/consultation/check-password.dto';
 
+@ApiTags('Consultations')
 @Controller('consultations')
 export class ConsultationsController {
   constructor(private readonly consultationsService: ConsultationsService) {}
 
-  // 상담 신청 작성
+  @ApiOperation({ summary: '상담 신청 작성' })
+  @ApiResponse({ status: 201, description: '상담 신청 성공' })
   @Post()
   create(@Body() dto: CreateConsultationDto) {
     return this.consultationsService.create(dto);
   }
 
-  // 상담 게시판 리스트
+  @ApiOperation({ summary: '상담 목록 조회' })
+  @ApiResponse({ status: 200, description: '상담 목록 조회 성공' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @Get()
   list(
     @Query('page') page = 1,
@@ -31,7 +37,10 @@ export class ConsultationsController {
     return this.consultationsService.list(Number(page), Number(limit));
   }
 
-  // 비밀번호 검증 포함 상세 조회
+  @ApiOperation({ summary: '상담 상세 조회 (비밀번호 검증)' })
+  @ApiResponse({ status: 200, description: '상담 상세 조회 성공' })
+  @ApiResponse({ status: 401, description: '비밀번호 불일치' })
+  @ApiResponse({ status: 404, description: '상담 요청 없음' })
   @Post(':id/detail')
   getDetail(
     @Param('id', ParseIntPipe) id: number,
@@ -40,7 +49,10 @@ export class ConsultationsController {
     return this.consultationsService.getDetailWithPassword(id, body.password);
   }
 
-  // 비밀번호 검증 포함 삭제
+  @ApiOperation({ summary: '상담 삭제 (비밀번호 검증)' })
+  @ApiResponse({ status: 200, description: '상담 삭제 성공' })
+  @ApiResponse({ status: 401, description: '비밀번호 불일치' })
+  @ApiResponse({ status: 404, description: '상담 요청 없음' })
   @Delete(':id')
   delete(
     @Param('id', ParseIntPipe) id: number,

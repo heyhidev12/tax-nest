@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { MemberType } from '../enums/members.enum';
+import { MemberType, MemberStatus } from '../enums/members.enum';
 
 @Entity('members')
 export class Member {
@@ -19,7 +19,7 @@ export class Member {
   @Column()
   passwordHash: string;
 
-  @Column()
+  @Column({ length: 50 })
   name: string;
 
   @Column()
@@ -31,9 +31,21 @@ export class Member {
   @Column({ type: 'enum', enum: MemberType })
   memberType: MemberType;
 
-  // 보험사 회원 승인 상태 (일반/법인은 자동 승인, 보험사는 승인대기) :contentReference[oaicite:3]{index=3}
+  // 보험사 회원 승인 상태 (일반/법인은 자동 승인, 보험사는 승인대기)
   @Column({ default: true })
   isApproved: boolean;
+
+  // 회원 상태 (이용중/탈퇴)
+  @Column({ type: 'enum', enum: MemberStatus, default: MemberStatus.ACTIVE })
+  status: MemberStatus;
+
+  // 뉴스레터 구독 여부
+  @Column({ default: false })
+  newsletterSubscribed: boolean;
+
+  // 소속 (보험사 이름 등)
+  @Column({ nullable: true })
+  affiliation: string;
 
   @CreateDateColumn()
   createdAt: Date;

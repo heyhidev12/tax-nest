@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
 } from 'typeorm';
 import { ConsultationStatus } from '../enums/consultations.enum';
-
+import { MemberFlag } from '../enums/members.enum';
 
 @Entity('consultations')
 export class Consultation {
@@ -41,11 +41,18 @@ export class Consultation {
   @Column({ default: false })
   privacyAgreed: boolean;
 
+  // 회원/비회원 구분
+  @Column({ type: 'enum', enum: MemberFlag, default: MemberFlag.NON_MEMBER })
+  memberFlag: MemberFlag;
+
   // 진행 상태 (기본: 신청완료, 관리자에서 완료로 변경)
   @Column({ type: 'enum', enum: ConsultationStatus, default: ConsultationStatus.PENDING })
   status: ConsultationStatus;
 
+  // 관리자 답변
+  @Column({ type: 'text', nullable: true })
+  answer: string;
+
   @CreateDateColumn()
   createdAt: Date;
-    answer: string;
 }

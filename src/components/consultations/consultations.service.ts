@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { In, Like, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Consultation } from 'src/libs/entity/consultation.entity';
 import { CreateConsultationDto } from 'src/libs/dto/consultation/create-consultation.dto';
@@ -37,6 +37,7 @@ export class ConsultationsService {
       residenceArea: dto.residenceArea,
       content: dto.content,
       privacyAgreed: !!dto.privacyAgreed,
+      memberFlag: dto.memberFlag ?? MemberFlag.NON_MEMBER,
       status: ConsultationStatus.PENDING,
     });
 
@@ -162,7 +163,7 @@ export class ConsultationsService {
   }
 
   async adminDeleteMany(ids: number[]) {
-    const list = await this.consultationRepo.findByIds(ids);
+    const list = await this.consultationRepo.find({ where: { id: In(ids) } });
     if (!list.length) return { success: true, deleted: 0 };
     await this.consultationRepo.remove(list);
     return { success: true, deleted: list.length };

@@ -8,5 +8,6 @@ import { Consultation } from 'src/libs/entity/consultation.entity';
   imports: [TypeOrmModule.forFeature([Consultation])],
   providers: [ConsultationsService],
   controllers: [ConsultationsController],
+  exports: [ConsultationsService],
 })
 export class ConsultationsModule {}

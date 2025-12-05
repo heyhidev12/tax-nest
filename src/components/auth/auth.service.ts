@@ -4,6 +4,8 @@ import * as bcrypt from 'bcrypt';
 import { MembersService } from '../members/members.service';
 import { SignUpDto } from 'src/libs/dto/auth/sign-up.dto';
 import { LoginDto } from 'src/libs/dto/auth/login.dto';
+import { UpdateProfileDto } from 'src/libs/dto/auth/update-profile.dto';
+import { ChangePasswordDto } from 'src/libs/dto/auth/change-password.dto';
 import { MemberType } from 'src/libs/enums/members.enum';
 
 @Injectable()
@@ -21,7 +23,7 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    // 보험사 회원이면 isApproved=false 로 시작 (IA에 따라) :contentReference[oaicite:5]{index=5}
+    // 보험사 회원이면 isApproved=false 로 시작 (IA에 따라)
     const isApproved = dto.memberType !== MemberType.INSURANCE;
 
     const member = await this.membersService.create({
@@ -75,5 +77,43 @@ export class AuthService {
         memberType: member.memberType,
       },
     };
+  }
+
+  // 내 정보 조회
+  async getMyProfile(userId: number) {
+    const member = await this.membersService.findById(userId);
+    const { passwordHash, ...profile } = member;
+    return profile;
+  }
+
+  // 프로필 수정
+  async updateProfile(userId: number, dto: UpdateProfileDto) {
+    const member = await this.membersService.findById(userId);
+    
+    if (dto.name) member.name = dto.name;
+    if (dto.email) member.email = dto.email;
+    if (dto.phoneNumber) member.phoneNumber = dto.phoneNumber;
+    if (dto.affiliation) member.affiliation = dto.affiliation;
+
+    await this.membersService.updateProfile(userId, member);
+    
+    const { passwordHash, ...profile } = member;
+    return profile;
+  }
+
+  // 비밀번호 변경
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const member = await this.membersService.findById(userId);
+
+    const match = await bcrypt.compare(dto.currentPassword, member.passwordHash);
+    if (!match) {
+      throw new UnauthorizedException('현재 비밀번호가 올바르지 않습니다.');
+    }
+
+    const newPasswordHash = await bcrypt.hash(dto.newPassword, 10);
+    member.passwordHash = newPasswordHash;
+    await this.membersService.updateProfile(userId, member);
+
+    return { success: true, message: '비밀번호가 변경되었습니다.' };
   }
 }
