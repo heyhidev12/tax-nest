@@ -28,3 +28,4 @@ export class ExposureSettings {
 // - newsletter_page: { exposed: boolean } - Newsletter 페이지 노출 여부
 // - history_page: { exposed: boolean } - History 페이지 노출 여부
 
+

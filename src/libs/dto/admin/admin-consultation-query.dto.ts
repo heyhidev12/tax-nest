@@ -2,24 +2,30 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { MemberFlag } from 'src/libs/enums/members.enum';
+import { ConsultationStatus } from 'src/libs/enums/consultations.enum';
 
 export class AdminConsultationQueryDto {
-  @ApiPropertyOptional({ example: '세무조정', description: '상담 분야 필터' })
+  @ApiPropertyOptional({ example: '세무조정', description: '상담 분야 필터 (드롭다운)' })
   @IsOptional()
   @IsString()
   field?: string;
 
-  @ApiPropertyOptional({ example: 'MEMBER', enum: MemberFlag, description: '회원/비회원 필터' })
+  @ApiPropertyOptional({ example: 'MEMBER', enum: MemberFlag, description: '회원/비회원 필터 (회원: MEMBER, 비회원: NON_MEMBER)' })
   @IsOptional()
   @IsEnum(MemberFlag)
   memberFlag?: MemberFlag;
 
-  @ApiPropertyOptional({ example: '검색어', description: '검색어' })
+  @ApiPropertyOptional({ example: 'PENDING', enum: ConsultationStatus, description: '진행 상태 필터' })
+  @IsOptional()
+  @IsEnum(ConsultationStatus)
+  status?: ConsultationStatus;
+
+  @ApiPropertyOptional({ example: '상담내용검색', description: '상담 내용 검색어' })
   @IsOptional()
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ example: 'latest', enum: ['latest', 'oldest'], description: '정렬 (최신순/오래된순)' })
+  @ApiPropertyOptional({ example: 'latest', enum: ['latest', 'oldest'], description: '정렬 (기본: latest - 최신순)' })
   @IsOptional()
   @IsString()
   sort?: 'latest' | 'oldest';
@@ -38,4 +44,3 @@ export class AdminConsultationQueryDto {
   @Min(1)
   limit?: number = 20;
 }
-

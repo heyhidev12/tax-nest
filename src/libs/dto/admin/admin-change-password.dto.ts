@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MinLength, MaxLength, IsNotEmpty } from 'class-validator';
 import { IsStrongPassword } from 'src/libs/validators/password.validator';
 
-export class ChangePasswordDto {
+export class AdminChangePasswordDto {
   @ApiProperty({ example: 'oldpassword', description: '현재 비밀번호' })
   @IsString()
   @IsNotEmpty({ message: '현재 비밀번호를 입력해주세요.' })

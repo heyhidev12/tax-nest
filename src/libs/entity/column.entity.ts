@@ -44,3 +44,4 @@ export class ColumnArticle {
   updatedAt: Date;
 }
 
+

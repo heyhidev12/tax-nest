@@ -63,3 +63,4 @@ export class MinorCategory {
   updatedAt: Date;
 }
 
+

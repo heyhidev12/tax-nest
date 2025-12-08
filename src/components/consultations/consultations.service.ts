@@ -1,16 +1,16 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Like, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Consultation } from 'src/libs/entity/consultation.entity';
 import { CreateConsultationDto } from 'src/libs/dto/consultation/create-consultation.dto';
 import { ConsultationStatus } from 'src/libs/enums/consultations.enum';
 import { MemberFlag } from 'src/libs/enums/members.enum';
 
-
 interface AdminListOptions {
   field?: string;
   memberFlag?: MemberFlag | string;
+  status?: ConsultationStatus;
   search?: string;
   sort?: 'latest' | 'oldest';
   page?: number;
@@ -25,6 +25,11 @@ export class ConsultationsService {
   ) {}
 
   async create(dto: CreateConsultationDto) {
+    // 개인정보 동의 필수 검증
+    if (!dto.privacyAgreed) {
+      throw new BadRequestException('개인정보 수집/이용에 동의해주세요.');
+    }
+
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const entity = this.consultationRepo.create({
@@ -36,7 +41,7 @@ export class ConsultationsService {
       insuranceCompanyName: dto.insuranceCompanyName,
       residenceArea: dto.residenceArea,
       content: dto.content,
-      privacyAgreed: !!dto.privacyAgreed,
+      privacyAgreed: true,
       memberFlag: dto.memberFlag ?? MemberFlag.NON_MEMBER,
       status: ConsultationStatus.PENDING,
     });
@@ -98,47 +103,68 @@ export class ConsultationsService {
     return { success: true };
   }
 
-
   ////// ADMIN
   async adminList(options: AdminListOptions) {
     const {
       field,
       memberFlag,
+      status,
       search,
       sort = 'latest',
       page = 1,
       limit = 20,
     } = options;
 
-    const where: any = {};
+    const qb = this.consultationRepo.createQueryBuilder('c');
 
+    // 상담 분야 필터
     if (field) {
-      where.consultingField = field;
+      qb.andWhere('c.consultingField = :field', { field });
     }
 
+    // 회원/비회원 필터
     if (memberFlag) {
-      where.memberFlag = memberFlag;
+      qb.andWhere('c.memberFlag = :memberFlag', { memberFlag });
     }
 
+    // 진행 상태 필터
+    if (status) {
+      qb.andWhere('c.status = :status', { status });
+    }
+
+    // 상담 내용 검색
     if (search) {
-      where.content = Like(`%${search}%`);
+      qb.andWhere('c.content LIKE :search', { search: `%${search}%` });
     }
 
-    const order = sort === 'latest'
-      ? { createdAt: 'DESC' }
-      : { createdAt: 'ASC' };
+    // 정렬 (기본: 최신순 - 등록일 DESC)
+    qb.orderBy('c.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
 
-    const [items, total] = await this.consultationRepo.findAndCount({
-      where,
-      order: {
-        createdAt: sort === 'latest' ? 'DESC' as const : 'ASC' as const,
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    // 페이지네이션
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    // 응답 포맷: No, 이름, 상담분야, 보험사, 전화번호, 상담내용(한 줄), 회원유형, 등록일시
+    const formattedItems = items.map((c, index) => ({
+      no: total - ((page - 1) * limit + index), // 역순 번호
+      id: c.id,
+      name: c.name,
+      consultingField: c.consultingField,
+      insuranceCompanyName: c.insuranceCompanyName || '-',
+      phoneNumber: c.phoneNumber,
+      contentPreview: c.content.length > 50 ? c.content.slice(0, 50) + '...' : c.content,
+      memberFlag: c.memberFlag,
+      memberFlagLabel: c.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
+      status: c.status,
+      statusLabel: c.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
+      createdAt: c.createdAt,
+      // Date format: yyyy.MM.dd HH:mm:ss
+      createdAtFormatted: this.formatDateTime(c.createdAt),
+    }));
 
     return {
-      items,
+      items: formattedItems,
       total,
       page,
       limit,
@@ -148,7 +174,15 @@ export class ConsultationsService {
   async adminGetOne(id: number) {
     const c = await this.consultationRepo.findOne({ where: { id } });
     if (!c) throw new NotFoundException('상담 요청을 찾을 수 없습니다.');
-    return c;
+
+    // passwordHash 제외하고 상세 정보 반환
+    const { passwordHash, ...rest } = c;
+    return {
+      ...rest,
+      memberFlagLabel: c.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
+      statusLabel: c.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
+      createdAtFormatted: this.formatDateTime(c.createdAt),
+    };
   }
 
   async adminSetAnswer(
@@ -156,10 +190,14 @@ export class ConsultationsService {
     answer: string,
     status: ConsultationStatus = ConsultationStatus.COMPLETED,
   ) {
-    const c = await this.adminGetOne(id);
-    c.answer = answer;
-    c.status = status;
-    return this.consultationRepo.save(c);
+    const entity = await this.consultationRepo.findOne({ where: { id } });
+    if (!entity) {
+      throw new NotFoundException('상담 요청을 찾을 수 없습니다.');
+    }
+    
+    entity.answer = answer;
+    entity.status = status;
+    return this.consultationRepo.save(entity);
   }
 
   async adminDeleteMany(ids: number[]) {
@@ -167,5 +205,26 @@ export class ConsultationsService {
     if (!list.length) return { success: true, deleted: 0 };
     await this.consultationRepo.remove(list);
     return { success: true, deleted: list.length };
+  }
+
+  // 등록된 상담 분야 목록 조회 (드롭다운용)
+  async getConsultingFields(): Promise<string[]> {
+    const result = await this.consultationRepo
+      .createQueryBuilder('c')
+      .select('DISTINCT c.consultingField', 'consultingField')
+      .getRawMany();
+    return result.map((r) => r.consultingField);
+  }
+
+  // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
+  private formatDateTime(date: Date): string {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
   }
 }

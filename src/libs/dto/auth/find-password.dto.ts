@@ -1,12 +1,27 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, MinLength, MaxLength, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsNotEmpty } from 'class-validator';
+import { IsValidLoginId } from 'src/libs/validators/login-id.validator';
 import { IsStrongPassword } from 'src/libs/validators/password.validator';
 
-export class ChangePasswordDto {
-  @ApiProperty({ example: 'oldpassword', description: '현재 비밀번호' })
+export class FindPasswordDto {
+  @ApiProperty({ example: 'user123', description: '로그인 ID' })
+  @IsValidLoginId()
+  loginId: string;
+
+  @ApiProperty({ example: '홍길동', description: '회원 이름' })
   @IsString()
-  @IsNotEmpty({ message: '현재 비밀번호를 입력해주세요.' })
-  currentPassword: string;
+  name: string;
+
+  @ApiProperty({ example: 'user@example.com', description: '이메일' })
+  @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다.' })
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ description: '비밀번호 재설정 토큰' })
+  @IsString()
+  @IsNotEmpty()
+  token: string;
 
   @ApiProperty({ example: 'newpassword123!', description: '새 비밀번호 (8-16자, 영문/숫자/특수문자 중 2가지 이상 조합)' })
   @IsString()

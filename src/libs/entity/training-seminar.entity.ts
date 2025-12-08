@@ -135,3 +135,4 @@ export class TrainingSeminarApplication {
   appliedAt: Date;
 }
 
+
