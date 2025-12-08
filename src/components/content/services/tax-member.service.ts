@@ -4,8 +4,10 @@ import { Repository, In } from 'typeorm';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
 
 interface TaxMemberListOptions {
-  search?: string;
+  search?: string; // Search by insurance company name (affiliation) or member name
   workArea?: string;
+  isExposed?: boolean;
+  sort?: 'latest' | 'oldest' | 'order';
   page?: number;
   limit?: number;
   includeHidden?: boolean;
@@ -24,63 +26,118 @@ export class TaxMemberService {
   }
 
   async findAll(options: TaxMemberListOptions = {}) {
-    const { search, workArea, page = 1, limit = 20, includeHidden = false } = options;
+    const { 
+      search, 
+      workArea, 
+      isExposed,
+      sort = 'order',
+      page = 1, 
+      limit = 20, 
+      includeHidden = false 
+    } = options;
 
     const qb = this.memberRepo.createQueryBuilder('member');
 
     if (!includeHidden) {
       qb.andWhere('member.isExposed = :isExposed', { isExposed: true });
+    } else if (isExposed !== undefined) {
+      qb.andWhere('member.isExposed = :isExposed', { isExposed });
     }
 
+    // 검색: 보험사명(소속명) 또는 회원명
     if (search) {
-      qb.andWhere('member.name LIKE :search', { search: `%${search}%` });
-    }
-
-    if (workArea) {
-      qb.andWhere('JSON_CONTAINS(member.workAreas, :workArea)', { 
-        workArea: JSON.stringify(workArea) 
+      qb.andWhere('(member.name LIKE :search OR member.affiliation LIKE :search)', {
+        search: `%${search}%`,
       });
     }
 
-    qb.orderBy('member.displayOrder', 'ASC')
-      .addOrderBy('member.createdAt', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+    if (workArea) {
+      qb.andWhere('JSON_CONTAINS(member.workAreas, :workArea)', {
+        workArea: JSON.stringify(workArea),
+      });
+    }
+
+    // 정렬
+    if (sort === 'order') {
+      qb.orderBy('member.displayOrder', 'ASC').addOrderBy('member.createdAt', 'DESC');
+    } else if (sort === 'latest') {
+      qb.orderBy('member.createdAt', 'DESC');
+    } else {
+      qb.orderBy('member.createdAt', 'ASC');
+    }
+
+    qb.skip((page - 1) * limit).take(limit);
 
     const [items, total] = await qb.getManyAndCount();
-    return { items, total, page, limit };
+
+    // 응답 포맷
+    const formattedItems = items.map((item, index) => ({
+      no: total - ((page - 1) * limit + index),
+      id: item.id,
+      name: item.name,
+      mainPhotoUrl: item.mainPhotoUrl,
+      subPhotoUrl: item.subPhotoUrl,
+      workAreas: item.workAreas || [],
+      affiliation: item.affiliation || '-',
+      phoneNumber: item.phoneNumber,
+      email: item.email,
+      vcardUrl: item.vcardUrl,
+      pdfUrl: item.pdfUrl,
+      oneLineIntro: item.oneLineIntro,
+      expertIntro: item.expertIntro,
+      mainCases: item.mainCases,
+      education: item.education,
+      careerAndAwards: item.careerAndAwards,
+      booksActivitiesOther: item.booksActivitiesOther,
+      displayOrder: item.displayOrder,
+      isExposed: item.isExposed,
+      exposedLabel: item.isExposed ? 'Y' : 'N',
+      createdAt: item.createdAt,
+      createdAtFormatted: this.formatDateTime(item.createdAt),
+    }));
+
+    return { items: formattedItems, total, page, limit };
   }
 
   async findById(id: number) {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
-    return member;
+    
+    return {
+      ...member,
+      exposedLabel: member.isExposed ? 'Y' : 'N',
+      createdAtFormatted: this.formatDateTime(member.createdAt),
+      updatedAtFormatted: this.formatDateTime(member.updatedAt),
+    };
   }
 
   async update(id: number, data: Partial<TaxMember>) {
-    const member = await this.findById(id);
+    const member = await this.memberRepo.findOne({ where: { id } });
+    if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
     Object.assign(member, data);
     return this.memberRepo.save(member);
   }
 
   async delete(id: number) {
-    const member = await this.findById(id);
+    const member = await this.memberRepo.findOne({ where: { id } });
+    if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
     await this.memberRepo.remove(member);
-    return { success: true };
+    return { success: true, message: '삭제가 완료되었습니다.' };
   }
 
   async deleteMany(ids: number[]) {
     const members = await this.memberRepo.find({ where: { id: In(ids) } });
     if (!members.length) return { success: true, deleted: 0 };
     await this.memberRepo.remove(members);
-    return { success: true, deleted: members.length };
+    return { success: true, deleted: members.length, message: '삭제가 완료되었습니다.' };
   }
 
   async toggleExposure(id: number) {
-    const member = await this.findById(id);
+    const member = await this.memberRepo.findOne({ where: { id } });
+    if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
     member.isExposed = !member.isExposed;
     await this.memberRepo.save(member);
-    return { success: true, isExposed: member.isExposed };
+    return { success: true, isExposed: member.isExposed, exposedLabel: member.isExposed ? 'Y' : 'N' };
   }
 
   async updateOrder(items: { id: number; displayOrder: number }[]) {
@@ -89,6 +146,16 @@ export class TaxMemberService {
     }
     return { success: true };
   }
+
+  // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
+  private formatDateTime(date: Date): string {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
+  }
 }
-
-

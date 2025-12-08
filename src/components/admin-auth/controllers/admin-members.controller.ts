@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@ne
 import { MembersService } from 'src/components/members/members.service';
 import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { AdminMemberQueryDto } from 'src/libs/dto/admin/admin-member-query.dto';
+import { AdminCreateMemberDto } from 'src/libs/dto/admin/admin-create-member.dto';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 import { MemberStatus } from 'src/libs/enums/members.enum';
 
@@ -24,26 +26,36 @@ export class AdminMembersController {
   constructor(private readonly membersService: MembersService) {}
 
   @ApiOperation({ summary: '회원 목록 조회' })
-  @ApiResponse({ status: 200, description: '목록 조회 성공' })
+  @ApiResponse({ status: 200, description: '목록 조회 성공 (검색: 이름/전화번호, 필터: 회원유형/상태/승인여부, 정렬: 최신순/오래된순)' })
   @Get()
   list(@Query() query: AdminMemberQueryDto) {
     return this.membersService.adminList(query);
   }
 
   @ApiOperation({ summary: '보험사 승인 대기 목록' })
-  @ApiResponse({ status: 200, description: '목록 조회 성공' })
+  @ApiResponse({ status: 200, description: '보험사 회원 승인 대기 목록 (기본: 미승인 상태)' })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @ApiQuery({ name: 'sort', required: false, example: 'latest', enum: ['latest', 'oldest'] })
   @Get('pending-approval')
   pendingApprovalList(
     @Query('page') page = 1,
     @Query('limit') limit = 20,
+    @Query('sort') sort: 'latest' | 'oldest' = 'latest',
   ) {
-    return this.membersService.adminPendingApprovalList(Number(page), Number(limit));
+    return this.membersService.adminPendingApprovalList(Number(page), Number(limit), sort);
+  }
+
+  @ApiOperation({ summary: '회원 추가' })
+  @ApiResponse({ status: 201, description: '회원 추가 성공' })
+  @ApiResponse({ status: 400, description: '이미 사용 중인 ID' })
+  @Post()
+  create(@Body() dto: AdminCreateMemberDto) {
+    return this.membersService.adminCreate(dto);
   }
 
   @ApiOperation({ summary: '회원 상세 조회' })
-  @ApiResponse({ status: 200, description: '상세 조회 성공' })
+  @ApiResponse({ status: 200, description: '상세 조회 성공 (상담 신청 수 포함)' })
   @ApiResponse({ status: 404, description: '회원 없음' })
   @Get(':id')
   getOne(@Param('id', ParseIntPipe) id: number) {
@@ -57,7 +69,14 @@ export class AdminMembersController {
     return this.membersService.adminApprove(id);
   }
 
-  @ApiOperation({ summary: '회원 상태 변경' })
+  @ApiOperation({ summary: '회원 승인 취소 (보험사)' })
+  @ApiResponse({ status: 200, description: '승인 취소 성공' })
+  @Patch(':id/reject-approval')
+  rejectApproval(@Param('id', ParseIntPipe) id: number) {
+    return this.membersService.adminRejectApproval(id);
+  }
+
+  @ApiOperation({ summary: '회원 상태 변경 (이용중/탈퇴)' })
   @ApiResponse({ status: 200, description: '상태 변경 성공' })
   @Patch(':id/status')
   updateStatus(
@@ -81,4 +100,3 @@ export class AdminMembersController {
     return this.membersService.adminDeleteMany([id]);
   }
 }
-

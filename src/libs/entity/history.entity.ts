@@ -45,11 +45,17 @@ export class HistoryItem {
   @JoinColumn({ name: 'historyYearId' })
   historyYear: HistoryYear;
 
+  // 월 (선택)
   @Column({ nullable: true })
   month: number;
 
+  // 내용 (필수)
   @Column({ type: 'text' })
   content: string;
+
+  // 노출 여부
+  @Column({ default: true })
+  isExposed: boolean;
 
   @Column({ default: 0 })
   displayOrder: number;
@@ -57,4 +63,3 @@ export class HistoryItem {
   @CreateDateColumn()
   createdAt: Date;
 }
-

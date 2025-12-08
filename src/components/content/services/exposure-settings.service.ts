@@ -38,7 +38,7 @@ export class ExposureSettingsService {
   // 편의 메서드들
   async isAwardsMainExposed(): Promise<boolean> {
     const value = await this.get('awards_main');
-    return value?.exposed ?? true;
+    return value?.exposed ?? false; // Default: N (false)
   }
 
   async setAwardsMainExposed(exposed: boolean) {
@@ -47,7 +47,7 @@ export class ExposureSettingsService {
 
   async isNewsletterPageExposed(): Promise<boolean> {
     const value = await this.get('newsletter_page');
-    return value?.exposed ?? true;
+    return value?.exposed ?? false; // Default: N (false)
   }
 
   async setNewsletterPageExposed(exposed: boolean) {
@@ -56,12 +56,13 @@ export class ExposureSettingsService {
 
   async isHistoryPageExposed(): Promise<boolean> {
     const value = await this.get('history_page');
-    return value?.exposed ?? true;
+    return value?.exposed ?? false; // Default: N (false)
   }
 
   async setHistoryPageExposed(exposed: boolean) {
     return this.set('history_page', { exposed });
   }
 }
+
 
 

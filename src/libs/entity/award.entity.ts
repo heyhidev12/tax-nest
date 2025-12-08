@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 
 @Entity('award_years')
@@ -16,14 +17,24 @@ export class AwardYear {
   @Column()
   year: number;
 
+  // 메인 노출 여부
+  @Column({ default: false })
+  isMainExposed: boolean;
+
   @Column({ default: true })
   isExposed: boolean;
 
   @Column({ default: 0 })
   displayOrder: number;
 
+  @OneToMany(() => Award, (award) => award.awardYear, { cascade: true })
+  awards: Award[];
+
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
 
 @Entity('awards')
@@ -34,7 +45,7 @@ export class Award {
   @Column()
   awardYearId: number;
 
-  @ManyToOne(() => AwardYear, { onDelete: 'CASCADE' })
+  @ManyToOne(() => AwardYear, (year) => year.awards, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'awardYearId' })
   awardYear: AwardYear;
 
@@ -50,6 +61,10 @@ export class Award {
   @Column()
   imageUrl: string;
 
+  // 메인 노출 여부
+  @Column({ default: false })
+  isMainExposed: boolean;
+
   @Column({ default: true })
   isExposed: boolean;
 
@@ -62,5 +77,3 @@ export class Award {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
-

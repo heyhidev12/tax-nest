@@ -71,9 +71,13 @@ export class DataRoomContent {
   @Column({ nullable: true })
   imageUrl: string;
 
-  // 본문 (HTML) - Hidtl 여부에 따라 노출
+  // 본문 (HTML)
   @Column({ type: 'longtext', nullable: true })
   body: string;
+
+  // 본문 노출 여부 (Y/N)
+  @Column({ default: true })
+  displayBodyHtml: boolean;
 
   // 카테고리명
   @Column({ nullable: true })
@@ -140,5 +144,6 @@ export class DataRoomComment {
   @CreateDateColumn()
   createdAt: Date;
 }
+
 
 

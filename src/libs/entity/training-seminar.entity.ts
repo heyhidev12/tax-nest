@@ -19,7 +19,6 @@ export enum TrainingSeminarType {
 
 export enum RecruitmentType {
   FIRST_COME = 'FIRST_COME',       // 선착순
-  FIRST_SERVED = 'FIRST_SERVED',   // 선착순 마감
   SELECTION = 'SELECTION',         // 선발
 }
 
@@ -29,34 +28,49 @@ export enum ApplicationStatus {
   CANCELLED = 'CANCELLED', // 취소
 }
 
+export enum TargetMemberType {
+  ALL = 'ALL',           // 전체
+  GENERAL = 'GENERAL',   // 일반회원
+  INSURANCE = 'INSURANCE', // 보험사
+  OTHER = 'OTHER',       // 기타
+}
+
 @Entity('training_seminars')
 export class TrainingSeminar {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // 모집 날짜 (YY.MM.DD)
-  @Column({ type: 'date' })
-  recruitmentDate: Date;
-
-  // 모집 유형
-  @Column({ type: 'enum', enum: RecruitmentType })
-  recruitmentType: RecruitmentType;
-
-  // 교육/세미나 유형
-  @Column({ type: 'enum', enum: TrainingSeminarType })
-  type: TrainingSeminarType;
-
   // 교육/세미나 이름
   @Column()
   name: string;
+
+  // 교육/세미나 유형 (VOD, SEMINAR, TRAINING, LECTURE)
+  @Column({ type: 'enum', enum: TrainingSeminarType })
+  type: TrainingSeminarType;
+
+  // 모집 유형 (선착순, 선발)
+  @Column({ type: 'enum', enum: RecruitmentType })
+  recruitmentType: RecruitmentType;
+
+  // 모집 마감일 (YY.MM.DD)
+  @Column({ type: 'date' })
+  recruitmentEndDate: Date;
+
+  // 대상 회원 유형 (전체, 일반, 보험사, 기타)
+  @Column({ type: 'enum', enum: TargetMemberType, default: TargetMemberType.ALL })
+  targetMemberType: TargetMemberType;
 
   // 이미지 URL
   @Column({ nullable: true })
   imageUrl: string;
 
-  // 대상 회원 유형
-  @Column({ type: 'enum', enum: MemberType, nullable: true })
-  targetMemberType: MemberType;
+  // 강사명
+  @Column({ nullable: true })
+  instructorName: string;
+
+  // 대상 (텍스트)
+  @Column({ nullable: true })
+  target: string;
 
   // 본문 (HTML)
   @Column({ type: 'longtext' })
@@ -69,7 +83,7 @@ export class TrainingSeminar {
   @Column({ type: 'date' })
   endDate: Date;
 
-  // 참여 시간
+  // 참여 시간 (HH:mm~HH:mm)
   @Column({ nullable: true })
   participationTime: string;
 
@@ -77,16 +91,17 @@ export class TrainingSeminar {
   @Column({ nullable: true })
   location: string;
 
-  // 강사명
-  @Column({ nullable: true })
-  instructorName: string;
-
-  // 모집 정원
+  // 모집 정원 (선착순일 경우 필수)
   @Column({ nullable: true })
   quota: number;
 
+  // 노출 여부
   @Column({ default: true })
   isExposed: boolean;
+
+  // 추천 세미나 여부
+  @Column({ default: false })
+  isRecommended: boolean;
 
   @OneToMany(() => TrainingSeminarApplication, (app) => app.trainingSeminar)
   applications: TrainingSeminarApplication[];
@@ -120,19 +135,22 @@ export class TrainingSeminarApplication {
   @Column()
   email: string;
 
-  // 참여 희망 일시
+  // 참여 희망 일자 (yyyy.MM.dd)
   @Column({ type: 'date' })
   participationDate: Date;
 
+  // 참여 희망 시간 (HH:mm)
   @Column({ nullable: true })
   participationTime: string;
 
-  // 신청 상태
+  // 참석 인원
+  @Column({ default: 1 })
+  attendeeCount: number;
+
+  // 신청 상태 (대기중, 확정, 취소)
   @Column({ type: 'enum', enum: ApplicationStatus, default: ApplicationStatus.WAITING })
   status: ApplicationStatus;
 
   @CreateDateColumn()
   appliedAt: Date;
 }
-
-

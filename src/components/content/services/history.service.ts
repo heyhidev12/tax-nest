@@ -3,6 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { HistoryYear, HistoryItem } from 'src/libs/entity/history.entity';
 
+interface YearListOptions {
+  isExposed?: boolean;
+  sort?: 'latest' | 'oldest' | 'order';
+  page?: number;
+  limit?: number;
+  includeHidden?: boolean;
+}
+
 @Injectable()
 export class HistoryService {
   constructor(
@@ -13,18 +21,56 @@ export class HistoryService {
   ) {}
 
   // === Year CRUD ===
-  async createYear(year: number) {
-    const entity = this.yearRepo.create({ year });
+  async createYear(year: number, isExposed = true) {
+    const entity = this.yearRepo.create({ year, isExposed });
     return this.yearRepo.save(entity);
   }
 
-  async findAllYears(includeHidden = false) {
-    const where = includeHidden ? {} : { isExposed: true };
-    return this.yearRepo.find({
-      where,
-      order: { year: 'DESC' },
-      relations: ['items'],
-    });
+  async findAllYears(options: YearListOptions = {}) {
+    const { 
+      isExposed,
+      sort = 'order',
+      page = 1, 
+      limit = 50, 
+      includeHidden = false 
+    } = options;
+
+    const qb = this.yearRepo.createQueryBuilder('year')
+      .leftJoinAndSelect('year.items', 'items');
+
+    if (!includeHidden) {
+      qb.andWhere('year.isExposed = :isExposed', { isExposed: true });
+    } else if (isExposed !== undefined) {
+      qb.andWhere('year.isExposed = :isExposed', { isExposed });
+    }
+
+    // 정렬
+    if (sort === 'order') {
+      qb.orderBy('year.displayOrder', 'ASC').addOrderBy('year.year', 'DESC');
+    } else if (sort === 'latest') {
+      qb.orderBy('year.createdAt', 'DESC');
+    } else {
+      qb.orderBy('year.createdAt', 'ASC');
+    }
+
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    // 응답 포맷
+    const formattedItems = items.map((item, index) => ({
+      no: total - ((page - 1) * limit + index),
+      id: item.id,
+      year: item.year,
+      displayOrder: item.displayOrder,
+      isExposed: item.isExposed,
+      exposedLabel: item.isExposed ? 'Y' : 'N',
+      itemCount: item.items?.length || 0,
+      createdAt: item.createdAt,
+      createdAtFormatted: this.formatDateTime(item.createdAt),
+    }));
+
+    return { items: formattedItems, total, page, limit };
   }
 
   async findYearById(id: number) {
@@ -33,43 +79,107 @@ export class HistoryService {
       relations: ['items'],
     });
     if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
-    return year;
+    
+    // 아이템 정렬 및 포맷
+    const formattedItems = (year.items || [])
+      .sort((a, b) => a.displayOrder - b.displayOrder || b.createdAt.getTime() - a.createdAt.getTime())
+      .map((item, index) => ({
+        no: year.items.length - index,
+        id: item.id,
+        month: item.month,
+        content: item.content,
+        isExposed: item.isExposed,
+        exposedLabel: item.isExposed ? 'Y' : 'N',
+        displayOrder: item.displayOrder,
+        createdAt: item.createdAt,
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+      }));
+
+    return {
+      id: year.id,
+      year: year.year,
+      isExposed: year.isExposed,
+      exposedLabel: year.isExposed ? 'Y' : 'N',
+      displayOrder: year.displayOrder,
+      items: formattedItems,
+      createdAt: year.createdAt,
+      createdAtFormatted: this.formatDateTime(year.createdAt),
+    };
   }
 
   async updateYear(id: number, data: Partial<HistoryYear>) {
-    const year = await this.findYearById(id);
+    const year = await this.yearRepo.findOne({ where: { id } });
+    if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
     Object.assign(year, data);
     return this.yearRepo.save(year);
   }
 
   async deleteYear(id: number) {
-    const year = await this.findYearById(id);
+    const year = await this.yearRepo.findOne({ where: { id } });
+    if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
     await this.yearRepo.remove(year);
-    return { success: true };
+    return { success: true, message: '삭제가 완료되었습니다.' };
   }
 
   async deleteYears(ids: number[]) {
     const years = await this.yearRepo.find({ where: { id: In(ids) } });
     if (!years.length) return { success: true, deleted: 0 };
     await this.yearRepo.remove(years);
-    return { success: true, deleted: years.length };
+    return { success: true, deleted: years.length, message: '삭제가 완료되었습니다.' };
   }
 
   async toggleYearExposure(id: number) {
-    const year = await this.findYearById(id);
+    const year = await this.yearRepo.findOne({ where: { id } });
+    if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
     year.isExposed = !year.isExposed;
     await this.yearRepo.save(year);
-    return { success: true, isExposed: year.isExposed };
+    return { success: true, isExposed: year.isExposed, exposedLabel: year.isExposed ? 'Y' : 'N' };
+  }
+
+  async updateYearOrder(items: { id: number; displayOrder: number }[]) {
+    for (const item of items) {
+      await this.yearRepo.update(item.id, { displayOrder: item.displayOrder });
+    }
+    return { success: true };
   }
 
   // === Item CRUD ===
-  async createItem(historyYearId: number, data: { month?: number; content: string }) {
-    const year = await this.findYearById(historyYearId);
+  async createItem(historyYearId: number, data: { month?: number; content: string; isExposed?: boolean }) {
+    const year = await this.yearRepo.findOne({ where: { id: historyYearId } });
+    if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
+    
     const item = this.itemRepo.create({
       historyYearId: year.id,
-      ...data,
+      month: data.month,
+      content: data.content,
+      isExposed: data.isExposed ?? true,
     });
     return this.itemRepo.save(item);
+  }
+
+  async findItemsByYear(historyYearId: number, includeHidden = false) {
+    const qb = this.itemRepo.createQueryBuilder('item')
+      .where('item.historyYearId = :historyYearId', { historyYearId });
+
+    if (!includeHidden) {
+      qb.andWhere('item.isExposed = :isExposed', { isExposed: true });
+    }
+
+    qb.orderBy('item.displayOrder', 'ASC').addOrderBy('item.createdAt', 'DESC');
+
+    const items = await qb.getMany();
+
+    return items.map((item, index) => ({
+      no: items.length - index,
+      id: item.id,
+      month: item.month,
+      content: item.content,
+      isExposed: item.isExposed,
+      exposedLabel: item.isExposed ? 'Y' : 'N',
+      displayOrder: item.displayOrder,
+      createdAt: item.createdAt,
+      createdAtFormatted: this.formatDateTime(item.createdAt),
+    }));
   }
 
   async updateItem(id: number, data: Partial<HistoryItem>) {
@@ -83,15 +193,40 @@ export class HistoryService {
     const item = await this.itemRepo.findOne({ where: { id } });
     if (!item) throw new NotFoundException('항목을 찾을 수 없습니다.');
     await this.itemRepo.remove(item);
-    return { success: true };
+    return { success: true, message: '삭제가 완료되었습니다.' };
   }
 
   async deleteItems(ids: number[]) {
     const items = await this.itemRepo.find({ where: { id: In(ids) } });
     if (!items.length) return { success: true, deleted: 0 };
     await this.itemRepo.remove(items);
-    return { success: true, deleted: items.length };
+    return { success: true, deleted: items.length, message: '삭제가 완료되었습니다.' };
+  }
+
+  async toggleItemExposure(id: number) {
+    const item = await this.itemRepo.findOne({ where: { id } });
+    if (!item) throw new NotFoundException('항목을 찾을 수 없습니다.');
+    item.isExposed = !item.isExposed;
+    await this.itemRepo.save(item);
+    return { success: true, isExposed: item.isExposed, exposedLabel: item.isExposed ? 'Y' : 'N' };
+  }
+
+  async updateItemOrder(items: { id: number; displayOrder: number }[]) {
+    for (const item of items) {
+      await this.itemRepo.update(item.id, { displayOrder: item.displayOrder });
+    }
+    return { success: true };
+  }
+
+  // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
+  private formatDateTime(date: Date): string {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
   }
 }
-
-
