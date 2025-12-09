@@ -25,30 +25,30 @@ export class ConsultationsService {
   ) {}
 
   async create(dto: CreateConsultationDto) {
-    // 개인정보 동의 필수 검증
+    // 개인정보 처리 방침 이용 동의 필수 검증
     if (!dto.privacyAgreed) {
-      throw new BadRequestException('개인정보 수집/이용에 동의해주세요.');
+      throw new BadRequestException('개인정보 처리 방침 이용에 동의해주세요.');
     }
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    // 이용 동의 필수 검증
+    if (!dto.termsAgreed) {
+      throw new BadRequestException('이용 동의에 동의해주세요.');
+    }
 
     const entity = this.consultationRepo.create({
       name: dto.name,
-      email: dto.email,
-      passwordHash,
       phoneNumber: dto.phoneNumber,
       consultingField: dto.consultingField,
-      insuranceCompanyName: dto.insuranceCompanyName,
-      residenceArea: dto.residenceArea,
+      assignedTaxAccountant: dto.assignedTaxAccountant,
       content: dto.content,
       privacyAgreed: true,
+      termsAgreed: true,
       memberFlag: dto.memberFlag ?? MemberFlag.NON_MEMBER,
       status: ConsultationStatus.PENDING,
     });
 
     const saved = await this.consultationRepo.save(entity);
 
-    // 리스트/상세에서 password는 절대 보내지 않음
     return { id: saved.id, createdAt: saved.createdAt };
   }
 
@@ -145,23 +145,40 @@ export class ConsultationsService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 이름, 상담분야, 보험사, 전화번호, 상담내용(한 줄), 회원유형, 등록일시
-    const formattedItems = items.map((c, index) => ({
-      no: total - ((page - 1) * limit + index), // 역순 번호
-      id: c.id,
+    // 응답 포맷: No, 이름, 상담분야, 담당 세무사, 휴대폰 번호, 상담 내용(한 줄), 회원유형, 신청일시
+    // 번호는 정렬 순서에 따라 순차적으로 부여 (최신순: 큰 번호부터, 오래된순: 작은 번호부터)
+    const formattedItems = items.map((c, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+      
+      // 상담 내용을 한 줄로 표시 (줄바꿈 제거, 길이 제한)
+      const contentSingleLine = c.content
+        .replace(/\n/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const contentPreview = contentSingleLine.length > 50 
+        ? contentSingleLine.slice(0, 50) + '...' 
+        : contentSingleLine;
+
+      return {
+        no,
+        id: c.id,
       name: c.name,
       consultingField: c.consultingField,
-      insuranceCompanyName: c.insuranceCompanyName || '-',
+      assignedTaxAccountant: c.assignedTaxAccountant || '-',
       phoneNumber: c.phoneNumber,
-      contentPreview: c.content.length > 50 ? c.content.slice(0, 50) + '...' : c.content,
-      memberFlag: c.memberFlag,
-      memberFlagLabel: c.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
-      status: c.status,
-      statusLabel: c.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
-      createdAt: c.createdAt,
-      // Date format: yyyy.MM.dd HH:mm:ss
-      createdAtFormatted: this.formatDateTime(c.createdAt),
-    }));
+        contentPreview,
+        memberFlag: c.memberFlag,
+        memberFlagLabel: c.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
+        status: c.status,
+        statusLabel: c.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
+        createdAt: c.createdAt,
+        // Date format: yyyy.MM.dd HH:mm:ss
+        createdAtFormatted: this.formatDateTime(c.createdAt),
+      };
+    });
 
     return {
       items: formattedItems,
@@ -177,11 +194,15 @@ export class ConsultationsService {
 
     // passwordHash 제외하고 상세 정보 반환
     const { passwordHash, ...rest } = c;
+    const isMember = c.memberFlag === MemberFlag.MEMBER;
+    
     return {
       ...rest,
-      memberFlagLabel: c.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
+      memberFlagLabel: isMember ? '회원' : '비회원',
       statusLabel: c.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
       createdAtFormatted: this.formatDateTime(c.createdAt),
+      // 회원인 경우에만 답변 입력 가능 (비회원은 비활성화)
+      canEditAnswer: isMember,
     };
   }
 
@@ -195,9 +216,23 @@ export class ConsultationsService {
       throw new NotFoundException('상담 요청을 찾을 수 없습니다.');
     }
     
+    // 비회원인 경우 답변 작성 불가
+    if (entity.memberFlag === MemberFlag.NON_MEMBER) {
+      throw new BadRequestException('비회원 상담은 답변을 작성할 수 없습니다.');
+    }
+    
     entity.answer = answer;
     entity.status = status;
-    return this.consultationRepo.save(entity);
+    const saved = await this.consultationRepo.save(entity);
+    
+    // passwordHash 제외하고 반환
+    const { passwordHash, ...result } = saved;
+    return {
+      ...result,
+      memberFlagLabel: entity.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
+      statusLabel: saved.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
+      createdAtFormatted: this.formatDateTime(saved.createdAt),
+    };
   }
 
   async adminDeleteMany(ids: number[]) {

@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ComponentsModule } from './components/components.module';
+import { RedisModule } from './libs/redis/redis.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ComponentsModule } from './components/components.module';
         logging: true,
       }),
     }),
+    RedisModule,
     ComponentsModule,
   ],
 })

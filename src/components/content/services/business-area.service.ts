@@ -83,27 +83,48 @@ export class BusinessAreaService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      contentType: item.contentType,
-      contentTypeLabel: this.getContentTypeLabel(item.contentType),
-      name: item.name,
-      subDescription: item.subDescription,
-      majorCategory: item.majorCategory,
-      minorCategory: item.minorCategory,
-      imageUrl: item.imageUrl,
-      youtubeUrl: item.youtubeUrl,
-      youtubeCount: item.youtubeUrl ? 1 : 0,
-      displayOrder: item.displayOrder,
-      isMainExposed: item.isMainExposed,
-      mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
-      isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
-      createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
-    }));
+    // 응답 포맷: No, 노출순서, 업무분야명, 업무분야(대분류), 업무분야(중분류), Youtube, 메인노출여부, 노출여부, 등록일시
+    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    const formattedItems = items.map((item, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      // YouTube URL 개수 계산 (여러 개일 수 있음 - JSON 배열 또는 콤마 구분)
+      let youtubeCount = 0;
+      if (item.youtubeUrl) {
+        try {
+          // JSON 배열인 경우
+          const parsed = JSON.parse(item.youtubeUrl);
+          youtubeCount = Array.isArray(parsed) ? parsed.length : 1;
+        } catch {
+          // 콤마 구분 문자열인 경우
+          youtubeCount = item.youtubeUrl.split(',').filter(url => url.trim()).length;
+        }
+      }
+
+      return {
+        no,
+        id: item.id,
+        contentType: item.contentType,
+        contentTypeLabel: this.getContentTypeLabel(item.contentType),
+        name: item.name,
+        subDescription: item.subDescription,
+        majorCategory: item.majorCategory,
+        minorCategory: item.minorCategory,
+        imageUrl: item.imageUrl,
+        youtubeUrl: item.youtubeUrl,
+        youtubeCount,
+        displayOrder: item.displayOrder,
+        isMainExposed: item.isMainExposed,
+        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
+        isExposed: item.isExposed,
+        exposedLabel: item.isExposed ? 'Y' : 'N',
+        createdAt: item.createdAt,
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }

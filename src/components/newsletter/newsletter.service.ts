@@ -2,6 +2,7 @@ import { Injectable, ConflictException, NotFoundException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { NewsletterSubscriber } from 'src/libs/entity/newsletter-subscriber.entity';
+import { Member } from 'src/libs/entity/member.entity';
 
 interface SubscriberListOptions {
   search?: string;
@@ -16,6 +17,8 @@ export class NewsletterService {
   constructor(
     @InjectRepository(NewsletterSubscriber)
     private readonly subscriberRepo: Repository<NewsletterSubscriber>,
+    @InjectRepository(Member)
+    private readonly memberRepo: Repository<Member>,
   ) {}
 
   // POST /newsletter/subscribe - 뉴스레터 구독 (이름 + 이메일)
@@ -147,6 +150,35 @@ export class NewsletterService {
     if (!subscribers.length) return { success: true, deleted: 0 };
     await this.subscriberRepo.remove(subscribers);
     return { success: true, deleted: subscribers.length, message: '삭제가 완료되었습니다.' };
+  }
+
+  // GET /newsletter/me - 회원의 뉴스레터 구독 정보 조회
+  async getMemberSubscription(memberId: number) {
+    const member = await this.memberRepo.findOne({ where: { id: memberId } });
+    if (!member) {
+      throw new NotFoundException('회원을 찾을 수 없습니다.');
+    }
+    return {
+      email: member.email,
+      isSubscribed: member.newsletterSubscribed,
+      subscriptionLabel: member.newsletterSubscribed ? 'Y' : 'N',
+    };
+  }
+
+  // POST /newsletter/me/unsubscribe - 회원의 뉴스레터 구독 취소
+  async unsubscribeMember(memberId: number) {
+    const member = await this.memberRepo.findOne({ where: { id: memberId } });
+    if (!member) {
+      throw new NotFoundException('회원을 찾을 수 없습니다.');
+    }
+    
+    if (!member.newsletterSubscribed) {
+      return { success: true, message: '이미 구독 취소된 상태입니다.' };
+    }
+
+    member.newsletterSubscribed = false;
+    await this.memberRepo.save(member);
+    return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
   }
 
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)

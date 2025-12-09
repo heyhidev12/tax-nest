@@ -1,20 +1,37 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsString, MinLength, MaxLength, IsNotEmpty } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsNotEmpty, Length, Matches } from 'class-validator';
 import { IsValidLoginId } from 'src/libs/validators/login-id.validator';
 import { IsStrongPassword } from 'src/libs/validators/password.validator';
 
-export class FindPasswordDto {
+export class FindPasswordByEmailDto {
   @ApiProperty({ example: 'user123', description: '로그인 ID' })
   @IsValidLoginId()
   loginId: string;
 
-  @ApiProperty({ example: '홍길동', description: '회원 이름' })
-  @IsString()
-  name: string;
-
   @ApiProperty({ example: 'user@example.com', description: '이메일' })
   @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다.' })
   email: string;
+
+  @ApiProperty({ example: '123456', description: '이메일 인증번호 (6자리)' })
+  @IsString()
+  @Length(6, 6, { message: '인증번호는 6자리여야 합니다.' })
+  verificationCode: string;
+}
+
+export class FindPasswordByPhoneDto {
+  @ApiProperty({ example: 'user123', description: '로그인 ID' })
+  @IsValidLoginId()
+  loginId: string;
+
+  @ApiProperty({ example: '01012345678', description: '휴대폰 번호' })
+  @IsString()
+  @Matches(/^01[0-9]{8,9}$/, { message: '올바른 휴대폰 번호 형식이 아닙니다.' })
+  phoneNumber: string;
+
+  @ApiProperty({ example: '123456', description: '인증번호 (6자리)' })
+  @IsString()
+  @Length(6, 6, { message: '인증번호는 6자리여야 합니다.' })
+  verificationCode: string;
 }
 
 export class ResetPasswordDto {
@@ -34,4 +51,26 @@ export class ResetPasswordDto {
   @IsString()
   @IsNotEmpty({ message: '새 비밀번호 확인을 입력해주세요.' })
   newPasswordConfirm: string;
+}
+
+// DTOs for requesting verification codes (for password reset)
+export class RequestPasswordResetEmailVerificationDto {
+  @ApiProperty({ example: 'user123', description: '로그인 ID' })
+  @IsValidLoginId()
+  loginId: string;
+
+  @ApiProperty({ example: 'user@example.com', description: '이메일' })
+  @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다.' })
+  email: string;
+}
+
+export class RequestPasswordResetPhoneVerificationDto {
+  @ApiProperty({ example: 'user123', description: '로그인 ID' })
+  @IsValidLoginId()
+  loginId: string;
+
+  @ApiProperty({ example: '01012345678', description: '휴대폰 번호' })
+  @IsString()
+  @Matches(/^01[0-9]{8,9}$/, { message: '올바른 휴대폰 번호 형식이 아닙니다.' })
+  phoneNumber: string;
 }

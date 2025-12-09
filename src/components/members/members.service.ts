@@ -90,7 +90,7 @@ export class MembersService {
       qb.andWhere('member.isApproved = :isApproved', { isApproved });
     }
 
-    // 검색: 이름 또는 전화번호
+    // 검색: 회원 명 또는 휴대폰번호 (이미지 요구사항에 따라)
     if (search) {
       qb.andWhere('(member.name LIKE :search OR member.phoneNumber LIKE :search)', {
         search: `%${search}%`,
@@ -105,26 +105,34 @@ export class MembersService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 회원유형, ID, 이름, 이메일, 전화번호, 뉴스레터, 등록일, 상태
-    const formattedItems = items.map((m, index) => ({
-      no: total - ((page - 1) * limit + index), // 역순 번호
-      id: m.id,
-      memberType: m.memberType,
-      memberTypeLabel: this.getMemberTypeLabel(m.memberType),
-      loginId: m.loginId,
-      name: m.name,
-      email: m.email,
-      phoneNumber: m.phoneNumber,
-      newsletterSubscribed: m.newsletterSubscribed,
-      newsletterLabel: m.newsletterSubscribed ? 'Y' : 'N',
-      isApproved: m.isApproved,
-      approvalLabel: m.isApproved ? '승인' : '미승인',
-      status: m.status,
-      statusLabel: m.status === MemberStatus.ACTIVE ? '이용중' : '탈퇴',
-      affiliation: m.affiliation,
-      createdAt: m.createdAt,
-      createdAtFormatted: this.formatDateTime(m.createdAt),
-    }));
+    // 응답 포맷: No, 회원유형, 아이디, 이름, 이메일, 휴대폰 번호, 뉴스레터 유무, 가입일시, 회원상태
+    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    const formattedItems = items.map((m, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      return {
+        no,
+        id: m.id,
+        memberType: m.memberType,
+        memberTypeLabel: this.getMemberTypeLabel(m.memberType),
+        loginId: m.loginId,
+        name: m.name,
+        email: m.email,
+        phoneNumber: m.phoneNumber,
+        newsletterSubscribed: m.newsletterSubscribed,
+        newsletterLabel: m.newsletterSubscribed ? 'Y' : 'N',
+        isApproved: m.isApproved,
+        approvalLabel: m.isApproved ? '승인' : '미승인',
+        status: m.status,
+        statusLabel: m.status === MemberStatus.ACTIVE ? '이용중' : '회원탈퇴',
+        affiliation: m.affiliation,
+        createdAt: m.createdAt,
+        createdAtFormatted: this.formatDateTime(m.createdAt),
+      };
+    });
 
     return {
       items: formattedItems,
@@ -187,9 +195,12 @@ export class MembersService {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
 
-    // 상담 신청 수 조회
+    // 상담 신청 수 조회 (이름과 전화번호로 매칭)
     const consultationCount = await this.consultationRepo.count({
-      where: { email: member.email },
+      where: { 
+        name: member.name,
+        phoneNumber: member.phoneNumber,
+      },
     });
 
     // passwordHash 제외
@@ -287,4 +298,24 @@ export class MembersService {
     const seconds = String(d.getSeconds()).padStart(2, '0');
     return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
   }
+
+
+
+async findByNameAndPhone(name: string, phone: string) {
+  return this.memberRepo.findOne({
+    where: { name, phoneNumber: phone },
+  });
+}
+
+async findByPhone(phone: string) {
+  return this.memberRepo.findOne({
+    where: { phoneNumber: phone },
+  });
+}
+
+async updatePassword(memberId: number, newPassword: string) {
+  const member = await this.findById(memberId);
+  member.passwordHash = await bcrypt.hash(newPassword, 10);
+  await this.memberRepo.save(member);
+}
 }

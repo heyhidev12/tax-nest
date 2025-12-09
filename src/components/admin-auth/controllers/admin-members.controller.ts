@@ -86,9 +86,9 @@ export class AdminMembersController {
     return this.membersService.adminUpdateStatus(id, body.status);
   }
 
-  @ApiOperation({ summary: '회원 다중 삭제' })
+  @ApiOperation({ summary: '회원 다중 삭제 (체크박스 선택 후 삭제)' })
   @ApiResponse({ status: 200, description: '삭제 성공' })
-  @Delete('bulk')
+  @Delete()
   deleteMany(@Body() dto: AdminDeleteManyDto) {
     return this.membersService.adminDeleteMany(dto.ids);
   }

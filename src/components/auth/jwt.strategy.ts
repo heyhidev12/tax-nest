@@ -14,6 +14,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     // payload에는 우리가 토큰 생성할 때 넣은 데이터가 들어감
     // ex) { sub: memberId, loginId, memberType }
-    return { userId: payload.sub, loginId: payload.loginId, memberType: payload.memberType };
+    return { sub: payload.sub, loginId: payload.loginId, memberType: payload.memberType };
   }
 }

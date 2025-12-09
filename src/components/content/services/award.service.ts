@@ -29,8 +29,8 @@ export class AwardService {
   ) {}
 
   // === Year CRUD ===
-  async createYear(year: number, isMainExposed = false, isExposed = true) {
-    const entity = this.yearRepo.create({ year, isMainExposed, isExposed });
+  async createYear(yearName: string, isMainExposed = false, isExposed = true) {
+    const entity = this.yearRepo.create({ yearName, isMainExposed, isExposed });
     return this.yearRepo.save(entity);
   }
 
@@ -59,7 +59,7 @@ export class AwardService {
 
     // 정렬
     if (sort === 'order') {
-      qb.orderBy('year.displayOrder', 'ASC').addOrderBy('year.year', 'DESC');
+      qb.orderBy('year.displayOrder', 'ASC').addOrderBy('year.createdAt', 'DESC');
     } else if (sort === 'latest') {
       qb.orderBy('year.createdAt', 'DESC');
     } else {
@@ -70,20 +70,27 @@ export class AwardService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      year: item.year,
-      displayOrder: item.displayOrder,
-      isMainExposed: item.isMainExposed,
-      mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
-      isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
-      awardCount: item.awards?.length || 0,
-      createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
-    }));
+    // 응답 포맷: No, 노출순서, 체크박스, 년도 명, 노출여부, 등록일시
+    const formattedItems = items.map((item, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      return {
+        no,
+        id: item.id,
+        yearName: item.yearName,
+        displayOrder: item.displayOrder,
+        isMainExposed: item.isMainExposed,
+        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
+        isExposed: item.isExposed,
+        exposedLabel: item.isExposed ? 'Y' : 'N',
+        awardCount: item.awards?.length || 0,
+        createdAt: item.createdAt,
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }
@@ -120,7 +127,7 @@ export class AwardService {
 
     return {
       id: year.id,
-      year: year.year,
+      yearName: year.yearName,
       displayOrder: year.displayOrder,
       isMainExposed: year.isMainExposed,
       mainExposedLabel: year.isMainExposed ? 'Y' : 'N',

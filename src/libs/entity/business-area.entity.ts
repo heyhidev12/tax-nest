@@ -48,9 +48,9 @@ export class BusinessArea {
   @Column({ type: 'longtext' })
   body: string;
 
-  // YouTube URL (선택)
-  @Column({ nullable: true })
-  youtubeUrl: string;
+  // YouTube URL (선택) - 여러 개 가능 (JSON 배열 또는 콤마 구분 문자열)
+  @Column({ type: 'text', nullable: true })
+  youtubeUrl: string; // JSON 배열 문자열 또는 콤마 구분 문자열로 저장 가능
 
   // 메인 노출 여부
   @Column({ default: false })
@@ -68,6 +68,7 @@ export class BusinessArea {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
 
 
 

@@ -44,7 +44,7 @@ export class TaxMemberService {
       qb.andWhere('member.isExposed = :isExposed', { isExposed });
     }
 
-    // 검색: 보험사명(소속명) 또는 회원명
+    // 검색: 보험사명(소속명) 또는 구성원 명 (이미지 요구사항에 따라)
     if (search) {
       qb.andWhere('(member.name LIKE :search OR member.affiliation LIKE :search)', {
         search: `%${search}%`,
@@ -70,31 +70,48 @@ export class TaxMemberService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      name: item.name,
-      mainPhotoUrl: item.mainPhotoUrl,
-      subPhotoUrl: item.subPhotoUrl,
-      workAreas: item.workAreas || [],
-      affiliation: item.affiliation || '-',
-      phoneNumber: item.phoneNumber,
-      email: item.email,
-      vcardUrl: item.vcardUrl,
-      pdfUrl: item.pdfUrl,
-      oneLineIntro: item.oneLineIntro,
-      expertIntro: item.expertIntro,
-      mainCases: item.mainCases,
-      education: item.education,
-      careerAndAwards: item.careerAndAwards,
-      booksActivitiesOther: item.booksActivitiesOther,
-      displayOrder: item.displayOrder,
-      isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
-      createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
-    }));
+    // 응답 포맷: No, 구성원 명, 구성원 메인 이미지, 소속 명, 업무 분야(1순위/2순위/3순위), 노출 여부, 등록일시
+    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    const formattedItems = items.map((item, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      // 업무 분야를 1순위/2순위/3순위로 표시
+      const workAreasArray = item.workAreas || [];
+      const workArea1st = workAreasArray[0] || '';
+      const workArea2nd = workAreasArray[1] || '';
+      const workArea3rd = workAreasArray[2] || '';
+
+      return {
+        no,
+        id: item.id,
+        name: item.name,
+        mainPhotoUrl: item.mainPhotoUrl,
+        subPhotoUrl: item.subPhotoUrl,
+        workAreas: item.workAreas || [],
+        workArea1st,
+        workArea2nd,
+        workArea3rd,
+        affiliation: item.affiliation || '-',
+        phoneNumber: item.phoneNumber,
+        email: item.email,
+        vcardUrl: item.vcardUrl,
+        pdfUrl: item.pdfUrl,
+        oneLineIntro: item.oneLineIntro,
+        expertIntro: item.expertIntro,
+        mainCases: item.mainCases,
+        education: item.education,
+        careerAndAwards: item.careerAndAwards,
+        booksActivitiesOther: item.booksActivitiesOther,
+        displayOrder: item.displayOrder,
+        isExposed: item.isExposed,
+        exposedLabel: item.isExposed ? 'Y' : 'N',
+        createdAt: item.createdAt,
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }

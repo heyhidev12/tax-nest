@@ -14,13 +14,15 @@ export class AwardYear {
   @PrimaryGeneratedColumn()
   id: number;
 
+  // 년도 명 (필수)
   @Column()
-  year: number;
+  yearName: string;
 
-  // 메인 노출 여부
+  // 메인 노출 여부 (Y/N)
   @Column({ default: false })
   isMainExposed: boolean;
 
+  // 노출 여부 (Y/N)
   @Column({ default: true })
   isExposed: boolean;
 

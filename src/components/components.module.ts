@@ -5,6 +5,7 @@ import { ConsultationsModule } from './consultations/consultations.module';
 import { AdminAuthModule } from './admin-auth/admin-auth.module';
 import { ContentModule } from './content/content.module';
 import { NewsletterModule } from './newsletter/newsletter.module';
+import { VerificationModule } from './verification/verification.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { NewsletterModule } from './newsletter/newsletter.module';
     AdminAuthModule,
     ContentModule,
     NewsletterModule,
+    VerificationModule,
   ],
 })
 export class ComponentsModule {}

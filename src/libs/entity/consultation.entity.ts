@@ -15,31 +15,37 @@ export class Consultation {
   @Column()
   name: string;
 
-  @Column()
-  email: string;
+  @Column({ nullable: true })
+  email: string; // 이전 데이터 호환성을 위해 nullable 유지
 
-  // 사용자 입력 비밀번호 (4~8 자리 숫자) -> 해시로 저장
-  @Column()
-  passwordHash: string;
+  @Column({ nullable: true })
+  passwordHash: string; // 이전 데이터 호환성을 위해 nullable 유지
 
   @Column()
   phoneNumber: string;
 
   @Column()
-  consultingField: string; // ex) 세무조정, 세무조사, 상속세 등
+  consultingField: string; // 상담 분야
 
   @Column({ nullable: true })
-  insuranceCompanyName: string;
+  assignedTaxAccountant: string; // 담당 세무사
 
-  @Column()
-  residenceArea: string;
+  @Column({ nullable: true })
+  insuranceCompanyName: string; // 이전 데이터 호환성을 위해 nullable 유지
+
+  @Column({ nullable: true })
+  residenceArea: string; // 이전 데이터 호환성을 위해 nullable 유지
 
   @Column({ type: 'text' })
-  content: string;
+  content: string; // 상담 내용
 
-  // 개인정보 동의 여부
+  // 개인정보 처리 방침 이용 동의
   @Column({ default: false })
   privacyAgreed: boolean;
+
+  // 이용 동의
+  @Column({ default: false })
+  termsAgreed: boolean;
 
   // 회원/비회원 구분
   @Column({ type: 'enum', enum: MemberFlag, default: MemberFlag.NON_MEMBER })

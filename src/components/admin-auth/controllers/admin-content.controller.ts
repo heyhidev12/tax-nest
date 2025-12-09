@@ -193,8 +193,8 @@ export class AdminContentController {
 
   @ApiOperation({ summary: '수상/인증 연도 생성' })
   @Post('awards/years')
-  createAwardYear(@Body() body: { year: number; isMainExposed?: boolean; isExposed?: boolean }) {
-    return this.awardService.createYear(body.year, body.isMainExposed, body.isExposed);
+  createAwardYear(@Body() body: { yearName: string; isMainExposed?: boolean; isExposed?: boolean }) {
+    return this.awardService.createYear(body.yearName, body.isMainExposed, body.isExposed);
   }
 
   @ApiOperation({ summary: '수상/인증 연도 수정' })
@@ -858,7 +858,7 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '세무사 회원 다중 삭제' })
-  @Delete('tax-members/bulk')
+  @Delete('tax-members')
   deleteTaxMembers(@Body() dto: AdminDeleteManyDto) {
     return this.taxMemberService.deleteMany(dto.ids);
   }

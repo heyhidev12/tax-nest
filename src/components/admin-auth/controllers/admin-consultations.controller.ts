@@ -55,9 +55,9 @@ export class AdminConsultationsController {
     return this.consultationsService.adminSetAnswer(id, dto.answer, dto.status);
   }
 
-  @ApiOperation({ summary: '상담 다중 삭제' })
+  @ApiOperation({ summary: '상담 다중 삭제 (체크박스 선택 후 삭제)' })
   @ApiResponse({ status: 200, description: '삭제 성공' })
-  @Delete('bulk')
+  @Delete()
   deleteMany(@Body() dto: AdminDeleteManyDto) {
     return this.consultationsService.adminDeleteMany(dto.ids);
   }

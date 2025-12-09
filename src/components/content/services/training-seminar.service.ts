@@ -107,33 +107,41 @@ export class TrainingSeminarService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      name: item.name,
-      type: item.type,
-      typeLabel: this.getTypeLabel(item.type),
-      recruitmentType: item.recruitmentType,
-      recruitmentTypeLabel: this.getRecruitmentTypeLabel(item.recruitmentType),
-      recruitmentEndDate: item.recruitmentEndDate,
-      recruitmentEndDateFormatted: this.formatDate(item.recruitmentEndDate),
-      imageUrl: item.imageUrl,
-      targetMemberType: item.targetMemberType,
-      targetMemberTypeLabel: this.getTargetMemberTypeLabel(item.targetMemberType),
-      startDate: item.startDate,
-      endDate: item.endDate,
-      trainingDateFormatted: `${this.formatDate(item.startDate)} ~ ${this.formatDate(item.endDate)}`,
-      participationTime: item.participationTime,
-      location: item.location,
-      quota: item.quota,
-      applicationCount: item.applications?.length || 0,
-      isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
-      isRecommended: item.isRecommended,
-      createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
-    }));
+    // 응답 포맷: No, 교육/세미나명, 교육/세미나유형, 모집유형, 회원유형, 이미지, 교육일자, 참여시간, 노출여부, 등록일시
+    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    const formattedItems = items.map((item, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      return {
+        no,
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        typeLabel: this.getTypeLabel(item.type),
+        recruitmentType: item.recruitmentType,
+        recruitmentTypeLabel: this.getRecruitmentTypeLabel(item.recruitmentType),
+        recruitmentEndDate: item.recruitmentEndDate,
+        recruitmentEndDateFormatted: this.formatRecruitmentDate(item.recruitmentEndDate),
+        imageUrl: item.imageUrl,
+        targetMemberType: item.targetMemberType,
+        targetMemberTypeLabel: this.getTargetMemberTypeLabel(item.targetMemberType),
+        startDate: item.startDate,
+        endDate: item.endDate,
+        trainingDateFormatted: `${this.formatDate(item.startDate)} ~ ${this.formatDate(item.endDate)}`,
+        participationTime: item.participationTime,
+        location: item.location,
+        quota: item.quota,
+        applicationCount: item.applications?.length || 0,
+        isExposed: item.isExposed,
+        exposedLabel: item.isExposed ? 'Y' : 'N',
+        isRecommended: item.isRecommended,
+        createdAt: item.createdAt,
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }
@@ -171,7 +179,7 @@ export class TrainingSeminarService {
       ...seminar,
       typeLabel: this.getTypeLabel(seminar.type),
       recruitmentTypeLabel: this.getRecruitmentTypeLabel(seminar.recruitmentType),
-      recruitmentEndDateFormatted: this.formatDate(seminar.recruitmentEndDate),
+      recruitmentEndDateFormatted: this.formatRecruitmentDate(seminar.recruitmentEndDate),
       targetMemberTypeLabel: this.getTargetMemberTypeLabel(seminar.targetMemberType),
       trainingDateFormatted: `${this.formatDate(seminar.startDate)} ~ ${this.formatDate(seminar.endDate)}`,
       exposedLabel: seminar.isExposed ? 'Y' : 'N',
@@ -270,23 +278,31 @@ export class TrainingSeminarService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      name: item.name,
-      phoneNumber: item.phoneNumber,
-      email: item.email,
-      trainingSeminarName: item.trainingSeminar?.name,
-      participationDate: item.participationDate,
-      participationDateFormatted: this.formatDate(item.participationDate),
-      participationTime: item.participationTime,
-      attendeeCount: item.attendeeCount,
-      status: item.status,
-      statusLabel: this.getApplicationStatusLabel(item.status),
-      appliedAt: item.appliedAt,
-      appliedAtFormatted: this.formatDateTime(item.appliedAt),
-    }));
+    // 응답 포맷: No, 이름, 휴대폰번호, 이메일, 교육/세미나명, 참여일자, 참여시간, 참석인원, 신청상태, 신청일시
+    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    const formattedItems = items.map((item, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      return {
+        no,
+        id: item.id,
+        name: item.name,
+        phoneNumber: item.phoneNumber,
+        email: item.email,
+        trainingSeminarName: item.trainingSeminar?.name,
+        participationDate: item.participationDate,
+        participationDateFormatted: this.formatDate(item.participationDate),
+        participationTime: item.participationTime, // HH:mm 형식
+        attendeeCount: item.attendeeCount,
+        status: item.status,
+        statusLabel: this.getApplicationStatusLabel(item.status),
+        appliedAt: item.appliedAt,
+        appliedAtFormatted: this.formatDateTime(item.appliedAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }
@@ -316,24 +332,32 @@ export class TrainingSeminarService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      name: item.name,
-      phoneNumber: item.phoneNumber,
-      email: item.email,
-      trainingSeminarId: item.trainingSeminarId,
-      trainingSeminarName: item.trainingSeminar?.name,
-      participationDate: item.participationDate,
-      participationDateFormatted: this.formatDate(item.participationDate),
-      participationTime: item.participationTime,
-      attendeeCount: item.attendeeCount,
-      status: item.status,
-      statusLabel: this.getApplicationStatusLabel(item.status),
-      appliedAt: item.appliedAt,
-      appliedAtFormatted: this.formatDateTime(item.appliedAt),
-    }));
+    // 응답 포맷: No, 이름, 휴대폰번호, 이메일, 교육/세미나명, 참여일자, 참여시간, 참석인원, 신청상태, 신청일시
+    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    const formattedItems = items.map((item, index) => {
+      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      return {
+        no,
+        id: item.id,
+        name: item.name,
+        phoneNumber: item.phoneNumber,
+        email: item.email,
+        trainingSeminarId: item.trainingSeminarId,
+        trainingSeminarName: item.trainingSeminar?.name,
+        participationDate: item.participationDate,
+        participationDateFormatted: this.formatDate(item.participationDate),
+        participationTime: item.participationTime, // HH:mm 형식
+        attendeeCount: item.attendeeCount,
+        status: item.status,
+        statusLabel: this.getApplicationStatusLabel(item.status),
+        appliedAt: item.appliedAt,
+        appliedAtFormatted: this.formatDateTime(item.appliedAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }
@@ -407,14 +431,24 @@ export class TrainingSeminarService {
 
   private getApplicationStatusLabel(status: ApplicationStatus): string {
     switch (status) {
-      case ApplicationStatus.WAITING: return '대기중';
+      case ApplicationStatus.WAITING: return '대기';
       case ApplicationStatus.CONFIRMED: return '확정';
       case ApplicationStatus.CANCELLED: return '취소';
-      default: return '대기중';
+      default: return '대기';
     }
   }
 
   // === Date Helpers ===
+  // 모집 종료일 포맷: YY.MM.DD
+  private formatRecruitmentDate(date: Date): string {
+    const d = new Date(date);
+    const year = String(d.getFullYear()).slice(-2); // 마지막 2자리
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}.${month}.${day}`;
+  }
+
+  // 일반 날짜 포맷: yyyy.MM.dd
   private formatDate(date: Date): string {
     const d = new Date(date);
     const year = d.getFullYear();
