@@ -64,6 +64,7 @@ export class AuthService {
 
     if (!member.isApproved)
       throw new UnauthorizedException('관리자 승인 대기 중입니다.');
+    console.log("JWT SECRET", process.env.JWT_SECRET);
 
     const payload = {
       sub: member.id,

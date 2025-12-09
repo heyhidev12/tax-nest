@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
@@ -7,15 +8,24 @@ import { MembersModule } from '../members/members.module';
 import { VerificationModule } from '../verification/verification.module';
 import { JwtStrategy } from './jwt.strategy';
 import { Member } from 'src/libs/entity/member.entity';
+import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
     MembersModule,
     VerificationModule,
     TypeOrmModule.forFeature([Member]),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET || 'dev-secret',
-      signOptions: { expiresIn: '1d' },
+    PassportModule.register({
+      defaultStrategy: 'jwt',
+      session: false,
+    }),
+
+    JwtModule.registerAsync({
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '1d' },
+      }),
+      inject: [ConfigService],
     }),
   ],
   providers: [AuthService, JwtStrategy],

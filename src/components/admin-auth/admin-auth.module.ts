@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminAuthController } from './admin-auth.controller';
 import { AdminJwtStrategy } from './admin-jwt.strategy';
@@ -19,6 +20,7 @@ import { RolesGuard } from './roles.guard';
 @Module({
   imports: [
     TypeOrmModule.forFeature([AdminUser]),
+    PassportModule,
     JwtModule.register({
       secret: process.env.ADMIN_JWT_SECRET || 'admin-dev-secret',
       signOptions: { expiresIn: '8h' },
