@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { MembersService } from 'src/components/members/members.service';
 import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { AdminMemberQueryDto } from 'src/libs/dto/admin/admin-member-query.dto';
@@ -77,6 +77,16 @@ export class AdminMembersController {
   }
 
   @ApiOperation({ summary: '회원 상태 변경 (이용중/탈퇴)' })
+  @ApiBody({
+    description: '회원 상태 변경 정보',
+    schema: {
+      type: 'object',
+      required: ['status'],
+      properties: {
+        status: { type: 'string', enum: ['ACTIVE', 'INACTIVE'], description: '회원 상태 (필수)' },
+      },
+    },
+  })
   @ApiResponse({ status: 200, description: '상태 변경 성공' })
   @Patch(':id/status')
   updateStatus(

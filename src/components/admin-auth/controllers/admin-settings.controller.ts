@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { AdminAuthService } from '../admin-auth.service';
 import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { CreateAdminDto } from 'src/libs/dto/admin/create-admin.dto';
@@ -64,6 +64,20 @@ export class AdminSettingsController {
   }
 
   @ApiOperation({ summary: '관리자 권한 수정 (SUPER_ADMIN)' })
+  @ApiBody({
+    description: '관리자 권한 수정 정보',
+    schema: {
+      type: 'object',
+      required: ['permissions'],
+      properties: {
+        permissions: { 
+          type: 'object', 
+          additionalProperties: { type: 'boolean' },
+          description: '권한 객체 (필수, 예: { "content": true, "members": false })' 
+        },
+      },
+    },
+  })
   @ApiResponse({ status: 200, description: '권한 수정 성공' })
   @Patch('admins/:id/permissions')
   @Roles(AdminRole.SUPER_ADMIN)

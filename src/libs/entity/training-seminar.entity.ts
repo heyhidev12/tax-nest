@@ -76,18 +76,26 @@ export class TrainingSeminar {
   @Column({ type: 'longtext' })
   body: string;
 
-  // 교육 기간 (시작일~종료일)
-  @Column({ type: 'date' })
+  // 교육 기간 (시작일~종료일) - 기존 호환성을 위해 유지
+  @Column({ type: 'date', nullable: true })
   startDate: Date;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date', nullable: true })
   endDate: Date;
 
-  // 교육 시간 (Text)
+  // 교육 일자 (다중 선택 가능) - JSON 배열로 저장: ["2025.12.20", "2025.12.22", "2025.12.25", "2025.12.26"]
+  @Column({ type: 'json', nullable: true })
+  educationDates: string[];
+
+  // 교육 시간 슬롯 (다중 선택 가능) - JSON 배열로 저장: ["11:00-12:00", "14:00-15:00", "17:00-18:00"]
+  @Column({ type: 'json', nullable: true })
+  educationTimeSlots: string[];
+
+  // 교육 시간 (Text) - 기존 호환성을 위해 유지
   @Column({ nullable: true })
   educationTime: string;
 
-  // 참여 시간 (HH:mm~HH:mm)
+  // 참여 시간 (HH:mm~HH:mm) - 기존 호환성을 위해 유지
   @Column({ nullable: true })
   participationTime: string;
 

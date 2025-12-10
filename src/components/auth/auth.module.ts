@@ -9,6 +9,10 @@ import { VerificationModule } from '../verification/verification.module';
 import { JwtStrategy } from './jwt.strategy';
 import { Member } from 'src/libs/entity/member.entity';
 import { ConfigService } from '@nestjs/config';
+import { OAuthService } from './oauth.service';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { KakaoStrategy } from './strategies/kakao.strategy';
+import { NaverStrategy } from './strategies/naver.strategy';
 
 @Module({
   imports: [
@@ -28,7 +32,14 @@ import { ConfigService } from '@nestjs/config';
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    OAuthService,
+    GoogleStrategy,
+    KakaoStrategy,
+    NaverStrategy,
+  ],
   controllers: [AuthController],
 })
 export class AuthModule {}

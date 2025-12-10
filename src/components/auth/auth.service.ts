@@ -59,6 +59,11 @@ export class AuthService {
     const member = await this.membersService.findByLoginId(dto.loginId);
     if (!member) throw new UnauthorizedException('ID 또는 비밀번호가 올바르지 않습니다.');
 
+    // SNS 로그인 사용자는 비밀번호가 없음
+    if (!member.passwordHash) {
+      throw new UnauthorizedException('SNS 로그인으로 가입한 계정입니다. SNS 로그인을 사용해주세요.');
+    }
+
     const match = await bcrypt.compare(dto.password, member.passwordHash);
     if (!match) throw new UnauthorizedException('ID 또는 비밀번호가 올바르지 않습니다.');
 

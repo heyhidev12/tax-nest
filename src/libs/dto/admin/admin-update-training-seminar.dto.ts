@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsDateString, IsInt, Min, IsBoolean, ValidateIf } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsDateString, IsInt, Min, IsBoolean, ValidateIf, IsArray, ArrayMinSize } from 'class-validator';
 import { TrainingSeminarType, RecruitmentType, TargetMemberType } from 'src/libs/entity/training-seminar.entity';
 
 export class AdminUpdateTrainingSeminarDto {
@@ -48,22 +48,42 @@ export class AdminUpdateTrainingSeminarDto {
   @IsString()
   body?: string;
 
-  @ApiPropertyOptional({ example: '2026-07-01', description: '교육 시작일 (YYYY-MM-DD 또는 YYYY.MM.DD 형식)' })
+  @ApiPropertyOptional({ example: '2026-07-01', description: '교육 시작일 (YYYY-MM-DD 또는 YYYY.MM.DD 형식) - 기존 호환성' })
   @IsOptional()
   @IsString()
   startDate?: string;
 
-  @ApiPropertyOptional({ example: '2026-07-03', description: '교육 종료일 (YYYY-MM-DD 또는 YYYY.MM.DD 형식)' })
+  @ApiPropertyOptional({ example: '2026-07-03', description: '교육 종료일 (YYYY-MM-DD 또는 YYYY.MM.DD 형식) - 기존 호환성' })
   @IsOptional()
   @IsString()
   endDate?: string;
 
-  @ApiPropertyOptional({ example: '09:00-18:00', description: '교육 시간 (Text)' })
+  @ApiPropertyOptional({ 
+    example: ['2025.12.20', '2025.12.22', '2025.12.25', '2025.12.26'], 
+    description: '교육 일자 (다중 선택 가능, YYYY.MM.DD 또는 YYYY-MM-DD 형식 배열)' 
+  })
+  @IsOptional()
+  @IsArray({ message: '교육 일자는 배열 형식이어야 합니다.' })
+  @ArrayMinSize(1, { message: '최소 1개 이상의 교육 일자를 선택해주세요.' })
+  @IsString({ each: true, message: '각 교육 일자는 문자열 형식이어야 합니다.' })
+  educationDates?: string[];
+
+  @ApiPropertyOptional({ 
+    example: ['11:00-12:00', '14:00-15:00', '17:00-18:00'], 
+    description: '교육 시간 슬롯 (다중 선택 가능, HH:mm-HH:mm 형식 배열)' 
+  })
+  @IsOptional()
+  @IsArray({ message: '교육 시간 슬롯은 배열 형식이어야 합니다.' })
+  @ArrayMinSize(1, { message: '최소 1개 이상의 교육 시간 슬롯을 선택해주세요.' })
+  @IsString({ each: true, message: '각 교육 시간 슬롯은 문자열 형식이어야 합니다.' })
+  educationTimeSlots?: string[];
+
+  @ApiPropertyOptional({ example: '09:00-18:00', description: '교육 시간 (Text) - 기존 호환성' })
   @IsOptional()
   @IsString()
   educationTime?: string;
 
-  @ApiPropertyOptional({ example: '14:00-16:00', description: '참여 시간 (HH:mm-HH:mm 형식)' })
+  @ApiPropertyOptional({ example: '14:00-16:00', description: '참여 시간 (HH:mm-HH:mm 형식) - 기존 호환성' })
   @IsOptional()
   @IsString()
   participationTime?: string;

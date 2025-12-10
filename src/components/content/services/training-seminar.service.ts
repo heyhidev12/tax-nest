@@ -73,6 +73,45 @@ export class TrainingSeminarService {
         throw new BadRequestException('교육 종료일 형식이 올바르지 않습니다. (YYYY-MM-DD 또는 YYYY.MM.DD 형식)');
       }
     }
+
+    // 교육 일자 배열 유효성 검사 및 정규화
+    if (seminarData.educationDates && Array.isArray(seminarData.educationDates)) {
+      if (seminarData.educationDates.length === 0) {
+        throw new BadRequestException('최소 1개 이상의 교육 일자를 선택해주세요.');
+      }
+      // 각 날짜 형식 검증 (YYYY.MM.DD 또는 YYYY-MM-DD)
+      seminarData.educationDates = seminarData.educationDates.map((date: string) => {
+        if (typeof date !== 'string') {
+          throw new BadRequestException('교육 일자는 문자열 배열이어야 합니다.');
+        }
+        // YYYY.MM.DD 형식을 YYYY-MM-DD로 정규화 (저장은 원본 형식 유지)
+        const normalizedDate = date.replace(/\./g, '-');
+        const dateObj = new Date(normalizedDate);
+        if (isNaN(dateObj.getTime())) {
+          throw new BadRequestException(`교육 일자 형식이 올바르지 않습니다: ${date} (YYYY.MM.DD 또는 YYYY-MM-DD 형식)`);
+        }
+        return date; // 원본 형식 유지
+      });
+    }
+
+    // 교육 시간 슬롯 배열 유효성 검사
+    if (seminarData.educationTimeSlots && Array.isArray(seminarData.educationTimeSlots)) {
+      if (seminarData.educationTimeSlots.length === 0) {
+        throw new BadRequestException('최소 1개 이상의 교육 시간 슬롯을 선택해주세요.');
+      }
+      // 각 시간 슬롯 형식 검증 (HH:mm-HH:mm)
+      seminarData.educationTimeSlots = seminarData.educationTimeSlots.map((slot: string) => {
+        if (typeof slot !== 'string') {
+          throw new BadRequestException('교육 시간 슬롯은 문자열 배열이어야 합니다.');
+        }
+        // HH:mm-HH:mm 형식 검증
+        const timeSlotRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]-([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+        if (!timeSlotRegex.test(slot)) {
+          throw new BadRequestException(`교육 시간 슬롯 형식이 올바르지 않습니다: ${slot} (HH:mm-HH:mm 형식, 예: 11:00-12:00)`);
+        }
+        return slot;
+      });
+    }
     
     const seminar = this.seminarRepo.create(seminarData);
     return this.seminarRepo.save(seminar);
@@ -143,6 +182,20 @@ export class TrainingSeminarService {
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
 
+      // 교육 일자 포맷팅 (배열이 있으면 사용, 없으면 기존 startDate/endDate 사용)
+      let trainingDateFormatted = '';
+      if (item.educationDates && Array.isArray(item.educationDates) && item.educationDates.length > 0) {
+        trainingDateFormatted = item.educationDates.join(', ');
+      } else if (item.startDate && item.endDate) {
+        trainingDateFormatted = `${this.formatDate(item.startDate)} ~ ${this.formatDate(item.endDate)}`;
+      }
+
+      // 교육 시간 슬롯 포맷팅
+      let educationTimeSlotsFormatted = '';
+      if (item.educationTimeSlots && Array.isArray(item.educationTimeSlots) && item.educationTimeSlots.length > 0) {
+        educationTimeSlotsFormatted = item.educationTimeSlots.join(', ');
+      }
+
       return {
         no,
         id: item.id,
@@ -158,7 +211,10 @@ export class TrainingSeminarService {
         targetMemberTypeLabel: this.getTargetMemberTypeLabel(item.targetMemberType),
         startDate: item.startDate,
         endDate: item.endDate,
-        trainingDateFormatted: `${this.formatDate(item.startDate)} ~ ${this.formatDate(item.endDate)}`,
+        educationDates: item.educationDates || [],
+        educationTimeSlots: item.educationTimeSlots || [],
+        trainingDateFormatted,
+        educationTimeSlotsFormatted,
         educationTime: item.educationTime,
         participationTime: item.participationTime,
         location: item.location,
@@ -205,13 +261,28 @@ export class TrainingSeminarService {
     });
     if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
     
+    // 교육 일자 포맷팅
+    let trainingDateFormatted = '';
+    if (seminar.educationDates && Array.isArray(seminar.educationDates) && seminar.educationDates.length > 0) {
+      trainingDateFormatted = seminar.educationDates.join(', ');
+    } else if (seminar.startDate && seminar.endDate) {
+      trainingDateFormatted = `${this.formatDate(seminar.startDate)} ~ ${this.formatDate(seminar.endDate)}`;
+    }
+
+    // 교육 시간 슬롯 포맷팅
+    let educationTimeSlotsFormatted = '';
+    if (seminar.educationTimeSlots && Array.isArray(seminar.educationTimeSlots) && seminar.educationTimeSlots.length > 0) {
+      educationTimeSlotsFormatted = seminar.educationTimeSlots.join(', ');
+    }
+
     return {
       ...seminar,
       typeLabel: this.getTypeLabel(seminar.type),
       recruitmentTypeLabel: this.getRecruitmentTypeLabel(seminar.recruitmentType),
       recruitmentEndDateFormatted: this.formatRecruitmentDate(seminar.recruitmentEndDate),
       targetMemberTypeLabel: this.getTargetMemberTypeLabel(seminar.targetMemberType),
-      trainingDateFormatted: `${this.formatDate(seminar.startDate)} ~ ${this.formatDate(seminar.endDate)}`,
+      trainingDateFormatted,
+      educationTimeSlotsFormatted,
       exposedLabel: seminar.isExposed ? 'Y' : 'N',
       applicationCount: seminar.applications?.length || 0,
       createdAtFormatted: this.formatDateTime(seminar.createdAt),
@@ -253,6 +324,49 @@ export class TrainingSeminarService {
       updateData.endDate = new Date(normalizedDate);
       if (isNaN(updateData.endDate.getTime())) {
         throw new BadRequestException('교육 종료일 형식이 올바르지 않습니다. (YYYY-MM-DD 또는 YYYY.MM.DD 형식)');
+      }
+    }
+
+    // 교육 일자 배열 유효성 검사 및 정규화
+    if (updateData.educationDates !== undefined) {
+      if (Array.isArray(updateData.educationDates)) {
+        if (updateData.educationDates.length === 0) {
+          throw new BadRequestException('최소 1개 이상의 교육 일자를 선택해주세요.');
+        }
+        updateData.educationDates = updateData.educationDates.map((date: string) => {
+          if (typeof date !== 'string') {
+            throw new BadRequestException('교육 일자는 문자열 배열이어야 합니다.');
+          }
+          const normalizedDate = date.replace(/\./g, '-');
+          const dateObj = new Date(normalizedDate);
+          if (isNaN(dateObj.getTime())) {
+            throw new BadRequestException(`교육 일자 형식이 올바르지 않습니다: ${date} (YYYY.MM.DD 또는 YYYY-MM-DD 형식)`);
+          }
+          return date;
+        });
+      } else if (updateData.educationDates !== null) {
+        throw new BadRequestException('교육 일자는 배열 형식이어야 합니다.');
+      }
+    }
+
+    // 교육 시간 슬롯 배열 유효성 검사
+    if (updateData.educationTimeSlots !== undefined) {
+      if (Array.isArray(updateData.educationTimeSlots)) {
+        if (updateData.educationTimeSlots.length === 0) {
+          throw new BadRequestException('최소 1개 이상의 교육 시간 슬롯을 선택해주세요.');
+        }
+        updateData.educationTimeSlots = updateData.educationTimeSlots.map((slot: string) => {
+          if (typeof slot !== 'string') {
+            throw new BadRequestException('교육 시간 슬롯은 문자열 배열이어야 합니다.');
+          }
+          const timeSlotRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]-([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+          if (!timeSlotRegex.test(slot)) {
+            throw new BadRequestException(`교육 시간 슬롯 형식이 올바르지 않습니다: ${slot} (HH:mm-HH:mm 형식, 예: 11:00-12:00)`);
+          }
+          return slot;
+        });
+      } else if (updateData.educationTimeSlots !== null) {
+        throw new BadRequestException('교육 시간 슬롯은 배열 형식이어야 합니다.');
       }
     }
     

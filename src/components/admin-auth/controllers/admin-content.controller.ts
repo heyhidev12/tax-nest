@@ -61,14 +61,39 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '메인 배너 생성' })
-  @ApiBody({ description: '메인 배너 생성 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '메인 배너 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['mediaType', 'mediaUrl'],
+      properties: {
+        mediaType: { type: 'string', enum: ['IMAGE', 'VIDEO'], description: '미디어 타입 (필수)' },
+        mediaUrl: { type: 'string', description: '미디어 URL (필수)' },
+        linkUrl: { type: 'string', description: '링크 URL (선택)' },
+        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
+        isActive: { type: 'boolean', description: '활성화 여부 (기본: true)' },
+      },
+    },
+  })
   @Post('banners')
   createBanner(@Body() body: any) {
     return this.bannerService.create(body);
   }
 
   @ApiOperation({ summary: '메인 배너 수정' })
-  @ApiBody({ description: '메인 배너 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '메인 배너 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        mediaType: { type: 'string', enum: ['IMAGE', 'VIDEO'], description: '미디어 타입' },
+        mediaUrl: { type: 'string', description: '미디어 URL' },
+        linkUrl: { type: 'string', description: '링크 URL' },
+        displayOrder: { type: 'number', description: '표시 순서' },
+        isActive: { type: 'boolean', description: '활성화 여부' },
+      },
+    },
+  })
   @Patch('banners/:id')
   updateBanner(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.bannerService.update(id, body);
@@ -141,7 +166,16 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '연혁 연도 수정' })
-  @ApiBody({ description: '연혁 연도 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '연혁 연도 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        year: { type: 'number', description: '연도' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('history/years/:id')
   updateHistoryYear(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.historyService.updateYear(id, body);
@@ -196,6 +230,18 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '연혁 항목 생성' })
+  @ApiBody({
+    description: '연혁 항목 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['content'],
+      properties: {
+        month: { type: 'number', description: '월 (선택, 1-12)' },
+        content: { type: 'string', description: '항목 내용 (필수)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+      },
+    },
+  })
   @Post('history/years/:yearId/items')
   createHistoryItem(
     @Param('yearId', ParseIntPipe) yearId: number,
@@ -205,6 +251,17 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '연혁 항목 수정' })
+  @ApiBody({
+    description: '연혁 항목 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        month: { type: 'number', description: '월 (1-12)' },
+        content: { type: 'string', description: '항목 내용' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('history/items/:id')
   updateHistoryItem(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.historyService.updateItem(id, body);
@@ -284,7 +341,17 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '수상/인증 연도 수정' })
-  @ApiBody({ description: '수상/인증 연도 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '수상/인증 연도 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        yearName: { type: 'string', description: '연도명' },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('awards/years/:id')
   updateAwardYear(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.awardService.updateYear(id, body);
@@ -351,6 +418,20 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '수상/인증 생성' })
+  @ApiBody({
+    description: '수상/인증 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name', 'source', 'imageUrl'],
+      properties: {
+        name: { type: 'string', description: '수상/인증 명칭 (필수)' },
+        source: { type: 'string', description: '출처 (필수)' },
+        imageUrl: { type: 'string', description: '이미지 URL (필수)' },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (기본: false)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+      },
+    },
+  })
   @Post('awards/years/:yearId/awards')
   createAward(
     @Param('yearId', ParseIntPipe) yearId: number,
@@ -360,6 +441,19 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '수상/인증 수정' })
+  @ApiBody({
+    description: '수상/인증 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '수상/인증 명칭' },
+        source: { type: 'string', description: '출처' },
+        imageUrl: { type: 'string', description: '이미지 URL' },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('awards/:id')
   updateAward(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.awardService.updateAward(id, body);
@@ -427,12 +521,57 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '본사/지점 생성' })
+  @ApiBody({
+    description: '본사/지점 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name', 'address'],
+      properties: {
+        name: { type: 'string', description: '본사/지점 이름 (필수)' },
+        address: { type: 'string', description: '상세 주소 (필수)' },
+        phoneNumber: { type: 'string', description: '전화번호 (선택)' },
+        fax: { type: 'string', description: '팩스 (선택)' },
+        email: { type: 'string', description: '이메일 (선택)' },
+        blogUrl: { type: 'string', description: '블로그 URL (선택)' },
+        youtubeUrl: { type: 'string', description: 'YouTube URL (선택)' },
+        instagramUrl: { type: 'string', description: 'Instagram URL (선택)' },
+        websiteUrl: { type: 'string', description: 'Website URL (선택)' },
+        busInfo: { type: 'string', description: '버스 이용 방법 (선택)' },
+        subwayInfo: { type: 'string', description: '지하철 이용 방법 (선택)' },
+        taxiInfo: { type: 'string', description: '택시 이용 방법 (선택)' },
+        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+      },
+    },
+  })
   @Post('branches')
   createBranch(@Body() body: any) {
     return this.branchService.create(body);
   }
 
   @ApiOperation({ summary: '본사/지점 수정' })
+  @ApiBody({
+    description: '본사/지점 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '본사/지점 이름' },
+        address: { type: 'string', description: '상세 주소' },
+        phoneNumber: { type: 'string', description: '전화번호' },
+        fax: { type: 'string', description: '팩스' },
+        email: { type: 'string', description: '이메일' },
+        blogUrl: { type: 'string', description: '블로그 URL' },
+        youtubeUrl: { type: 'string', description: 'YouTube URL' },
+        instagramUrl: { type: 'string', description: 'Instagram URL' },
+        websiteUrl: { type: 'string', description: 'Website URL' },
+        busInfo: { type: 'string', description: '버스 이용 방법' },
+        subwayInfo: { type: 'string', description: '지하철 이용 방법' },
+        taxiInfo: { type: 'string', description: '택시 이용 방법' },
+        displayOrder: { type: 'number', description: '표시 순서' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('branches/:id')
   updateBranch(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.branchService.update(id, body);
@@ -457,6 +596,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '본사/지점 순서 변경' })
+  @ApiBody({
+    description: '본사/지점 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('branches/order')
   updateBranchOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.branchService.updateOrder(body.items);
@@ -476,12 +633,39 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '주요 고객 생성' })
+  @ApiBody({
+    description: '주요 고객 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['logoUrl'],
+      properties: {
+        logoUrl: { type: 'string', description: '로고 이미지 URL (필수)' },
+        name: { type: 'string', description: '고객사 이름 (선택, 내부 관리용)' },
+        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (기본: false)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+      },
+    },
+  })
   @Post('key-customers')
   createKeyCustomer(@Body() body: any) {
     return this.keyCustomerService.create(body);
   }
 
   @ApiOperation({ summary: '주요 고객 수정' })
+  @ApiBody({
+    description: '주요 고객 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        logoUrl: { type: 'string', description: '로고 이미지 URL' },
+        name: { type: 'string', description: '고객사 이름 (내부 관리용)' },
+        displayOrder: { type: 'number', description: '표시 순서' },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('key-customers/:id')
   updateKeyCustomer(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.keyCustomerService.update(id, body);
@@ -512,6 +696,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '주요 고객 순서 변경' })
+  @ApiBody({
+    description: '주요 고객 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('key-customers/order')
   updateKeyCustomerOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.keyCustomerService.updateOrder(body.items);
@@ -543,14 +745,67 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '업무분야 생성' })
-  @ApiBody({ description: '업무분야 생성 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '업무분야 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['contentType', 'name', 'imageUrl', 'majorCategory', 'overview', 'body'],
+      properties: {
+        contentType: { 
+          type: 'string', 
+          enum: ['A', 'B', 'C'], 
+          description: '콘텐츠 타입 (필수: A, B, C)' 
+        },
+        name: { type: 'string', description: '업무분야명 (필수)' },
+        subDescription: { type: 'string', description: '부제목 (선택)' },
+        imageUrl: { type: 'string', description: '대표 이미지 URL (필수)' },
+        majorCategory: { type: 'string', description: '대분류 카테고리 (필수)' },
+        minorCategory: { type: 'string', description: '중분류 카테고리 (선택)' },
+        overview: { type: 'string', description: '개요 (필수, 텍스트)' },
+        body: { type: 'string', description: '본문 HTML (필수)' },
+        youtubeUrl: { 
+          type: 'string', 
+          description: 'YouTube URL (선택, 여러 개는 JSON 배열 또는 콤마 구분)' 
+        },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (기본: false)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
+      },
+    },
+  })
   @Post('business-areas')
   createBusinessArea(@Body() body: any) {
     return this.businessAreaService.create(body);
   }
 
   @ApiOperation({ summary: '업무분야 수정' })
-  @ApiBody({ description: '업무분야 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '업무분야 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        contentType: { 
+          type: 'string', 
+          enum: ['A', 'B', 'C'], 
+          description: '콘텐츠 타입' 
+        },
+        name: { type: 'string', description: '업무분야명' },
+        subDescription: { type: 'string', description: '부제목' },
+        imageUrl: { type: 'string', description: '대표 이미지 URL' },
+        majorCategory: { type: 'string', description: '대분류 카테고리' },
+        minorCategory: { type: 'string', description: '중분류 카테고리' },
+        overview: { type: 'string', description: '개요 (텍스트)' },
+        body: { type: 'string', description: '본문 HTML' },
+        youtubeUrl: { 
+          type: 'string', 
+          description: 'YouTube URL (여러 개는 JSON 배열 또는 콤마 구분)' 
+        },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+        displayOrder: { type: 'number', description: '표시 순서' },
+      },
+    },
+  })
   @Patch('business-areas/:id')
   updateBusinessArea(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.businessAreaService.update(id, body);
@@ -738,14 +993,45 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '칼럼 생성' })
-  @ApiBody({ description: '칼럼 생성 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '칼럼 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name', 'categoryName', 'thumbnailUrl', 'body'],
+      properties: {
+        name: { type: 'string', description: '칼럼명 (필수)' },
+        categoryName: { type: 'string', description: '카테고리명 (필수)' },
+        thumbnailUrl: { type: 'string', description: '썸네일 이미지 URL (필수)' },
+        body: { type: 'string', description: '본문 HTML (필수)' },
+        authorName: { type: 'string', description: '작성자 이름 (선택)' },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (기본: false)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
+      },
+    },
+  })
   @Post('columns')
   createColumn(@Body() body: any) {
     return this.columnService.create(body);
   }
 
   @ApiOperation({ summary: '칼럼 수정' })
-  @ApiBody({ description: '칼럼 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '칼럼 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '칼럼명' },
+        categoryName: { type: 'string', description: '카테고리명' },
+        thumbnailUrl: { type: 'string', description: '썸네일 이미지 URL' },
+        body: { type: 'string', description: '본문 HTML' },
+        authorName: { type: 'string', description: '작성자 이름' },
+        isMainExposed: { type: 'boolean', description: '메인 노출 여부' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+        displayOrder: { type: 'number', description: '표시 순서' },
+      },
+    },
+  })
   @Patch('columns/:id')
   updateColumn(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.columnService.update(id, body);
@@ -813,14 +1099,39 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '자료실 생성' })
-  @ApiBody({ description: '자료실 생성 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '자료실 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string', description: '자료실 이름 (필수)' },
+        boardType: { type: 'string', description: '게시판 유형 (선택, 갤러리/스니펫/게시판)' },
+        exposureType: { type: 'string', enum: ['ALL', 'GENERAL', 'INSURANCE', 'OTHER'], description: '노출 유형 (기본: ALL)' },
+        enableComments: { type: 'boolean', description: '댓글 기능 사용 여부 (기본: false)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+      },
+    },
+  })
   @Post('data-rooms')
   createDataRoom(@Body() body: any) {
     return this.dataRoomService.createRoom(body);
   }
 
   @ApiOperation({ summary: '자료실 수정' })
-  @ApiBody({ description: '자료실 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '자료실 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '자료실 이름' },
+        boardType: { type: 'string', description: '게시판 유형' },
+        exposureType: { type: 'string', enum: ['ALL', 'GENERAL', 'INSURANCE', 'OTHER'], description: '노출 유형' },
+        enableComments: { type: 'boolean', description: '댓글 기능 사용 여부' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('data-rooms/:id')
   updateDataRoom(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.dataRoomService.updateRoom(id, body);
@@ -860,14 +1171,45 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '자료실 콘텐츠 생성' })
-  @ApiBody({ description: '자료실 콘텐츠 생성 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '자료실 콘텐츠 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string', description: '콘텐츠 이름 (필수)' },
+        imageUrl: { type: 'string', description: '대표 이미지 URL (선택)' },
+        body: { type: 'string', description: '본문 HTML (선택)' },
+        displayBodyHtml: { type: 'boolean', description: '본문 노출 여부 (기본: true)' },
+        categoryName: { type: 'string', description: '카테고리명 (선택)' },
+        authorName: { type: 'string', description: '작성자 (선택)' },
+        attachmentUrl: { type: 'string', description: '첨부파일 URL (선택)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+      },
+    },
+  })
   @Post('data-rooms/:id/contents')
   createDataRoomContent(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.dataRoomService.createContent(id, body);
   }
 
   @ApiOperation({ summary: '자료실 콘텐츠 수정' })
-  @ApiBody({ description: '자료실 콘텐츠 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '자료실 콘텐츠 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '콘텐츠 이름' },
+        imageUrl: { type: 'string', description: '대표 이미지 URL' },
+        body: { type: 'string', description: '본문 HTML' },
+        displayBodyHtml: { type: 'boolean', description: '본문 노출 여부' },
+        categoryName: { type: 'string', description: '카테고리명' },
+        authorName: { type: 'string', description: '작성자' },
+        attachmentUrl: { type: 'string', description: '첨부파일 URL' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('data-room-contents/:id')
   updateDataRoomContent(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.dataRoomService.updateContent(id, body);
@@ -946,7 +1288,16 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '대분류 카테고리 수정' })
-  @ApiBody({ description: '대분류 카테고리 수정 정보', schema: { type: 'object' } })
+  @ApiBody({
+    description: '대분류 카테고리 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '카테고리명' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('categories/major/:id')
   updateMajorCategory(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.categoryService.updateMajor(id, body);
@@ -1024,6 +1375,16 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '중분류 카테고리 수정' })
+  @ApiBody({
+    description: '중분류 카테고리 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '카테고리명' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
   @Patch('categories/minor/:id')
   updateMinorCategory(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.categoryService.updateMinor(id, body);
@@ -1048,6 +1409,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '중분류 카테고리 순서 변경' })
+  @ApiBody({
+    description: '중분류 카테고리 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('categories/minor/order')
   updateMinorCategoryOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.categoryService.updateMinorOrder(body.items);
@@ -1070,6 +1449,7 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '구성원 추가' })
+  @ApiBody({ type: AdminCreateTaxMemberDto, description: '구성원 생성 정보' })
   @ApiResponse({ status: 201, description: '구성원 추가 성공' })
   @Post('tax-members')
   createTaxMember(@Body() dto: AdminCreateTaxMemberDto) {
@@ -1077,6 +1457,7 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '구성원 수정' })
+  @ApiBody({ type: AdminUpdateTaxMemberDto, description: '구성원 수정 정보' })
   @ApiResponse({ status: 200, description: '구성원 수정 성공' })
   @ApiResponse({ status: 404, description: '구성원 없음' })
   @Patch('tax-members/:id')
@@ -1103,6 +1484,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '세무사 회원 순서 변경' })
+  @ApiBody({
+    description: '세무사 회원 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('tax-members/order')
   updateTaxMemberOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.taxMemberService.updateOrder(body.items);
@@ -1116,24 +1515,64 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '노출 설정 수정' })
+  @ApiBody({
+    description: '노출 설정 수정 정보',
+    schema: {
+      type: 'object',
+      required: ['value'],
+      properties: {
+        value: { type: 'any', description: '설정 값 (필수)' },
+      },
+    },
+  })
   @Patch('exposure-settings/:key')
   updateExposureSetting(@Param('key') key: string, @Body() body: { value: any }) {
     return this.exposureSettingsService.set(key, body.value);
   }
 
   @ApiOperation({ summary: 'Awards 메인 노출 설정 (Y/N, 기본: N)' })
+  @ApiBody({
+    description: 'Awards 메인 노출 설정',
+    schema: {
+      type: 'object',
+      required: ['exposed'],
+      properties: {
+        exposed: { type: 'boolean', description: '노출 여부 (필수)' },
+      },
+    },
+  })
   @Patch('exposure-settings/awards-main')
   setAwardsMainExposure(@Body() body: { exposed: boolean }) {
     return this.exposureSettingsService.setAwardsMainExposed(body.exposed);
   }
 
   @ApiOperation({ summary: 'Newsletter 페이지 노출 설정 (Y/N, 기본: N)' })
+  @ApiBody({
+    description: 'Newsletter 페이지 노출 설정',
+    schema: {
+      type: 'object',
+      required: ['exposed'],
+      properties: {
+        exposed: { type: 'boolean', description: '노출 여부 (필수)' },
+      },
+    },
+  })
   @Patch('exposure-settings/newsletter-page')
   setNewsletterPageExposure(@Body() body: { exposed: boolean }) {
     return this.exposureSettingsService.setNewsletterPageExposed(body.exposed);
   }
 
   @ApiOperation({ summary: 'History 페이지 노출 설정 (Y/N, 기본: N)' })
+  @ApiBody({
+    description: 'History 페이지 노출 설정',
+    schema: {
+      type: 'object',
+      required: ['exposed'],
+      properties: {
+        exposed: { type: 'boolean', description: '노출 여부 (필수)' },
+      },
+    },
+  })
   @Patch('exposure-settings/history-page')
   setHistoryPageExposure(@Body() body: { exposed: boolean }) {
     return this.exposureSettingsService.setHistoryPageExposed(body.exposed);

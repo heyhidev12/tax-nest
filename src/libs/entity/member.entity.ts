@@ -16,8 +16,8 @@ export class Member {
   @Column({ unique: true })
   loginId: string;
 
-  @Column()
-  passwordHash: string;
+  @Column({ nullable: true })
+  passwordHash: string; // Nullable for SNS login users
 
   @Column({ length: 50 })
   name: string;
@@ -46,6 +46,13 @@ export class Member {
   // 소속 (보험사 이름 등)
   @Column({ nullable: true })
   affiliation: string;
+
+  // SNS 로그인 관련
+  @Column({ nullable: true })
+  provider: string; // 'google', 'kakao', 'naver'
+
+  @Column({ nullable: true })
+  providerId: string; // SNS 제공자의 사용자 ID
 
   @CreateDateColumn()
   createdAt: Date;
