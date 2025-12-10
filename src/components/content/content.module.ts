@@ -28,6 +28,7 @@ import { DataRoomService } from './services/data-room.service';
 import { CategoryService } from './services/category.service';
 import { TaxMemberService } from './services/tax-member.service';
 import { ExposureSettingsService } from './services/exposure-settings.service';
+import { PublicContentController } from './controllers/public-content.controller';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { ExposureSettingsService } from './services/exposure-settings.service';
     TaxMemberService,
     ExposureSettingsService,
   ],
+  controllers: [PublicContentController],
   exports: [
     MainBannerService,
     HistoryService,

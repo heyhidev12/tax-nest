@@ -42,11 +42,39 @@ export class TrainingSeminarService {
 
   // === Seminar CRUD ===
   async create(data: Partial<TrainingSeminar>) {
-    // 선착순일 경우 정원 필수
-    if (data.recruitmentType === RecruitmentType.FIRST_COME && !data.quota) {
-      throw new BadRequestException('선착순 모집의 경우 정원을 입력해주세요.');
+    // 선착순일 경우 정원 필수 및 유효성 검사
+    if (data.recruitmentType === RecruitmentType.FIRST_COME) {
+      if (!data.quota || data.quota <= 0) {
+        throw new BadRequestException('선착순 모집의 경우 정원을 입력해주세요. (정원은 1명 이상이어야 합니다.)');
+      }
     }
-    const seminar = this.seminarRepo.create(data);
+    
+    // 날짜 문자열을 Date 객체로 변환 (YYYY.MM.DD 또는 YYYY-MM-DD 형식 지원)
+    const seminarData: any = { ...data };
+    if (seminarData.recruitmentEndDate && typeof seminarData.recruitmentEndDate === 'string') {
+      // YYYY.MM.DD 형식을 YYYY-MM-DD로 변환
+      const normalizedDate = seminarData.recruitmentEndDate.replace(/\./g, '-');
+      seminarData.recruitmentEndDate = new Date(normalizedDate);
+      if (isNaN(seminarData.recruitmentEndDate.getTime())) {
+        throw new BadRequestException('모집 종료일 형식이 올바르지 않습니다. (YYYY.MM.DD 또는 YYYY-MM-DD 형식)');
+      }
+    }
+    if (seminarData.startDate && typeof seminarData.startDate === 'string') {
+      const normalizedDate = seminarData.startDate.replace(/\./g, '-');
+      seminarData.startDate = new Date(normalizedDate);
+      if (isNaN(seminarData.startDate.getTime())) {
+        throw new BadRequestException('교육 시작일 형식이 올바르지 않습니다. (YYYY-MM-DD 또는 YYYY.MM.DD 형식)');
+      }
+    }
+    if (seminarData.endDate && typeof seminarData.endDate === 'string') {
+      const normalizedDate = seminarData.endDate.replace(/\./g, '-');
+      seminarData.endDate = new Date(normalizedDate);
+      if (isNaN(seminarData.endDate.getTime())) {
+        throw new BadRequestException('교육 종료일 형식이 올바르지 않습니다. (YYYY-MM-DD 또는 YYYY.MM.DD 형식)');
+      }
+    }
+    
+    const seminar = this.seminarRepo.create(seminarData);
     return this.seminarRepo.save(seminar);
   }
 
@@ -131,8 +159,10 @@ export class TrainingSeminarService {
         startDate: item.startDate,
         endDate: item.endDate,
         trainingDateFormatted: `${this.formatDate(item.startDate)} ~ ${this.formatDate(item.endDate)}`,
+        educationTime: item.educationTime,
         participationTime: item.participationTime,
         location: item.location,
+        otherInfo: item.otherInfo,
         quota: item.quota,
         applicationCount: item.applications?.length || 0,
         isExposed: item.isExposed,
@@ -192,7 +222,41 @@ export class TrainingSeminarService {
   async update(id: number, data: Partial<TrainingSeminar>) {
     const seminar = await this.seminarRepo.findOne({ where: { id } });
     if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
-    Object.assign(seminar, data);
+    
+    // 선착순으로 변경하거나 이미 선착순인 경우 정원 검증
+    const recruitmentType = data.recruitmentType ?? seminar.recruitmentType;
+    if (recruitmentType === RecruitmentType.FIRST_COME) {
+      const quota = data.quota ?? seminar.quota;
+      if (!quota || quota <= 0) {
+        throw new BadRequestException('선착순 모집의 경우 정원을 입력해주세요. (정원은 1명 이상이어야 합니다.)');
+      }
+    }
+    
+    // 날짜 문자열을 Date 객체로 변환 (YYYY.MM.DD 또는 YYYY-MM-DD 형식 지원)
+    const updateData: any = { ...data };
+    if (updateData.recruitmentEndDate && typeof updateData.recruitmentEndDate === 'string') {
+      const normalizedDate = updateData.recruitmentEndDate.replace(/\./g, '-');
+      updateData.recruitmentEndDate = new Date(normalizedDate);
+      if (isNaN(updateData.recruitmentEndDate.getTime())) {
+        throw new BadRequestException('모집 종료일 형식이 올바르지 않습니다. (YYYY.MM.DD 또는 YYYY-MM-DD 형식)');
+      }
+    }
+    if (updateData.startDate && typeof updateData.startDate === 'string') {
+      const normalizedDate = updateData.startDate.replace(/\./g, '-');
+      updateData.startDate = new Date(normalizedDate);
+      if (isNaN(updateData.startDate.getTime())) {
+        throw new BadRequestException('교육 시작일 형식이 올바르지 않습니다. (YYYY-MM-DD 또는 YYYY.MM.DD 형식)');
+      }
+    }
+    if (updateData.endDate && typeof updateData.endDate === 'string') {
+      const normalizedDate = updateData.endDate.replace(/\./g, '-');
+      updateData.endDate = new Date(normalizedDate);
+      if (isNaN(updateData.endDate.getTime())) {
+        throw new BadRequestException('교육 종료일 형식이 올바르지 않습니다. (YYYY-MM-DD 또는 YYYY.MM.DD 형식)');
+      }
+    }
+    
+    Object.assign(seminar, updateData);
     return this.seminarRepo.save(seminar);
   }
 
@@ -234,11 +298,25 @@ export class TrainingSeminarService {
     });
     if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
 
-    // 선착순일 경우 정원 체크
+    // 선착순일 경우 정원 체크 (참석 인원 수를 고려)
     if (seminar.recruitmentType === RecruitmentType.FIRST_COME && seminar.quota) {
-      const currentCount = seminar.applications?.length || 0;
-      if (currentCount >= seminar.quota) {
-        throw new BadRequestException('모집 정원이 마감되었습니다.');
+      // 현재 확정된 신청의 총 참석 인원 수 계산
+      const confirmedApplications = (seminar.applications || []).filter(
+        app => app.status === ApplicationStatus.CONFIRMED
+      );
+      const currentAttendeeCount = confirmedApplications.reduce(
+        (sum, app) => sum + (app.attendeeCount || 1), 
+        0
+      );
+      
+      // 신청하려는 참석 인원 수
+      const requestedAttendeeCount = data.attendeeCount || 1;
+      
+      // 정원 초과 체크
+      if (currentAttendeeCount + requestedAttendeeCount > seminar.quota) {
+        throw new BadRequestException(
+          `모집 정원이 마감되었습니다. (정원: ${seminar.quota}명, 현재 신청: ${currentAttendeeCount}명, 요청: ${requestedAttendeeCount}명)`
+        );
       }
     }
 

@@ -83,6 +83,10 @@ export class TrainingSeminar {
   @Column({ type: 'date' })
   endDate: Date;
 
+  // 교육 시간 (Text)
+  @Column({ nullable: true })
+  educationTime: string;
+
   // 참여 시간 (HH:mm~HH:mm)
   @Column({ nullable: true })
   participationTime: string;
@@ -90,6 +94,10 @@ export class TrainingSeminar {
   // 교육 장소
   @Column({ nullable: true })
   location: string;
+
+  // 기타 입력란
+  @Column({ type: 'text', nullable: true })
+  otherInfo: string;
 
   // 모집 정원 (선착순일 경우 필수)
   @Column({ nullable: true })
@@ -146,6 +154,10 @@ export class TrainingSeminarApplication {
   // 참석 인원
   @Column({ default: 1 })
   attendeeCount: number;
+
+  // 요청사항 (선택)
+  @Column({ type: 'text', nullable: true })
+  requestDetails: string;
 
   // 신청 상태 (대기중, 확정, 취소)
   @Column({ type: 'enum', enum: ApplicationStatus, default: ApplicationStatus.WAITING })

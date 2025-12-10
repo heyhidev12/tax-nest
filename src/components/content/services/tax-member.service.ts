@@ -38,23 +38,33 @@ export class TaxMemberService {
 
     const qb = this.memberRepo.createQueryBuilder('member');
 
+    // 조건들을 배열로 수집
+    const conditions: string[] = [];
+    const params: Record<string, any> = {};
+
+    // 노출 여부 필터 (includeHidden이 false면 노출된 것만, true면 isExposed 파라미터에 따라)
     if (!includeHidden) {
-      qb.andWhere('member.isExposed = :isExposed', { isExposed: true });
+      conditions.push('member.isExposed = :isExposed');
+      params.isExposed = true;
     } else if (isExposed !== undefined) {
-      qb.andWhere('member.isExposed = :isExposed', { isExposed });
+      conditions.push('member.isExposed = :isExposed');
+      params.isExposed = isExposed;
     }
 
     // 검색: 보험사명(소속명) 또는 구성원 명 (이미지 요구사항에 따라)
     if (search) {
-      qb.andWhere('(member.name LIKE :search OR member.affiliation LIKE :search)', {
-        search: `%${search}%`,
-      });
+      conditions.push('(member.name LIKE :search OR member.affiliation LIKE :search)');
+      params.search = `%${search}%`;
     }
 
     if (workArea) {
-      qb.andWhere('JSON_CONTAINS(member.workAreas, :workArea)', {
-        workArea: JSON.stringify(workArea),
-      });
+      conditions.push('JSON_CONTAINS(member.workAreas, :workArea)');
+      params.workArea = JSON.stringify(workArea);
+    }
+
+    // 조건 적용
+    if (conditions.length > 0) {
+      qb.where(conditions.join(' AND '), params);
     }
 
     // 정렬
@@ -73,10 +83,16 @@ export class TaxMemberService {
     // 응답 포맷: No, 구성원 명, 구성원 메인 이미지, 소속 명, 업무 분야(1순위/2순위/3순위), 노출 여부, 등록일시
     // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
     const formattedItems = items.map((item, index) => {
-      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest' 
-        ? total - ((page - 1) * limit + index)
-        : (page - 1) * limit + index + 1;
+      // 번호 계산: 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터, 순서순이면 큰 번호부터
+      let no: number;
+      if (sort === 'latest') {
+        no = total - ((page - 1) * limit + index);
+      } else if (sort === 'oldest') {
+        no = (page - 1) * limit + index + 1;
+      } else {
+        // order sort: 큰 번호부터
+        no = total - ((page - 1) * limit + index);
+      }
 
       // 업무 분야를 1순위/2순위/3순위로 표시
       const workAreasArray = item.workAreas || [];

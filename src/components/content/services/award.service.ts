@@ -19,6 +19,13 @@ interface AwardListOptions {
   includeHidden?: boolean;
 }
 
+interface PublicAwardListOptions {
+  isMainExposed?: boolean;
+  sort?: 'latest' | 'oldest' | 'order';
+  page?: number;
+  limit?: number;
+}
+
 @Injectable()
 export class AwardService {
   constructor(
@@ -245,6 +252,58 @@ export class AwardService {
       createdAt: award.createdAt,
       createdAtFormatted: this.formatDateTime(award.createdAt),
     }));
+  }
+
+  async findAllAwardsPublic(options: PublicAwardListOptions = {}) {
+    const {
+      isMainExposed,
+      sort = 'latest',
+      page = 1,
+      limit = 20,
+    } = options;
+
+    const qb = this.awardRepo.createQueryBuilder('award')
+      .leftJoinAndSelect('award.awardYear', 'year')
+      .where('award.isExposed = :isExposed', { isExposed: true });
+
+    if (isMainExposed !== undefined) {
+      qb.andWhere('award.isMainExposed = :isMainExposed', { isMainExposed });
+    }
+
+    // 정렬
+    if (sort === 'order') {
+      qb.orderBy('award.displayOrder', 'ASC').addOrderBy('award.createdAt', 'DESC');
+    } else if (sort === 'latest') {
+      qb.orderBy('award.createdAt', 'DESC');
+    } else {
+      qb.orderBy('award.createdAt', 'ASC');
+    }
+
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    const formattedItems = items.map((award, index) => {
+      const no = sort === 'latest'
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      return {
+        no,
+        id: award.id,
+        name: award.name,
+        source: award.source,
+        imageUrl: award.imageUrl,
+        yearName: award.awardYear?.yearName || '-',
+        yearId: award.awardYearId,
+        displayOrder: award.displayOrder,
+        isMainExposed: award.isMainExposed,
+        createdAt: award.createdAt,
+        createdAtFormatted: this.formatDateTime(award.createdAt),
+      };
+    });
+
+    return { items: formattedItems, total, page, limit };
   }
 
   async findAwardById(id: number) {

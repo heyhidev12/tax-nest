@@ -10,7 +10,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { MainBannerService } from 'src/components/content/services/main-banner.service';
 import { HistoryService } from 'src/components/content/services/history.service';
@@ -25,6 +25,12 @@ import { CategoryService } from 'src/components/content/services/category.servic
 import { TaxMemberService } from 'src/components/content/services/tax-member.service';
 import { ExposureSettingsService } from 'src/components/content/services/exposure-settings.service';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
+import { AdminTaxMemberQueryDto } from 'src/libs/dto/admin/admin-tax-member-query.dto';
+import { AdminCreateTaxMemberDto } from 'src/libs/dto/admin/admin-create-tax-member.dto';
+import { AdminUpdateTaxMemberDto } from 'src/libs/dto/admin/admin-update-tax-member.dto';
+import { AdminTrainingSeminarQueryDto } from 'src/libs/dto/admin/admin-training-seminar-query.dto';
+import { AdminCreateTrainingSeminarDto } from 'src/libs/dto/admin/admin-create-training-seminar.dto';
+import { AdminUpdateTrainingSeminarDto } from 'src/libs/dto/admin/admin-update-training-seminar.dto';
 import { ApplicationStatus } from 'src/libs/entity/training-seminar.entity';
 
 @ApiTags('Admin Content')
@@ -55,12 +61,14 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '메인 배너 생성' })
+  @ApiBody({ description: '메인 배너 생성 정보', schema: { type: 'object' } })
   @Post('banners')
   createBanner(@Body() body: any) {
     return this.bannerService.create(body);
   }
 
   @ApiOperation({ summary: '메인 배너 수정' })
+  @ApiBody({ description: '메인 배너 수정 정보', schema: { type: 'object' } })
   @Patch('banners/:id')
   updateBanner(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.bannerService.update(id, body);
@@ -79,6 +87,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '메인 배너 순서 변경' })
+  @ApiBody({
+    description: '메인 배너 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('banners/order')
   updateBannerOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.bannerService.updateOrder(body.items);
@@ -98,12 +124,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '연혁 연도 생성' })
+  @ApiBody({
+    description: '연혁 연도 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['year'],
+      properties: {
+        year: { type: 'number' },
+        isExposed: { type: 'boolean' },
+      },
+    },
+  })
   @Post('history/years')
   createHistoryYear(@Body() body: { year: number; isExposed?: boolean }) {
     return this.historyService.createYear(body.year, body.isExposed);
   }
 
   @ApiOperation({ summary: '연혁 연도 수정' })
+  @ApiBody({ description: '연혁 연도 수정 정보', schema: { type: 'object' } })
   @Patch('history/years/:id')
   updateHistoryYear(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.historyService.updateYear(id, body);
@@ -128,6 +166,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '연혁 연도 순서 변경' })
+  @ApiBody({
+    description: '연혁 연도 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('history/years/order')
   updateHistoryYearOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.historyService.updateYearOrder(body.items);
@@ -173,6 +229,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '연혁 항목 순서 변경' })
+  @ApiBody({
+    description: '연혁 항목 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('history/items/order')
   updateHistoryItemOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.historyService.updateItemOrder(body.items);
@@ -192,12 +266,25 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '수상/인증 연도 생성' })
+  @ApiBody({
+    description: '수상/인증 연도 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['yearName'],
+      properties: {
+        yearName: { type: 'string' },
+        isMainExposed: { type: 'boolean' },
+        isExposed: { type: 'boolean' },
+      },
+    },
+  })
   @Post('awards/years')
   createAwardYear(@Body() body: { yearName: string; isMainExposed?: boolean; isExposed?: boolean }) {
     return this.awardService.createYear(body.yearName, body.isMainExposed, body.isExposed);
   }
 
   @ApiOperation({ summary: '수상/인증 연도 수정' })
+  @ApiBody({ description: '수상/인증 연도 수정 정보', schema: { type: 'object' } })
   @Patch('awards/years/:id')
   updateAwardYear(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.awardService.updateYear(id, body);
@@ -228,6 +315,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '수상/인증 연도 순서 변경' })
+  @ApiBody({
+    description: '수상/인증 연도 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('awards/years/order')
   updateAwardYearOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.awardService.updateYearOrder(body.items);
@@ -285,6 +390,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '수상/인증 순서 변경' })
+  @ApiBody({
+    description: '수상/인증 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('awards/order')
   updateAwardOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.awardService.updateAwardOrder(body.items);
@@ -420,12 +543,14 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '업무분야 생성' })
+  @ApiBody({ description: '업무분야 생성 정보', schema: { type: 'object' } })
   @Post('business-areas')
   createBusinessArea(@Body() body: any) {
     return this.businessAreaService.create(body);
   }
 
   @ApiOperation({ summary: '업무분야 수정' })
+  @ApiBody({ description: '업무분야 수정 정보', schema: { type: 'object' } })
   @Patch('business-areas/:id')
   updateBusinessArea(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.businessAreaService.update(id, body);
@@ -456,34 +581,62 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '업무분야 순서 변경' })
+  @ApiBody({
+    description: '업무분야 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('business-areas/order')
   updateBusinessAreaOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.businessAreaService.updateOrder(body.items);
   }
 
   // ===== TRAINING/SEMINARS =====
-  @ApiOperation({ summary: '교육/세미나 목록 (검색: 이름, 필터: 유형/모집유형/대상회원/노출여부)' })
+  @ApiOperation({ summary: '교육/세미나 목록 조회 (검색: 교육/세미나명, 필터: 유형/모집유형/회원유형/노출여부)' })
+  @ApiResponse({ status: 200, description: '목록 조회 성공' })
   @Get('training-seminars')
-  listTrainingSeminars(@Query() query: any) {
+  listTrainingSeminars(@Query() query: AdminTrainingSeminarQueryDto) {
     return this.trainingSeminarService.findAll({ ...query, includeHidden: true });
   }
 
-  @ApiOperation({ summary: '교육/세미나 상세' })
+  @ApiOperation({ summary: '교육/세미나 상세 조회' })
+  @ApiResponse({ status: 200, description: '상세 조회 성공' })
+  @ApiResponse({ status: 404, description: '교육/세미나 없음' })
   @Get('training-seminars/:id')
   getTrainingSeminar(@Param('id', ParseIntPipe) id: number) {
     return this.trainingSeminarService.findById(id);
   }
 
-  @ApiOperation({ summary: '교육/세미나 생성' })
+  @ApiOperation({ summary: '교육/세미나 추가' })
+  @ApiBody({ type: AdminCreateTrainingSeminarDto, description: '교육/세미나 생성 정보' })
+  @ApiResponse({ status: 201, description: '교육/세미나 추가 성공' })
+  @ApiResponse({ status: 400, description: '선착순 모집의 경우 정원 필수' })
   @Post('training-seminars')
-  createTrainingSeminar(@Body() body: any) {
-    return this.trainingSeminarService.create(body);
+  createTrainingSeminar(@Body() dto: AdminCreateTrainingSeminarDto) {
+    return this.trainingSeminarService.create(dto as any);
   }
 
   @ApiOperation({ summary: '교육/세미나 수정' })
+  @ApiBody({ type: AdminUpdateTrainingSeminarDto, description: '교육/세미나 수정 정보' })
+  @ApiResponse({ status: 200, description: '교육/세미나 수정 성공' })
+  @ApiResponse({ status: 404, description: '교육/세미나 없음' })
+  @ApiResponse({ status: 400, description: '선착순 모집의 경우 정원 필수' })
   @Patch('training-seminars/:id')
-  updateTrainingSeminar(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-    return this.trainingSeminarService.update(id, body);
+  updateTrainingSeminar(@Param('id', ParseIntPipe) id: number, @Body() dto: AdminUpdateTrainingSeminarDto) {
+    return this.trainingSeminarService.update(id, dto as any);
   }
 
   @ApiOperation({ summary: '교육/세미나 삭제' })
@@ -536,6 +689,15 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '신청 상태 변경' })
+  @ApiBody({
+    description: '신청 상태 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['WAITING', 'CONFIRMED', 'CANCELLED'] },
+      },
+    },
+  })
   @Patch('training-seminar-applications/:id/status')
   updateApplicationStatus(
     @Param('id', ParseIntPipe) id: number,
@@ -576,12 +738,14 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '칼럼 생성' })
+  @ApiBody({ description: '칼럼 생성 정보', schema: { type: 'object' } })
   @Post('columns')
   createColumn(@Body() body: any) {
     return this.columnService.create(body);
   }
 
   @ApiOperation({ summary: '칼럼 수정' })
+  @ApiBody({ description: '칼럼 수정 정보', schema: { type: 'object' } })
   @Patch('columns/:id')
   updateColumn(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.columnService.update(id, body);
@@ -612,6 +776,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '칼럼 순서 변경' })
+  @ApiBody({
+    description: '칼럼 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('columns/order')
   updateColumnOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.columnService.updateOrder(body.items);
@@ -631,12 +813,14 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '자료실 생성' })
+  @ApiBody({ description: '자료실 생성 정보', schema: { type: 'object' } })
   @Post('data-rooms')
   createDataRoom(@Body() body: any) {
     return this.dataRoomService.createRoom(body);
   }
 
   @ApiOperation({ summary: '자료실 수정' })
+  @ApiBody({ description: '자료실 수정 정보', schema: { type: 'object' } })
   @Patch('data-rooms/:id')
   updateDataRoom(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.dataRoomService.updateRoom(id, body);
@@ -676,12 +860,14 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '자료실 콘텐츠 생성' })
+  @ApiBody({ description: '자료실 콘텐츠 생성 정보', schema: { type: 'object' } })
   @Post('data-rooms/:id/contents')
   createDataRoomContent(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.dataRoomService.createContent(id, body);
   }
 
   @ApiOperation({ summary: '자료실 콘텐츠 수정' })
+  @ApiBody({ description: '자료실 콘텐츠 수정 정보', schema: { type: 'object' } })
   @Patch('data-room-contents/:id')
   updateDataRoomContent(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.dataRoomService.updateContent(id, body);
@@ -743,12 +929,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '대분류 카테고리 생성' })
+  @ApiBody({
+    description: '대분류 카테고리 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string' },
+        isExposed: { type: 'boolean' },
+      },
+    },
+  })
   @Post('categories/major')
   createMajorCategory(@Body() body: { name: string; isExposed?: boolean }) {
     return this.categoryService.createMajor(body.name, body.isExposed);
   }
 
   @ApiOperation({ summary: '대분류 카테고리 수정' })
+  @ApiBody({ description: '대분류 카테고리 수정 정보', schema: { type: 'object' } })
   @Patch('categories/major/:id')
   updateMajorCategory(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.categoryService.updateMajor(id, body);
@@ -773,6 +971,24 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '대분류 카테고리 순서 변경' })
+  @ApiBody({
+    description: '대분류 카테고리 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
   @Patch('categories/major/order')
   updateMajorCategoryOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
     return this.categoryService.updateMajorOrder(body.items);
@@ -791,6 +1007,17 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '중분류 카테고리 생성' })
+  @ApiBody({
+    description: '중분류 카테고리 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string' },
+        isExposed: { type: 'boolean' },
+      },
+    },
+  })
   @Post('categories/major/:majorId/minor')
   createMinorCategory(@Param('majorId', ParseIntPipe) majorId: number, @Body() body: { name: string; isExposed?: boolean }) {
     return this.categoryService.createMinor(majorId, body.name, body.isExposed);
@@ -827,28 +1054,34 @@ export class AdminContentController {
   }
 
   // ===== TAX MEMBERS (세무사 회원 프로필) =====
-  @ApiOperation({ summary: '세무사 회원 목록 (검색: 보험사명/회원명, 필터: 업무분야/노출여부)' })
+  @ApiOperation({ summary: '구성원 목록 조회 (검색: 보험사명/구성원명, 필터: 업무분야/노출여부)' })
+  @ApiResponse({ status: 200, description: '목록 조회 성공' })
   @Get('tax-members')
-  listTaxMembers(@Query() query: any) {
+  listTaxMembers(@Query() query: AdminTaxMemberQueryDto) {
     return this.taxMemberService.findAll({ ...query, includeHidden: true });
   }
 
-  @ApiOperation({ summary: '세무사 회원 상세' })
+  @ApiOperation({ summary: '구성원 상세 조회' })
+  @ApiResponse({ status: 200, description: '상세 조회 성공' })
+  @ApiResponse({ status: 404, description: '구성원 없음' })
   @Get('tax-members/:id')
   getTaxMember(@Param('id', ParseIntPipe) id: number) {
     return this.taxMemberService.findById(id);
   }
 
-  @ApiOperation({ summary: '세무사 회원 생성' })
+  @ApiOperation({ summary: '구성원 추가' })
+  @ApiResponse({ status: 201, description: '구성원 추가 성공' })
   @Post('tax-members')
-  createTaxMember(@Body() body: any) {
-    return this.taxMemberService.create(body);
+  createTaxMember(@Body() dto: AdminCreateTaxMemberDto) {
+    return this.taxMemberService.create(dto);
   }
 
-  @ApiOperation({ summary: '세무사 회원 수정' })
+  @ApiOperation({ summary: '구성원 수정' })
+  @ApiResponse({ status: 200, description: '구성원 수정 성공' })
+  @ApiResponse({ status: 404, description: '구성원 없음' })
   @Patch('tax-members/:id')
-  updateTaxMember(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-    return this.taxMemberService.update(id, body);
+  updateTaxMember(@Param('id', ParseIntPipe) id: number, @Body() dto: AdminUpdateTaxMemberDto) {
+    return this.taxMemberService.update(id, dto);
   }
 
   @ApiOperation({ summary: '세무사 회원 삭제' })

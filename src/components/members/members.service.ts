@@ -75,33 +75,45 @@ export class MembersService {
 
     const qb = this.memberRepo.createQueryBuilder('member');
 
+    // 조건들을 배열로 수집
+    const conditions: string[] = [];
+    const params: Record<string, any> = {};
+
     // 회원 유형 필터
     if (memberType) {
-      qb.andWhere('member.memberType = :memberType', { memberType });
+      conditions.push('member.memberType = :memberType');
+      params.memberType = memberType;
     }
 
     // 회원 상태 필터 (이용중/탈퇴)
     if (status) {
-      qb.andWhere('member.status = :status', { status });
+      conditions.push('member.status = :status');
+      params.status = status;
     }
 
     // 승인 여부 필터
     if (isApproved !== undefined) {
-      qb.andWhere('member.isApproved = :isApproved', { isApproved });
+      conditions.push('member.isApproved = :isApproved');
+      params.isApproved = isApproved;
     }
 
     // 검색: 회원 명 또는 휴대폰번호 (이미지 요구사항에 따라)
     if (search) {
-      qb.andWhere('(member.name LIKE :search OR member.phoneNumber LIKE :search)', {
-        search: `%${search}%`,
-      });
+      conditions.push('(member.name LIKE :search OR member.phoneNumber LIKE :search)');
+      params.search = `%${search}%`;
+    }
+
+    // 조건 적용
+    if (conditions.length > 0) {
+      qb.where(conditions.join(' AND '), params);
     }
 
     // 정렬 (기본: 최신순 - 등록일 DESC)
     qb.orderBy('member.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
 
     // 페이지네이션
-    qb.skip((page - 1) * limit).take(limit);
+    const skip = (page - 1) * limit;
+    qb.skip(skip).take(limit);
 
     const [items, total] = await qb.getManyAndCount();
 
