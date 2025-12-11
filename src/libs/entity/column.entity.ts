@@ -4,6 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
 
 @Entity('columns')
@@ -42,9 +45,48 @@ export class ColumnArticle {
   @Column({ default: 0 })
   displayOrder: number;
 
+  @OneToMany(() => ColumnComment, (comment) => comment.column)
+  comments: ColumnComment[];
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+}
+
+@Entity('column_comments')
+export class ColumnComment {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  columnId: number;
+
+  @ManyToOne(() => ColumnArticle, (column) => column.comments, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'columnId' })
+  column: ColumnArticle;
+
+  // 댓글 내용
+  @Column({ type: 'text' })
+  body: string;
+
+  // 작성자 ID (회원이면)
+  @Column({ nullable: true })
+  memberId: number;
+
+  // 작성자 이름 (비회원이면)
+  @Column({ nullable: true })
+  authorName: string;
+
+  // 신고됨 여부
+  @Column({ default: false })
+  isReported: boolean;
+
+  // 숨김 여부
+  @Column({ default: false })
+  isHidden: boolean;
+
+  @CreateDateColumn()
+  createdAt: Date;
 }

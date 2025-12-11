@@ -9,7 +9,7 @@ import { Branch } from 'src/libs/entity/branch.entity';
 import { KeyCustomer } from 'src/libs/entity/key-customer.entity';
 import { BusinessArea } from 'src/libs/entity/business-area.entity';
 import { TrainingSeminar, TrainingSeminarApplication } from 'src/libs/entity/training-seminar.entity';
-import { ColumnArticle } from 'src/libs/entity/column.entity';
+import { ColumnArticle, ColumnComment } from 'src/libs/entity/column.entity';
 import { DataRoom, DataRoomContent, DataRoomComment } from 'src/libs/entity/data-room.entity';
 import { MajorCategory, MinorCategory } from 'src/libs/entity/category.entity';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
@@ -44,6 +44,7 @@ import { PublicContentController } from './controllers/public-content.controller
       TrainingSeminar,
       TrainingSeminarApplication,
       ColumnArticle,
+      ColumnComment,
       DataRoom,
       DataRoomContent,
       DataRoomComment,

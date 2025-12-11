@@ -394,9 +394,13 @@ export class DataRoomService {
     return { success: true, message: '댓글이 숨김 처리되었습니다.' };
   }
 
-  async deleteComment(id: number) {
+  async deleteComment(id: number, memberId?: number) {
     const comment = await this.commentRepo.findOne({ where: { id } });
     if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    // Only allow deletion if user owns the comment
+    if (memberId && comment.memberId !== memberId) {
+      throw new NotFoundException('본인의 댓글만 삭제할 수 있습니다.');
+    }
     await this.commentRepo.remove(comment);
     return { success: true, message: '삭제가 완료되었습니다.' };
   }

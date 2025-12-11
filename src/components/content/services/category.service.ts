@@ -89,6 +89,14 @@ export class CategoryService {
     return category;
   }
 
+  async findMajorByName(name: string) {
+    const category = await this.majorRepo.findOne({
+      where: { name },
+      relations: ['minorCategories'],
+    });
+    return category || null;
+  }
+
   async updateMajor(id: number, data: Partial<MajorCategory>) {
     const category = await this.majorRepo.findOne({ where: { id } });
     if (!category) throw new NotFoundException('대분류를 찾을 수 없습니다.');

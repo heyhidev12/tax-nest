@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { ColumnArticle } from 'src/libs/entity/column.entity';
+import { ColumnArticle, ColumnComment } from 'src/libs/entity/column.entity';
 
 interface ColumnListOptions {
   search?: string;
@@ -19,6 +19,8 @@ export class ColumnService {
   constructor(
     @InjectRepository(ColumnArticle)
     private readonly columnRepo: Repository<ColumnArticle>,
+    @InjectRepository(ColumnComment)
+    private readonly commentRepo: Repository<ColumnComment>,
   ) {}
 
   async create(data: Partial<ColumnArticle>) {
@@ -178,6 +180,39 @@ export class ColumnService {
       .select('DISTINCT column.categoryName', 'categoryName')
       .getRawMany();
     return result.map((r) => r.categoryName).filter(Boolean);
+  }
+
+  // === Comment CRUD ===
+  async createComment(columnId: number, data: Partial<ColumnComment>) {
+    await this.findById(columnId); // Verify column exists
+    const comment = this.commentRepo.create({ columnId, ...data });
+    return this.commentRepo.save(comment);
+  }
+
+  async findComments(columnId: number) {
+    return this.commentRepo.find({
+      where: { columnId, isHidden: false },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  async deleteComment(id: number, memberId?: number) {
+    const comment = await this.commentRepo.findOne({ where: { id } });
+    if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    // Only allow deletion if user owns the comment
+    if (memberId && comment.memberId !== memberId) {
+      throw new NotFoundException('본인의 댓글만 삭제할 수 있습니다.');
+    }
+    await this.commentRepo.remove(comment);
+    return { success: true, message: '삭제가 완료되었습니다.' };
+  }
+
+  async reportComment(id: number) {
+    const comment = await this.commentRepo.findOne({ where: { id } });
+    if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    comment.isReported = true;
+    await this.commentRepo.save(comment);
+    return { success: true, message: '신고가 접수되었습니다.' };
   }
 
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
