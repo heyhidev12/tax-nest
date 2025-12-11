@@ -218,6 +218,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: '내 신청 내역 조회 (교육/세미나 및 상담)' })
   @ApiResponse({ status: 200, description: '신청 내역 조회 성공' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
   @ApiQuery({ name: 'type', required: false, enum: ['seminar', 'consultation'], description: '신청 유형 필터 (seminar: 교육/세미나, consultation: 상담신청)' })
   @ApiQuery({ name: 'search', required: false, description: '검색어 (세미나명, 상담내용 등)' })
   @ApiQuery({ name: 'startDate', required: false, description: '조회 시작일 (YYYY-MM-DD)' })
@@ -234,7 +235,7 @@ export class AuthController {
     @Query('page') page = 1,
     @Query('limit') limit = 20,
   ) {
-    // Get user's email from member profile
+    // Get user's email from member profile - ensures we only get the authenticated user's data
     const member = await this.authService.getMyProfile(req.user.sub);
     const userEmail = member.email;
 
@@ -256,7 +257,7 @@ export class AuthController {
 
     // 타입별로 필터링
     if (type === 'seminar') {
-      // 교육/세미나 신청만 조회
+      // 교육/세미나 신청만 조회 (해당 사용자의 이메일로 필터링됨)
       const seminarApplications = await this.trainingSeminarService.findUserApplications(userEmail, options);
       
       return {
@@ -264,7 +265,7 @@ export class AuthController {
         ...seminarApplications,
       };
     } else if (type === 'consultation') {
-      // 상담 신청만 조회
+      // 상담 신청만 조회 (해당 사용자의 이메일로 필터링됨)
       const consultations = await this.consultationsService.findUserConsultations(userEmail, options);
       
       return {
@@ -272,7 +273,7 @@ export class AuthController {
         ...consultations,
       };
     } else {
-      // 전체 조회 (교육/세미나 + 상담)
+      // 전체 조회 (교육/세미나 + 상담) - 모두 해당 사용자의 이메일로 필터링됨
       const [seminarApplications, consultations] = await Promise.all([
         this.trainingSeminarService.findUserApplications(userEmail, options),
         this.consultationsService.findUserConsultations(userEmail, options),
@@ -290,5 +291,30 @@ export class AuthController {
         },
       };
     }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: '내 신청 내역 조회 - 히스토리 (교육/세미나 및 상담)' })
+  @ApiResponse({ status: 200, description: '신청 내역 조회 성공' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
+  @ApiQuery({ name: 'type', required: false, enum: ['seminar', 'consultation'], description: '신청 유형 필터 (seminar: 교육/세미나, consultation: 상담신청)' })
+  @ApiQuery({ name: 'search', required: false, description: '검색어 (세미나명, 상담내용 등)' })
+  @ApiQuery({ name: 'startDate', required: false, description: '조회 시작일 (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: '조회 종료일 (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @Get('me/history')
+  async getMyHistory(
+    @Req() req: any,
+    @Query('type') type?: 'seminar' | 'consultation',
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    // This endpoint is an alias for getMyApplications
+    // It ensures users can only see their own application history
+    return this.getMyApplications(req, type, search, startDate, endDate, page, limit);
   }
 }

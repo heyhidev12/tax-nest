@@ -18,6 +18,8 @@ import { BranchService } from '../services/branch.service';
 import { KeyCustomerService } from '../services/key-customer.service';
 import { BusinessAreaService } from '../services/business-area.service';
 import { HistoryService } from '../services/history.service';
+import { ColumnService } from '../services/column.service';
+import { DataRoomService } from '../services/data-room.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
 
 @ApiTags('Content')
@@ -32,6 +34,8 @@ export class PublicContentController {
     private readonly keyCustomerService: KeyCustomerService,
     private readonly businessAreaService: BusinessAreaService,
     private readonly historyService: HistoryService,
+    private readonly columnService: ColumnService,
+    private readonly dataRoomService: DataRoomService,
   ) {}
 
   // ===== MEMBERS (구성원) =====
@@ -402,6 +406,185 @@ export class PublicContentController {
       year.items = year.items.filter(item => item.isExposed);
     }
     return year;
+  }
+
+  // ===== INSIGHTS (인사이트) =====
+
+  @ApiOperation({ summary: '인사이트 카테고리 목록 조회 (공개)' })
+  @ApiResponse({ status: 200, description: '인사이트 카테고리 목록 조회 성공' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String, description: '카테고리명으로 검색' })
+  @ApiQuery({ name: 'boardType', required: false, enum: ['갤러리', '스니펫', '게시판'], description: '게시판 유형 필터링' })
+  @ApiQuery({ name: 'category', required: false, type: String, description: '카테고리명 (지정 시 해당 카테고리의 아이템 목록 반환)' })
+  @Get('insights')
+  async getInsights(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('boardType') boardType?: string,
+    @Query('category') category?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+
+    // category 파라미터가 있으면 해당 카테고리의 아이템 목록 반환
+    if (category) {
+      if (category === 'column' || category.toLowerCase() === 'column') {
+        // Column 카테고리의 아이템 목록 (columns)
+        return this.columnService.findAll({
+          search,
+          page: pageNum,
+          limit: limitNum,
+          isExposed: true, // Only exposed columns
+          includeHidden: false,
+        });
+      } else {
+        // 다른 카테고리의 아이템 목록 (data room contents)
+        try {
+          const matchingRoom = await this.dataRoomService.findRoomByName(category);
+          // 카테고리가 노출되지 않았으면 에러
+          if (!matchingRoom.isExposed) {
+            throw new NotFoundException(`카테고리 "${category}"를 찾을 수 없습니다.`);
+          }
+          // 해당 카테고리의 콘텐츠 목록 반환 (노출된 것만)
+          return this.dataRoomService.findContents(matchingRoom.id, {
+            search,
+            page: pageNum,
+            limit: limitNum,
+            isExposed: true, // Only exposed contents
+            includeHidden: false,
+          });
+        } catch (error) {
+          if (error instanceof NotFoundException) {
+            throw error;
+          }
+          throw new NotFoundException(`카테고리 "${category}"를 찾을 수 없습니다.`);
+        }
+      }
+    }
+
+    // category 파라미터가 없으면 모든 카테고리 목록 반환 (data rooms, 노출된 것만)
+    const roomsResult = await this.dataRoomService.findAllRooms({
+      search,
+      boardType,
+      page: pageNum,
+      limit: limitNum,
+      isExposed: true, // Only exposed categories
+      includeHidden: false,
+    });
+
+    // Column은 기본 카테고리이므로 목록에 포함
+    const shouldIncludeColumn = !search ||
+      search.toLowerCase().includes('column') ||
+      search.toLowerCase().includes('칼럼');
+
+    if (shouldIncludeColumn && (!boardType || boardType === '갤러리')) {
+      // Column 카테고리의 실제 아이템 개수 조회
+      const columnCountResult = await this.columnService.findAll({
+        isExposed: true,
+        includeHidden: false,
+        page: 1,
+        limit: 1,
+      });
+
+      // Column 카테고리 정보 추가
+      const columnCategory = {
+        id: 0, // 특별 ID로 표시
+        name: 'column',
+        nameLabel: 'Column',
+        boardType: '갤러리',
+        boardTypeLabel: '갤러리',
+        exposureType: 'ALL',
+        exposureTypeLabel: '전체',
+        enableComments: false,
+        commentsLabel: 'N',
+        isExposed: true,
+        exposedLabel: 'Y',
+        contentCount: columnCountResult.total,
+        createdAt: new Date(),
+        createdAtFormatted: '',
+        updatedAt: new Date(),
+        updatedAtFormatted: '',
+        isDefault: true, // 기본 카테고리 표시
+      };
+
+      // Column 카테고리를 첫 번째로 추가
+      return {
+        items: [columnCategory, ...roomsResult.items],
+        total: roomsResult.total + 1,
+        page: roomsResult.page,
+        limit: roomsResult.limit,
+      };
+    }
+
+    return roomsResult;
+  }
+
+  @ApiOperation({ summary: '인사이트 아이템 상세 조회 (공개)' })
+  @ApiResponse({ status: 200, description: '인사이트 아이템 상세 조회 성공' })
+  @ApiResponse({ status: 404, description: '아이템을 찾을 수 없습니다' })
+  @ApiQuery({ name: 'category', required: false, type: String, description: '카테고리명 (column 또는 다른 카테고리명)' })
+  @Get('insights/:id')
+  async getInsightDetail(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('category') category?: string,
+  ) {
+    if (category === 'column' || category?.toLowerCase() === 'column') {
+      // Column 아이템 상세
+      const column = await this.columnService.findById(id);
+      // Only return if exposed
+      if (!column.isExposed) {
+        throw new NotFoundException('아이템을 찾을 수 없습니다.');
+      }
+      return column;
+    } else if (category) {
+      // 다른 카테고리의 아이템 상세 (data room content)
+      const content = await this.dataRoomService.findContentById(id);
+      // Only return if exposed
+      if (!content.isExposed) {
+        throw new NotFoundException('아이템을 찾을 수 없습니다.');
+      }
+      // 카테고리도 노출되어야 함
+      if (content.dataRoom && !content.dataRoom.isExposed) {
+        throw new NotFoundException('아이템을 찾을 수 없습니다.');
+      }
+      return content;
+    } else {
+      // 카테고리 상세 (data room)
+      const room = await this.dataRoomService.findRoomById(id);
+      // Only return if exposed
+      if (!room.isExposed) {
+        throw new NotFoundException('카테고리를 찾을 수 없습니다.');
+      }
+      return room;
+    }
+  }
+
+  @ApiOperation({ summary: '인사이트 아이템 조회수 증가 (공개)' })
+  @ApiResponse({ status: 200, description: '조회수 증가 성공' })
+  @ApiResponse({ status: 404, description: '아이템을 찾을 수 없습니다' })
+  @ApiQuery({ name: 'category', required: false, type: String, description: '카테고리명 (column은 조회수 없음, 다른 카테고리만)' })
+  @Post('insights/:id/increment-view')
+  async incrementInsightViewCount(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('category') category?: string,
+  ) {
+    // Column은 조회수 기능 없음 (필요시 추가 가능)
+    if (category === 'column' || category?.toLowerCase() === 'column') {
+      // Column은 조회수 증가 없이 그냥 성공 반환
+      return { success: true, message: '조회수가 증가되었습니다.' };
+    } else if (category) {
+      // 다른 카테고리의 아이템 조회수 증가 (data room content)
+      const content = await this.dataRoomService.findContentById(id);
+      // Only increment if exposed
+      if (!content.isExposed) {
+        throw new NotFoundException('아이템을 찾을 수 없습니다.');
+      }
+      return this.dataRoomService.incrementViewCount(id);
+    } else {
+      throw new BadRequestException('카테고리 파라미터가 필요합니다.');
+    }
   }
 
 }

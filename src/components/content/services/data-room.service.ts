@@ -139,6 +139,25 @@ export class DataRoomService {
     };
   }
 
+  async findRoomByName(name: string) {
+    const room = await this.roomRepo.findOne({ 
+      where: { name },
+      relations: ['contents'],
+    });
+    if (!room) throw new NotFoundException(`카테고리 "${name}"를 찾을 수 없습니다.`);
+    
+    return {
+      ...room,
+      boardTypeLabel: this.getBoardTypeLabel(room.boardType),
+      exposureTypeLabel: this.getExposureTypeLabel(room.exposureType),
+      commentsLabel: room.enableComments ? 'Y' : 'N',
+      exposedLabel: room.isExposed ? 'Y' : 'N',
+      contentCount: room.contents?.length || 0,
+      createdAtFormatted: this.formatDateTime(room.createdAt),
+      updatedAtFormatted: this.formatDateTime(room.updatedAt),
+    };
+  }
+
   async updateRoom(id: number, data: Partial<DataRoom>) {
     const room = await this.roomRepo.findOne({ where: { id } });
     if (!room) throw new NotFoundException('자료실을 찾을 수 없습니다.');
