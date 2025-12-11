@@ -4,10 +4,11 @@ import { NewsletterSubscriber } from 'src/libs/entity/newsletter-subscriber.enti
 import { Member } from 'src/libs/entity/member.entity';
 import { NewsletterService } from './newsletter.service';
 import { NewsletterController } from './newsletter.controller';
+import { EasyMailService } from './services/easy-mail.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([NewsletterSubscriber, Member])],
-  providers: [NewsletterService],
+  providers: [NewsletterService, EasyMailService],
   controllers: [NewsletterController],
   exports: [NewsletterService],
 })

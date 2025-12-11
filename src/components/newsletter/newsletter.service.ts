@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { NewsletterSubscriber } from 'src/libs/entity/newsletter-subscriber.entity';
 import { Member } from 'src/libs/entity/member.entity';
+import { EasyMailService } from './services/easy-mail.service';
 
 interface SubscriberListOptions {
   search?: string;
@@ -19,6 +20,7 @@ export class NewsletterService {
     private readonly subscriberRepo: Repository<NewsletterSubscriber>,
     @InjectRepository(Member)
     private readonly memberRepo: Repository<Member>,
+    private readonly easyMailService: EasyMailService,
   ) {}
 
   // POST /newsletter/subscribe - 뉴스레터 구독 (이름 + 이메일)
@@ -57,99 +59,170 @@ export class NewsletterService {
     return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
   }
 
-  // GET /admin/newsletter - 관리자용 구독자 목록
+  // GET /admin/newsletter - 관리자용 구독자 목록 (Easy Mail에서 가져오기)
   async adminList(options: SubscriberListOptions = {}) {
     const { search, isSubscribed, sort = 'latest', page = 1, limit = 20 } = options;
     
-    const qb = this.subscriberRepo.createQueryBuilder('subscriber');
+    try {
+      // Easy Mail에서 구독자 목록 가져오기
+      const easyMailResponse = await this.easyMailService.getSubscribers({
+        search,
+        subscribed: isSubscribed,
+        page,
+        limit,
+      });
 
-    // 수신 여부 필터
-    if (isSubscribed !== undefined) {
-      qb.andWhere('subscriber.isSubscribed = :isSubscribed', { isSubscribed });
+      // Easy Mail 응답을 포맷팅
+      let formattedItems = easyMailResponse.subscribers.map((subscriber, index) => {
+        const subscribedAt = subscriber.subscribedAt 
+          ? (typeof subscriber.subscribedAt === 'string' ? new Date(subscriber.subscribedAt) : subscriber.subscribedAt)
+          : new Date();
+        const unsubscribedAt = subscriber.unsubscribedAt
+          ? (typeof subscriber.unsubscribedAt === 'string' ? new Date(subscriber.unsubscribedAt) : subscriber.unsubscribedAt)
+          : null;
+
+        return {
+          no: easyMailResponse.total - ((page - 1) * limit + index),
+          id: subscriber.id,
+          name: subscriber.name || '-',
+          email: subscriber.email,
+          isSubscribed: subscriber.subscribed,
+          subscriptionLabel: subscriber.subscribed ? 'Y' : 'N',
+          subscribedAt: subscribedAt,
+          subscribedAtFormatted: this.formatDateTime(subscribedAt),
+          unsubscribedAt: unsubscribedAt,
+          unsubscribedAtFormatted: unsubscribedAt ? this.formatDateTime(unsubscribedAt) : null,
+        };
+      });
+
+      // 정렬 (Easy Mail에서 정렬이 안되면 여기서 정렬)
+      if (sort === 'latest') {
+        formattedItems.sort((a, b) => 
+          new Date(b.subscribedAt).getTime() - new Date(a.subscribedAt).getTime()
+        );
+      } else if (sort === 'oldest') {
+        formattedItems.sort((a, b) => 
+          new Date(a.subscribedAt).getTime() - new Date(b.subscribedAt).getTime()
+        );
+      }
+
+      // 검색 결과 없음 메시지 처리
+      const hasSearchQuery = !!search;
+      const hasNoResults = formattedItems.length === 0;
+
+      return { 
+        items: formattedItems, 
+        total: easyMailResponse.total, 
+        page, 
+        limit,
+        message: hasSearchQuery && hasNoResults ? '검색 결과 없음' : undefined,
+      };
+    } catch (error: any) {
+      // Easy Mail API 오류 시 빈 결과 반환 (fallback)
+      return {
+        items: [],
+        total: 0,
+        page,
+        limit,
+        message: search ? '검색 결과 없음' : undefined,
+      };
     }
-
-    // 이메일 검색
-    if (search) {
-      qb.andWhere('subscriber.email LIKE :search', { search: `%${search}%` });
-    }
-
-    // 정렬 (기본: 최신순)
-    qb.orderBy('subscriber.subscribedAt', sort === 'latest' ? 'DESC' : 'ASC');
-
-    // 페이지네이션
-    qb.skip((page - 1) * limit).take(limit);
-
-    const [items, total] = await qb.getManyAndCount();
-
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      name: item.name || '-',
-      email: item.email,
-      isSubscribed: item.isSubscribed,
-      subscriptionLabel: item.isSubscribed ? 'Y' : 'N',
-      subscribedAt: item.subscribedAt,
-      subscribedAtFormatted: this.formatDateTime(item.subscribedAt),
-      unsubscribedAt: item.unsubscribedAt,
-      unsubscribedAtFormatted: item.unsubscribedAt ? this.formatDateTime(item.unsubscribedAt) : null,
-    }));
-
-    return { items: formattedItems, total, page, limit };
   }
 
-  // 구독자 상세 조회
-  async findById(id: number) {
-    const subscriber = await this.subscriberRepo.findOne({ where: { id } });
-    if (!subscriber) {
+  // 구독자 상세 조회 (Easy Mail에서 가져오기)
+  async findById(id: number | string) {
+    try {
+      const subscriber = await this.easyMailService.getSubscriberById(id);
+      if (!subscriber) {
+        throw new NotFoundException('구독자를 찾을 수 없습니다.');
+      }
+
+      const subscribedAt = subscriber.subscribedAt 
+        ? (typeof subscriber.subscribedAt === 'string' ? new Date(subscriber.subscribedAt) : subscriber.subscribedAt)
+        : new Date();
+      const unsubscribedAt = subscriber.unsubscribedAt
+        ? (typeof subscriber.unsubscribedAt === 'string' ? new Date(subscriber.unsubscribedAt) : subscriber.unsubscribedAt)
+        : null;
+
+      return {
+        id: subscriber.id,
+        name: subscriber.name || '-',
+        email: subscriber.email,
+        isSubscribed: subscriber.subscribed,
+        subscriptionLabel: subscriber.subscribed ? 'Y' : 'N',
+        subscribedAt: subscribedAt,
+        subscribedAtFormatted: this.formatDateTime(subscribedAt),
+        unsubscribedAt: unsubscribedAt,
+        unsubscribedAtFormatted: unsubscribedAt ? this.formatDateTime(unsubscribedAt) : null,
+      };
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       throw new NotFoundException('구독자를 찾을 수 없습니다.');
     }
-    return {
-      ...subscriber,
-      subscriptionLabel: subscriber.isSubscribed ? 'Y' : 'N',
-      subscribedAtFormatted: this.formatDateTime(subscriber.subscribedAt),
-      unsubscribedAtFormatted: subscriber.unsubscribedAt ? this.formatDateTime(subscriber.unsubscribedAt) : null,
-    };
   }
 
-  // 구독 상태 토글
-  async toggleSubscription(id: number) {
-    const subscriber = await this.subscriberRepo.findOne({ where: { id } });
-    if (!subscriber) {
+  // 구독 상태 토글 (Easy Mail에서 업데이트)
+  async toggleSubscription(id: number | string) {
+    try {
+      // 현재 상태 조회
+      const currentSubscriber = await this.easyMailService.getSubscriberById(id);
+      if (!currentSubscriber) {
+        throw new NotFoundException('구독자를 찾을 수 없습니다.');
+      }
+
+      // 상태 토글
+      const newSubscribedStatus = !currentSubscriber.subscribed;
+      const updatedSubscriber = await this.easyMailService.toggleSubscription(id, newSubscribedStatus);
+
+      return { 
+        success: true, 
+        isSubscribed: updatedSubscriber.subscribed,
+        subscriptionLabel: updatedSubscriber.subscribed ? 'Y' : 'N',
+      };
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       throw new NotFoundException('구독자를 찾을 수 없습니다.');
     }
+  }
 
-    subscriber.isSubscribed = !subscriber.isSubscribed;
-    if (!subscriber.isSubscribed) {
-      subscriber.unsubscribedAt = new Date();
-    } else {
-      subscriber.unsubscribedAt = null;
+  // 구독자 삭제 (Easy Mail에서 삭제)
+  async delete(id: number | string) {
+    try {
+      await this.easyMailService.deleteSubscriber(id);
+      return { success: true, message: '삭제가 완료되었습니다.' };
+    } catch (error: any) {
+      throw new NotFoundException('구독자를 찾을 수 없습니다.');
+    }
+  }
+
+  // 구독자 다중 삭제 (Easy Mail에서 삭제)
+  async deleteMany(ids: (number | string)[]) {
+    let deletedCount = 0;
+    const errors: string[] = [];
+
+    for (const id of ids) {
+      try {
+        await this.easyMailService.deleteSubscriber(id);
+        deletedCount++;
+      } catch (error: any) {
+        errors.push(`ID ${id}: ${error.message}`);
+      }
     }
 
-    await this.subscriberRepo.save(subscriber);
+    if (deletedCount === 0) {
+      return { success: true, deleted: 0, message: '삭제된 항목이 없습니다.' };
+    }
+
     return { 
       success: true, 
-      isSubscribed: subscriber.isSubscribed,
-      subscriptionLabel: subscriber.isSubscribed ? 'Y' : 'N',
+      deleted: deletedCount, 
+      message: `삭제가 완료되었습니다. (${deletedCount}/${ids.length})`,
+      errors: errors.length > 0 ? errors : undefined,
     };
-  }
-
-  // 구독자 삭제
-  async delete(id: number) {
-    const subscriber = await this.subscriberRepo.findOne({ where: { id } });
-    if (!subscriber) {
-      throw new NotFoundException('구독자를 찾을 수 없습니다.');
-    }
-    await this.subscriberRepo.remove(subscriber);
-    return { success: true, message: '삭제가 완료되었습니다.' };
-  }
-
-  // 구독자 다중 삭제
-  async deleteMany(ids: number[]) {
-    const subscribers = await this.subscriberRepo.find({ where: { id: In(ids) } });
-    if (!subscribers.length) return { success: true, deleted: 0 };
-    await this.subscriberRepo.remove(subscribers);
-    return { success: true, deleted: subscribers.length, message: '삭제가 완료되었습니다.' };
   }
 
   // GET /newsletter/me - 회원의 뉴스레터 구독 정보 조회

@@ -4,6 +4,7 @@ import {
   Get,
   Patch,
   Post,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -31,12 +32,18 @@ import { SignUpDto } from 'src/libs/dto/auth/sign-up.dto';
 import { LoginDto } from 'src/libs/dto/auth/login.dto';
 import { UpdateProfileDto } from 'src/libs/dto/auth/update-profile.dto';
 import { ChangePasswordDto } from 'src/libs/dto/auth/change-password.dto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { TrainingSeminarService } from '../content/services/training-seminar.service';
+import { ConsultationsService } from '../consultations/consultations.service';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly trainingSeminarService: TrainingSeminarService,
+    private readonly consultationsService: ConsultationsService,
+  ) {}
 
   // -------------------------------------
   // SIGN UP / LOGIN
@@ -202,5 +209,86 @@ export class AuthController {
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=naver`);
+  }
+
+  // -------------------------------------
+  // APPLICATION HISTORY
+  // -------------------------------------
+
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: '내 신청 내역 조회 (교육/세미나 및 상담)' })
+  @ApiResponse({ status: 200, description: '신청 내역 조회 성공' })
+  @ApiQuery({ name: 'type', required: false, enum: ['seminar', 'consultation'], description: '신청 유형 필터 (seminar: 교육/세미나, consultation: 상담신청)' })
+  @ApiQuery({ name: 'search', required: false, description: '검색어 (세미나명, 상담내용 등)' })
+  @ApiQuery({ name: 'startDate', required: false, description: '조회 시작일 (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: '조회 종료일 (YYYY-MM-DD)' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 20 })
+  @Get('me/applications')
+  async getMyApplications(
+    @Req() req: any,
+    @Query('type') type?: 'seminar' | 'consultation',
+    @Query('search') search?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 20,
+  ) {
+    // Get user's email from member profile
+    const member = await this.authService.getMyProfile(req.user.sub);
+    const userEmail = member.email;
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+
+    // 날짜 문자열을 Date 객체로 변환
+    const startDateObj = startDate ? new Date(startDate) : undefined;
+    const endDateObj = endDate ? new Date(endDate) : undefined;
+
+    const options = {
+      search,
+      startDate: startDateObj,
+      endDate: endDateObj,
+      page: pageNum,
+      limit: limitNum,
+      sort: 'latest' as const,
+    };
+
+    // 타입별로 필터링
+    if (type === 'seminar') {
+      // 교육/세미나 신청만 조회
+      const seminarApplications = await this.trainingSeminarService.findUserApplications(userEmail, options);
+      
+      return {
+        type: 'seminar',
+        ...seminarApplications,
+      };
+    } else if (type === 'consultation') {
+      // 상담 신청만 조회
+      const consultations = await this.consultationsService.findUserConsultations(userEmail, options);
+      
+      return {
+        type: 'consultation',
+        ...consultations,
+      };
+    } else {
+      // 전체 조회 (교육/세미나 + 상담)
+      const [seminarApplications, consultations] = await Promise.all([
+        this.trainingSeminarService.findUserApplications(userEmail, options),
+        this.consultationsService.findUserConsultations(userEmail, options),
+      ]);
+
+      // 통합 응답
+      return {
+        type: 'all',
+        seminars: seminarApplications,
+        consultations: consultations,
+        summary: {
+          seminarTotal: seminarApplications.total,
+          consultationTotal: consultations.total,
+          total: seminarApplications.total + consultations.total,
+        },
+      };
+    }
   }
 }

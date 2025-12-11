@@ -29,6 +29,8 @@ interface ApplicationListOptions {
   sort?: 'latest' | 'oldest';
   page?: number;
   limit?: number;
+  startDate?: Date | string;
+  endDate?: Date | string;
 }
 
 @Injectable()
@@ -412,13 +414,80 @@ export class TrainingSeminarService {
     });
     if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
 
-    // 선착순일 경우 정원 체크 (참석 인원 수를 고려)
+    // 날짜 및 시간 유효성 검사
+    if (!data.participationDate) {
+      throw new BadRequestException('참여 일자를 선택해주세요.');
+    }
+    if (!data.participationTime) {
+      throw new BadRequestException('참여 시간을 선택해주세요.');
+    }
+
+    // 교육 일자 검증: 사용자가 선택한 날짜가 교육 일자 목록에 있는지 확인
+    if (seminar.educationDates && seminar.educationDates.length > 0) {
+      // participationDate를 YYYY.MM.DD 형식으로 변환
+      const participationDateObj = data.participationDate instanceof Date 
+        ? data.participationDate 
+        : new Date(data.participationDate);
+      const formattedDate = this.formatDateForComparison(participationDateObj);
+      
+      // educationDates 배열에서 일치하는 날짜 찾기
+      const dateMatches = seminar.educationDates.some(dateStr => {
+        // educationDates는 "YYYY.MM.DD" 형식
+        return dateStr === formattedDate;
+      });
+
+      if (!dateMatches) {
+        throw new BadRequestException(
+          `선택하신 날짜(${formattedDate})는 이 교육/세미나의 교육 일자와 일치하지 않습니다. 가능한 교육 일자: ${seminar.educationDates.join(', ')}`
+        );
+      }
+    }
+
+    // 교육 시간 슬롯 검증: 사용자가 선택한 시간이 교육 시간 슬롯 목록에 있는지 확인
+    if (seminar.educationTimeSlots && seminar.educationTimeSlots.length > 0) {
+      // participationTime 형식 정규화 (HH:mm~HH:mm 또는 HH:mm-HH:mm -> HH:mm-HH:mm)
+      const normalizedTime = data.participationTime.replace(/~/g, '-');
+      
+      // educationTimeSlots 배열에서 일치하는 시간 찾기
+      const timeMatches = seminar.educationTimeSlots.some(timeSlot => {
+        // educationTimeSlots는 "HH:mm-HH:mm" 형식
+        return timeSlot === normalizedTime;
+      });
+
+      if (!timeMatches) {
+        throw new BadRequestException(
+          `선택하신 시간(${data.participationTime})은 이 교육/세미나의 교육 시간과 일치하지 않습니다. 가능한 교육 시간: ${seminar.educationTimeSlots.join(', ')}`
+        );
+      }
+    }
+
+    // 선착순일 경우 정원 체크 (날짜+시간별로 별도 관리)
     if (seminar.recruitmentType === RecruitmentType.FIRST_COME && seminar.quota) {
-      // 현재 확정된 신청의 총 참석 인원 수 계산
-      const confirmedApplications = (seminar.applications || []).filter(
-        app => app.status === ApplicationStatus.CONFIRMED
-      );
-      const currentAttendeeCount = confirmedApplications.reduce(
+      // 사용자가 선택한 날짜와 시간에 대한 신청만 필터링
+      const participationDateObj = data.participationDate instanceof Date 
+        ? data.participationDate 
+        : new Date(data.participationDate);
+      const formattedDate = this.formatDateForComparison(participationDateObj);
+      const normalizedTime = data.participationTime.replace(/~/g, '-');
+
+      // 같은 날짜와 시간에 확정된 신청만 필터링
+      const confirmedApplicationsForSameSlot = (seminar.applications || []).filter(app => {
+        if (app.status !== ApplicationStatus.CONFIRMED) return false;
+        
+        // 날짜 비교
+        const appDate = app.participationDate instanceof Date 
+          ? app.participationDate 
+          : new Date(app.participationDate);
+        const appFormattedDate = this.formatDateForComparison(appDate);
+        
+        // 시간 비교 (형식 정규화)
+        const appNormalizedTime = app.participationTime ? app.participationTime.replace(/~/g, '-') : '';
+        
+        return appFormattedDate === formattedDate && appNormalizedTime === normalizedTime;
+      });
+
+      // 해당 시간 슬롯의 현재 참석 인원 수 계산
+      const currentAttendeeCountForSlot = confirmedApplicationsForSameSlot.reduce(
         (sum, app) => sum + (app.attendeeCount || 1), 
         0
       );
@@ -426,10 +495,10 @@ export class TrainingSeminarService {
       // 신청하려는 참석 인원 수
       const requestedAttendeeCount = data.attendeeCount || 1;
       
-      // 정원 초과 체크
-      if (currentAttendeeCount + requestedAttendeeCount > seminar.quota) {
+      // 해당 시간 슬롯의 정원 초과 체크
+      if (currentAttendeeCountForSlot + requestedAttendeeCount > seminar.quota) {
         throw new BadRequestException(
-          `모집 정원이 마감되었습니다. (정원: ${seminar.quota}명, 현재 신청: ${currentAttendeeCount}명, 요청: ${requestedAttendeeCount}명)`
+          `선택하신 시간(${data.participationTime})의 모집 정원이 마감되었습니다. (정원: ${seminar.quota}명, 현재 신청: ${currentAttendeeCountForSlot}명, 요청: ${requestedAttendeeCount}명)`
         );
       }
     }
@@ -491,6 +560,111 @@ export class TrainingSeminarService {
         attendeeCount: item.attendeeCount,
         status: item.status,
         statusLabel: this.getApplicationStatusLabel(item.status),
+        appliedAt: item.appliedAt,
+        appliedAtFormatted: this.formatDateTime(item.appliedAt),
+      };
+    });
+
+    return { items: formattedItems, total, page, limit };
+  }
+
+  // 사용자별 신청 목록 조회 (이메일 기준)
+  async findUserApplications(email: string, options: ApplicationListOptions = {}) {
+    const { search, status, sort = 'latest', page = 1, limit = 20, startDate, endDate } = options;
+
+    const qb = this.appRepo.createQueryBuilder('app')
+      .leftJoinAndSelect('app.trainingSeminar', 'seminar')
+      .where('app.email = :email', { email });
+
+    // 이름 또는 세미나명 검색
+    if (search) {
+      qb.andWhere(
+        '(app.name LIKE :search OR seminar.name LIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    // 상태 필터
+    if (status) {
+      qb.andWhere('app.status = :status', { status });
+    }
+
+    // 날짜 범위 필터 (신청일 기준)
+    if (startDate) {
+      const start = startDate instanceof Date ? startDate : new Date(startDate);
+      qb.andWhere('app.appliedAt >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = endDate instanceof Date ? endDate : new Date(endDate);
+      // endDate의 끝 시간까지 포함 (23:59:59)
+      end.setHours(23, 59, 59, 999);
+      qb.andWhere('app.appliedAt <= :endDate', { endDate: end });
+    }
+
+    // 정렬
+    qb.orderBy('app.appliedAt', sort === 'latest' ? 'DESC' : 'ASC');
+
+    // 페이지네이션
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    // 응답 포맷 (UI에 맞게)
+    const formattedItems = items.map((item, index) => {
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      const seminar = item.trainingSeminar;
+      const recruitmentEndDate = seminar?.recruitmentEndDate 
+        ? new Date(seminar.recruitmentEndDate)
+        : null;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // 신청 마감일까지 남은 일수 계산
+      let deadlineDays: number | null = null;
+      let deadlineLabel: string | null = null;
+      if (recruitmentEndDate) {
+        const diffTime = recruitmentEndDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          deadlineDays = diffDays;
+          deadlineLabel = `신청마감 D-${diffDays}`;
+        } else if (diffDays === 0) {
+          deadlineLabel = '신청마감 D-day';
+        } else {
+          deadlineLabel = '신청마감';
+        }
+      }
+
+      // 상태에 따른 라벨
+      const statusLabel = item.status === ApplicationStatus.CONFIRMED 
+        ? '신청완료' 
+        : item.status === ApplicationStatus.WAITING 
+        ? '대기중' 
+        : '취소';
+
+      return {
+        no,
+        id: item.id,
+        applicationId: item.id,
+        seminarId: item.trainingSeminarId,
+        name: seminar?.name || '-',
+        type: seminar?.type || '',
+        typeLabel: this.getTypeLabel(seminar?.type || TrainingSeminarType.SEMINAR),
+        imageUrl: seminar?.imageUrl || null,
+        location: seminar?.location || '-',
+        endDate: seminar?.endDate || null,
+        endDateFormatted: seminar?.endDate ? this.formatDate(seminar.endDate) : null,
+        deadlineLabel,
+        deadlineDays,
+        status: item.status,
+        statusLabel,
+        participationDate: item.participationDate,
+        participationDateFormatted: this.formatDate(item.participationDate),
+        participationTime: item.participationTime,
+        attendeeCount: item.attendeeCount,
         appliedAt: item.appliedAt,
         appliedAtFormatted: this.formatDateTime(item.appliedAt),
       };
@@ -647,6 +821,11 @@ export class TrainingSeminarService {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}.${month}.${day}`;
+  }
+
+  // 날짜 비교용 포맷: yyyy.MM.dd (educationDates와 비교하기 위해)
+  private formatDateForComparison(date: Date): string {
+    return this.formatDate(date);
   }
 
   private formatDateTime(date: Date): string {

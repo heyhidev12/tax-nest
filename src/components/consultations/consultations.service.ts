@@ -15,6 +15,18 @@ interface AdminListOptions {
   sort?: 'latest' | 'oldest';
   page?: number;
   limit?: number;
+  startDate?: Date | string;
+  endDate?: Date | string;
+}
+
+interface UserConsultationListOptions {
+  search?: string;
+  status?: ConsultationStatus;
+  sort?: 'latest' | 'oldest';
+  page?: number;
+  limit?: number;
+  startDate?: Date | string;
+  endDate?: Date | string;
 }
 
 @Injectable()
@@ -240,6 +252,78 @@ export class ConsultationsService {
     if (!list.length) return { success: true, deleted: 0 };
     await this.consultationRepo.remove(list);
     return { success: true, deleted: list.length };
+  }
+
+  // 사용자별 상담 신청 목록 조회 (이메일 기준)
+  async findUserConsultations(email: string, options: UserConsultationListOptions = {}) {
+    const { search, status, sort = 'latest', page = 1, limit = 20, startDate, endDate } = options;
+
+    const qb = this.consultationRepo.createQueryBuilder('c')
+      .where('c.email = :email', { email });
+
+    // 상담 내용 또는 상담 분야 검색
+    if (search) {
+      qb.andWhere(
+        '(c.content LIKE :search OR c.consultingField LIKE :search OR c.name LIKE :search)',
+        { search: `%${search}%` }
+      );
+    }
+
+    // 상태 필터
+    if (status) {
+      qb.andWhere('c.status = :status', { status });
+    }
+
+    // 날짜 범위 필터 (신청일 기준)
+    if (startDate) {
+      const start = startDate instanceof Date ? startDate : new Date(startDate);
+      qb.andWhere('c.createdAt >= :startDate', { startDate: start });
+    }
+    if (endDate) {
+      const end = endDate instanceof Date ? endDate : new Date(endDate);
+      // endDate의 끝 시간까지 포함 (23:59:59)
+      end.setHours(23, 59, 59, 999);
+      qb.andWhere('c.createdAt <= :endDate', { endDate: end });
+    }
+
+    // 정렬
+    qb.orderBy('c.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
+
+    // 페이지네이션
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    // 응답 포맷 (UI에 맞게)
+    const formattedItems = items.map((item, index) => {
+      const no = sort === 'latest' 
+        ? total - ((page - 1) * limit + index)
+        : (page - 1) * limit + index + 1;
+
+      // 상담 내용 미리보기
+      const contentPreview = item.content
+        .replace(/\n/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 100);
+
+      return {
+        no,
+        id: item.id,
+        consultationId: item.id,
+        name: item.name,
+        consultingField: item.consultingField,
+        content: item.content,
+        contentPreview: contentPreview.length < item.content.length ? contentPreview + '...' : contentPreview,
+        assignedTaxAccountant: item.assignedTaxAccountant || '-',
+        status: item.status,
+        statusLabel: item.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
+        createdAt: item.createdAt,
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+      };
+    });
+
+    return { items: formattedItems, total, page, limit };
   }
 
   // 등록된 상담 분야 목록 조회 (드롭다운용)

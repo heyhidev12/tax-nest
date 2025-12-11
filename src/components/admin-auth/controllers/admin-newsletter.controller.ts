@@ -21,8 +21,11 @@ import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 export class AdminNewsletterController {
   constructor(private readonly newsletterService: NewsletterService) {}
 
-  @ApiOperation({ summary: '뉴스레터 구독자 목록 (검색: 이메일)' })
-  @ApiResponse({ status: 200, description: '목록 조회 성공' })
+  @ApiOperation({ summary: '뉴스레터 구독자 목록 (검색: 이메일) - Easy Mail에서 가져오기' })
+  @ApiResponse({ 
+    status: 200, 
+    description: '목록 조회 성공. 검색 결과가 없을 경우 message 필드에 "검색 결과 없음" 반환' 
+  })
   @ApiQuery({ name: 'search', required: false, description: '이메일 검색' })
   @ApiQuery({ name: 'isSubscribed', required: false, description: '수신 여부 필터 (true/false)' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest'], description: '정렬 (기본: latest)' })
@@ -49,22 +52,28 @@ export class AdminNewsletterController {
   @ApiOperation({ summary: '뉴스레터 구독자 상세' })
   @ApiResponse({ status: 200, description: '상세 조회 성공' })
   @Get(':id')
-  getOne(@Param('id', ParseIntPipe) id: number) {
-    return this.newsletterService.findById(id);
+  getOne(@Param('id') id: string) {
+    // Easy Mail IDs can be strings or numbers
+    const parsedId = isNaN(Number(id)) ? id : Number(id);
+    return this.newsletterService.findById(parsedId);
   }
 
   @ApiOperation({ summary: '수신 여부 토글 (Y/N)' })
   @ApiResponse({ status: 200, description: '토글 성공' })
   @Patch(':id/toggle')
-  toggleSubscription(@Param('id', ParseIntPipe) id: number) {
-    return this.newsletterService.toggleSubscription(id);
+  toggleSubscription(@Param('id') id: string) {
+    // Easy Mail IDs can be strings or numbers
+    const parsedId = isNaN(Number(id)) ? id : Number(id);
+    return this.newsletterService.toggleSubscription(parsedId);
   }
 
   @ApiOperation({ summary: '구독자 삭제' })
   @ApiResponse({ status: 200, description: '삭제 성공' })
   @Delete(':id')
-  delete(@Param('id', ParseIntPipe) id: number) {
-    return this.newsletterService.delete(id);
+  delete(@Param('id') id: string) {
+    // Easy Mail IDs can be strings or numbers
+    const parsedId = isNaN(Number(id)) ? id : Number(id);
+    return this.newsletterService.delete(parsedId);
   }
 
   @ApiOperation({ summary: '구독자 다중 삭제' })

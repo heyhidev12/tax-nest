@@ -12,14 +12,12 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { TaxMemberService } from '../services/tax-member.service';
 import { AwardService } from '../services/award.service';
-import { ColumnService } from '../services/column.service';
 import { TrainingSeminarService } from '../services/training-seminar.service';
 import { MainBannerService } from '../services/main-banner.service';
 import { BranchService } from '../services/branch.service';
 import { KeyCustomerService } from '../services/key-customer.service';
 import { BusinessAreaService } from '../services/business-area.service';
 import { HistoryService } from '../services/history.service';
-import { DataRoomService } from '../services/data-room.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
 
 @ApiTags('Content')
@@ -28,14 +26,12 @@ export class PublicContentController {
   constructor(
     private readonly taxMemberService: TaxMemberService,
     private readonly awardService: AwardService,
-    private readonly columnService: ColumnService,
     private readonly trainingSeminarService: TrainingSeminarService,
     private readonly bannerService: MainBannerService,
     private readonly branchService: BranchService,
     private readonly keyCustomerService: KeyCustomerService,
     private readonly businessAreaService: BusinessAreaService,
     private readonly historyService: HistoryService,
-    private readonly dataRoomService: DataRoomService,
   ) {}
 
   // ===== MEMBERS (구성원) =====
@@ -122,53 +118,6 @@ export class PublicContentController {
     return award;
   }
 
-  // ===== INSIGHTS (인사이트) =====
-
-  @ApiOperation({ summary: '인사이트 목록 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '인사이트 목록 조회 성공' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'search', required: false, type: String, description: '제목으로 검색' })
-  @ApiQuery({ name: 'categoryName', required: false, type: String, description: '카테고리로 필터링' })
-  @ApiQuery({ name: 'isMainExposed', required: false, type: Boolean, description: '메인 노출 여부로 필터링' })
-  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: latest)' })
-  @Get('insights')
-  async getInsights(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('search') search?: string,
-    @Query('categoryName') categoryName?: string,
-    @Query('isMainExposed') isMainExposed?: string,
-    @Query('sort') sort?: 'latest' | 'oldest' | 'order',
-  ) {
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 20;
-    const isMainExposedBool = isMainExposed === 'true' ? true : isMainExposed === 'false' ? false : undefined;
-
-    return this.columnService.findAll({
-      page: pageNum,
-      limit: limitNum,
-      search,
-      categoryName,
-      isExposed: true, // Only exposed insights
-      isMainExposed: isMainExposedBool,
-      sort: sort || 'latest',
-      includeHidden: false,
-    });
-  }
-
-  @ApiOperation({ summary: '인사이트 상세 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '인사이트 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '인사이트를 찾을 수 없습니다' })
-  @Get('insights/:id')
-  async getInsightDetail(@Param('id', ParseIntPipe) id: number) {
-    const insight = await this.columnService.findById(id);
-    // Only return if exposed
-    if (!insight.isExposed) {
-      throw new NotFoundException('인사이트를 찾을 수 없습니다.');
-    }
-    return insight;
-  }
 
   // ===== TRAINING/SEMINAR (교육/세미나) =====
 
@@ -255,6 +204,7 @@ export class PublicContentController {
       },
     };
   }
+
 
   // ===== BANNERS (메인 배너) =====
 
@@ -454,101 +404,4 @@ export class PublicContentController {
     return year;
   }
 
-  // ===== DATA ROOMS (자료실) =====
-
-  @ApiOperation({ summary: '자료실 목록 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '자료실 목록 조회 성공' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'search', required: false, type: String, description: '자료실명으로 검색' })
-  @ApiQuery({ name: 'exposureType', required: false, enum: ['ALL', 'GENERAL', 'INSURANCE', 'OTHER'], description: '노출 유형 필터링' })
-  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest'], description: '정렬 방식 (기본: latest)' })
-  @Get('data-rooms')
-  async getDataRooms(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('search') search?: string,
-    @Query('exposureType') exposureType?: string,
-    @Query('sort') sort?: 'latest' | 'oldest',
-  ) {
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 20;
-
-    return this.dataRoomService.findAllRooms({
-      page: pageNum,
-      limit: limitNum,
-      search,
-      exposureType: exposureType as any,
-      isExposed: true, // Only exposed data rooms
-      sort: sort || 'latest',
-      includeHidden: false,
-    });
-  }
-
-  @ApiOperation({ summary: '자료실 상세 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '자료실 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '자료실을 찾을 수 없습니다' })
-  @Get('data-rooms/:id')
-  async getDataRoomDetail(@Param('id', ParseIntPipe) id: number) {
-    const room = await this.dataRoomService.findRoomById(id);
-    // Only return if exposed
-    if (!room.isExposed) {
-      throw new NotFoundException('자료실을 찾을 수 없습니다.');
-    }
-    return room;
-  }
-
-  @ApiOperation({ summary: '자료실 콘텐츠 목록 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '자료실 콘텐츠 목록 조회 성공' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'search', required: false, type: String, description: '콘텐츠명으로 검색' })
-  @ApiQuery({ name: 'categoryName', required: false, type: String, description: '카테고리 필터링' })
-  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest'], description: '정렬 방식 (기본: latest)' })
-  @Get('data-rooms/:id/contents')
-  async getDataRoomContents(
-    @Param('id', ParseIntPipe) id: number,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('search') search?: string,
-    @Query('categoryName') categoryName?: string,
-    @Query('sort') sort?: 'latest' | 'oldest',
-  ) {
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 20;
-
-    // Check if data room exists and is exposed
-    const room = await this.dataRoomService.findRoomById(id);
-    if (!room.isExposed) {
-      throw new NotFoundException('자료실을 찾을 수 없습니다.');
-    }
-
-    return this.dataRoomService.findContents(id, {
-      page: pageNum,
-      limit: limitNum,
-      search,
-      categoryName,
-      isExposed: true, // Only exposed contents
-      sort: sort || 'latest',
-      includeHidden: false,
-    });
-  }
-
-  @ApiOperation({ summary: '자료실 콘텐츠 상세 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '자료실 콘텐츠 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '자료실 콘텐츠를 찾을 수 없습니다' })
-  @Get('data-room-contents/:id')
-  async getDataRoomContentDetail(@Param('id', ParseIntPipe) id: number) {
-    const content = await this.dataRoomService.findContentById(id);
-    // Only return if exposed
-    if (!content.isExposed) {
-      throw new NotFoundException('자료실 콘텐츠를 찾을 수 없습니다.');
-    }
-    // Check if parent data room is exposed
-    const room = await this.dataRoomService.findRoomById(content.dataRoomId);
-    if (!room.isExposed) {
-      throw new NotFoundException('자료실 콘텐츠를 찾을 수 없습니다.');
-    }
-    return content;
-  }
 }

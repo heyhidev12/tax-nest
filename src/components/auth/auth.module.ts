@@ -6,6 +6,8 @@ import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { MembersModule } from '../members/members.module';
 import { VerificationModule } from '../verification/verification.module';
+import { ContentModule } from '../content/content.module';
+import { ConsultationsModule } from '../consultations/consultations.module';
 import { JwtStrategy } from './jwt.strategy';
 import { Member } from 'src/libs/entity/member.entity';
 import { ConfigService } from '@nestjs/config';
@@ -18,6 +20,8 @@ import { NaverStrategy } from './strategies/naver.strategy';
   imports: [
     MembersModule,
     VerificationModule,
+    ContentModule,
+    ConsultationsModule,
     TypeOrmModule.forFeature([Member]),
     PassportModule.register({
       defaultStrategy: 'jwt',

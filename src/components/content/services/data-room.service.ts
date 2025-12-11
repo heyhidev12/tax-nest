@@ -6,6 +6,7 @@ import { DataRoom, DataRoomContent, DataRoomComment, DataRoomType } from 'src/li
 interface DataRoomListOptions {
   search?: string;
   exposureType?: DataRoomType;
+  boardType?: string;
   isExposed?: boolean;
   enableComments?: boolean;
   sort?: 'latest' | 'oldest';
@@ -17,6 +18,17 @@ interface DataRoomListOptions {
 interface ContentListOptions {
   search?: string;
   categoryName?: string;
+  isExposed?: boolean;
+  sort?: 'latest' | 'oldest';
+  page?: number;
+  limit?: number;
+  includeHidden?: boolean;
+}
+
+interface ConceptContentListOptions {
+  search?: string;
+  categoryName?: string;
+  boardType?: string;
   isExposed?: boolean;
   sort?: 'latest' | 'oldest';
   page?: number;
@@ -45,6 +57,7 @@ export class DataRoomService {
     const {
       search,
       exposureType,
+      boardType,
       isExposed,
       enableComments,
       sort = 'latest',
@@ -64,6 +77,10 @@ export class DataRoomService {
 
     if (exposureType) {
       qb.andWhere('room.exposureType = :exposureType', { exposureType });
+    }
+
+    if (boardType) {
+      qb.andWhere('room.boardType = :boardType', { boardType });
     }
 
     if (enableComments !== undefined) {
@@ -156,6 +173,77 @@ export class DataRoomService {
     await this.findRoomById(dataRoomId);
     const content = this.contentRepo.create({ dataRoomId, ...data });
     return this.contentRepo.save(content);
+  }
+
+  // Find all contents from all exposed data rooms/categories (for concepts)
+  // Categories and Data Rooms are unified - categories ARE data rooms
+  async findAllConceptContents(options: ConceptContentListOptions = {}) {
+    const {
+      search,
+      categoryName,
+      boardType,
+      isExposed,
+      sort = 'latest',
+      page = 1,
+      limit = 20,
+      includeHidden = false,
+    } = options;
+
+    const qb = this.contentRepo.createQueryBuilder('content')
+      .leftJoinAndSelect('content.dataRoom', 'dataRoom')
+      .leftJoinAndSelect('content.comments', 'comments');
+
+    // Only from exposed data rooms
+    qb.andWhere('dataRoom.isExposed = :roomExposed', { roomExposed: true });
+
+    if (!includeHidden) {
+      qb.andWhere('content.isExposed = :isExposed', { isExposed: true });
+    } else if (isExposed !== undefined) {
+      qb.andWhere('content.isExposed = :isExposed', { isExposed });
+    }
+
+    // Filter by boardType (갤러리, 스니펫, 게시판)
+    if (boardType) {
+      qb.andWhere('dataRoom.boardType = :boardType', { boardType });
+    }
+
+    if (categoryName) {
+      qb.andWhere('content.categoryName = :categoryName', { categoryName });
+    }
+
+    // 콘텐츠명 검색
+    if (search) {
+      qb.andWhere('content.name LIKE :search', { search: `%${search}%` });
+    }
+
+    // 정렬
+    qb.orderBy('content.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
+
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    // 응답 포맷
+    const formattedItems = items.map((item, index) => ({
+      no: total - ((page - 1) * limit + index),
+      id: item.id,
+      name: item.name,
+      imageUrl: item.imageUrl,
+      categoryName: item.categoryName || '-',
+      authorName: item.authorName || '-',
+      attachmentUrl: item.attachmentUrl,
+      viewCount: item.viewCount,
+      commentCount: item.comments?.length || 0,
+      isExposed: item.isExposed,
+      exposedLabel: item.isExposed ? 'Y' : 'N',
+      boardType: item.dataRoom?.boardType,
+      dataRoomId: item.dataRoomId,
+      dataRoomName: item.dataRoom?.name,
+      createdAt: item.createdAt,
+      createdAtFormatted: this.formatDateTime(item.createdAt),
+    }));
+
+    return { items: formattedItems, total, page, limit };
   }
 
   async findContents(dataRoomId: number, options: ContentListOptions = {}) {
