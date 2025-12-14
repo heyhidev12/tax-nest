@@ -32,9 +32,10 @@ import { SignUpDto } from 'src/libs/dto/auth/sign-up.dto';
 import { LoginDto } from 'src/libs/dto/auth/login.dto';
 import { UpdateProfileDto } from 'src/libs/dto/auth/update-profile.dto';
 import { ChangePasswordDto } from 'src/libs/dto/auth/change-password.dto';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { TrainingSeminarService } from '../content/services/training-seminar.service';
 import { ConsultationsService } from '../consultations/consultations.service';
+import { ExposureSettingsService } from '../content/services/exposure-settings.service';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -43,17 +44,26 @@ export class AuthController {
     private readonly authService: AuthService,
     private readonly trainingSeminarService: TrainingSeminarService,
     private readonly consultationsService: ConsultationsService,
+    private readonly exposureSettingsService: ExposureSettingsService,
   ) {}
 
   // -------------------------------------
   // SIGN UP / LOGIN
   // -------------------------------------
 
+  @ApiOperation({ summary: '회원가입' })
+  @ApiResponse({ status: 201, description: '회원가입 성공' })
+  @ApiResponse({ status: 400, description: '입력값 검증 실패 또는 이미 사용 중인 ID/이메일/전화번호' })
+  @ApiBody({ type: SignUpDto })
   @Post('sign-up')
   signUp(@Body() dto: SignUpDto) {
     return this.authService.signUp(dto);
   }
 
+  @ApiOperation({ summary: '로그인' })
+  @ApiResponse({ status: 200, description: '로그인 성공' })
+  @ApiResponse({ status: 401, description: 'ID 또는 비밀번호가 올바르지 않습니다.' })
+  @ApiBody({ type: LoginDto })
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto);
@@ -64,161 +74,48 @@ export class AuthController {
   // -------------------------------------
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('user-auth')
+  @ApiOperation({ summary: '내 프로필 조회 (인증 필요)' })
+  @ApiResponse({ status: 200, description: '프로필 조회 성공' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자 - Authorization 헤더에 Bearer 토큰이 필요합니다' })
   @Get('me')
   getMyProfile(@Req() req: any) {
     return this.authService.getMyProfile(req.user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('user-auth')
+  @ApiOperation({ summary: '프로필 수정 (인증 필요)' })
+  @ApiResponse({ status: 200, description: '프로필 수정 성공' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자 - Authorization 헤더에 Bearer 토큰이 필요합니다' })
+  @ApiBody({ type: UpdateProfileDto })
   @Patch('profile')
   updateProfile(@Req() req: any, @Body() dto: UpdateProfileDto) {
     return this.authService.updateProfile(req.user.sub, dto);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('user-auth')
+  @ApiOperation({ summary: '비밀번호 변경 (인증 필요)' })
+  @ApiResponse({ status: 200, description: '비밀번호 변경 성공' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자 - Authorization 헤더에 Bearer 토큰이 필요합니다' })
+  @ApiResponse({ status: 400, description: '현재 비밀번호가 올바르지 않습니다.' })
+  @ApiBody({ type: ChangePasswordDto })
   @Patch('change-password')
   changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(req.user.sub, dto);
   }
 
-  // -------------------------------------
-  // FIND ID — SEND VERIFICATION
-  // -------------------------------------
-
-  @Post('find-id/email/send')
-  sendFindIdEmailVerification(@Body() dto: RequestEmailVerificationDto) {
-    return this.authService.requestFindIdEmailVerification(dto);
-  }
-
-  @Post('find-id/phone/send')
-  sendFindIdPhoneVerification(@Body() dto: RequestPhoneVerificationDto) {
-    return this.authService.requestFindIdPhoneVerification(dto);
-  }
-
-  // -------------------------------------
-  // FIND ID — VERIFY RESULT
-  // -------------------------------------
-
-  @Post('find-id/email/verify')
-  findIdByEmail(@Body() dto: FindIdByEmailDto) {
-    return this.authService.findIdByEmail(dto);
-  }
-
-  @Post('find-id/phone/verify')
-  findIdByPhone(@Body() dto: FindIdByPhoneDto) {
-    return this.authService.findIdByPhone(dto);
-  }
-
-  // -------------------------------------
-  // FIND PASSWORD — SEND VERIFICATION
-  // -------------------------------------
-
-  @Post('find-password/email/send')
-  sendResetPasswordEmailVerification(
-    @Body() dto: RequestPasswordResetEmailVerificationDto,
-  ) {
-    return this.authService.requestPasswordResetEmailVerification(dto);
-  }
-
-  @Post('find-password/phone/send')
-  sendResetPasswordPhoneVerification(
-    @Body() dto: RequestPasswordResetPhoneVerificationDto,
-  ) {
-    return this.authService.requestPasswordResetPhoneVerification(dto);
-  }
-
-  // -------------------------------------
-  // FIND PASSWORD — VERIFY
-  // -------------------------------------
-
-  @Post('find-password/email/verify')
-  findPasswordByEmail(@Body() dto: FindPasswordByEmailDto) {
-    return this.authService.findPasswordByEmail(dto);
-  }
-
-  @Post('find-password/phone/verify')
-  findPasswordByPhone(@Body() dto: FindPasswordByPhoneDto) {
-    return this.authService.findPasswordByPhone(dto);
-  }
-
-  // -------------------------------------
-  // PASSWORD RESET (after verification)
-  // -------------------------------------
-
-  @Post('reset-password')
-  resetPassword(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto);
-  }
-
-  // -------------------------------------
-  // SNS LOGIN (OAuth)
-  // -------------------------------------
-
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google 로그인 시작', description: 'Google OAuth 인증을 시작합니다. 브라우저에서 이 엔드포인트로 리다이렉트하세요.' })
-  async googleAuth() {
-    // Guard handles OAuth flow - this method won't be called if redirect happens
-  }
-
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google 로그인 콜백', description: 'Google OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
-  async googleAuthCallback(@Req() req: any, @Res() res: any) {
-    // After successful Google authentication
-    const { accessToken, member } = req.user;
-    
-    // Redirect to frontend with token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=google`);
-  }
-
-  @Get('kakao')
-  @UseGuards(AuthGuard('kakao'))
-  @ApiOperation({ summary: 'Kakao 로그인 시작', description: 'Kakao OAuth 인증을 시작합니다. 브라우저에서 이 엔드포인트로 리다이렉트하세요.' })
-  async kakaoAuth() {
-    // Guard handles OAuth flow - this method won't be called if redirect happens
-  }
-
-  @Get('kakao/callback')
-  @UseGuards(AuthGuard('kakao'))
-  @ApiOperation({ summary: 'Kakao 로그인 콜백', description: 'Kakao OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
-  async kakaoAuthCallback(@Req() req: any, @Res() res: any) {
-    // After successful Kakao authentication
-    const { accessToken, member } = req.user;
-    
-    // Redirect to frontend with token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=kakao`);
-  }
-
-  @Get('naver')
-  @UseGuards(AuthGuard('naver'))
-  @ApiOperation({ summary: 'Naver 로그인 시작', description: 'Naver OAuth 인증을 시작합니다. 브라우저에서 이 엔드포인트로 리다이렉트하세요.' })
-  async naverAuth() {
-    // Guard handles OAuth flow - this method won't be called if redirect happens
-  }
-
-  @Get('naver/callback')
-  @UseGuards(AuthGuard('naver'))
-  @ApiOperation({ summary: 'Naver 로그인 콜백', description: 'Naver OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
-  async naverAuthCallback(@Req() req: any, @Res() res: any) {
-    // After successful Naver authentication
-    const { accessToken, member } = req.user;
-    
-    // Redirect to frontend with token
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=naver`);
-  }
 
   // -------------------------------------
   // APPLICATION HISTORY
   // -------------------------------------
 
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: '내 신청 내역 조회 (교육/세미나 및 상담)' })
+  @ApiBearerAuth('user-auth')
+  @ApiOperation({ summary: '내 신청 내역 조회 (교육/세미나 및 상담, 인증 필요)' })
   @ApiResponse({ status: 200, description: '신청 내역 조회 성공' })
-  @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자 - Authorization 헤더에 Bearer 토큰이 필요합니다' })
   @ApiQuery({ name: 'type', required: false, enum: ['seminar', 'consultation'], description: '신청 유형 필터 (seminar: 교육/세미나, consultation: 상담신청)' })
   @ApiQuery({ name: 'search', required: false, description: '검색어 (세미나명, 상담내용 등)' })
   @ApiQuery({ name: 'startDate', required: false, description: '조회 시작일 (YYYY-MM-DD)' })
@@ -256,6 +153,8 @@ export class AuthController {
     };
 
     // 타입별로 필터링
+    const isExposed = await this.exposureSettingsService.isAwardsMainExposed();
+
     if (type === 'seminar') {
       // 교육/세미나 신청만 조회 (해당 사용자의 이메일로 필터링됨)
       const seminarApplications = await this.trainingSeminarService.findUserApplications(userEmail, options);
@@ -263,6 +162,7 @@ export class AuthController {
       return {
         type: 'seminar',
         ...seminarApplications,
+        isExposed,
       };
     } else if (type === 'consultation') {
       // 상담 신청만 조회 (해당 사용자의 이메일로 필터링됨)
@@ -271,6 +171,7 @@ export class AuthController {
       return {
         type: 'consultation',
         ...consultations,
+        isExposed,
       };
     } else {
       // 전체 조회 (교육/세미나 + 상담) - 모두 해당 사용자의 이메일로 필터링됨
@@ -289,32 +190,183 @@ export class AuthController {
           consultationTotal: consultations.total,
           total: seminarApplications.total + consultations.total,
         },
+        isExposed,
       };
     }
   }
 
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: '내 신청 내역 조회 - 히스토리 (교육/세미나 및 상담)' })
-  @ApiResponse({ status: 200, description: '신청 내역 조회 성공' })
-  @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
-  @ApiQuery({ name: 'type', required: false, enum: ['seminar', 'consultation'], description: '신청 유형 필터 (seminar: 교육/세미나, consultation: 상담신청)' })
-  @ApiQuery({ name: 'search', required: false, description: '검색어 (세미나명, 상담내용 등)' })
-  @ApiQuery({ name: 'startDate', required: false, description: '조회 시작일 (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'endDate', required: false, description: '조회 종료일 (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 20 })
-  @Get('me/history')
-  async getMyHistory(
-    @Req() req: any,
-    @Query('type') type?: 'seminar' | 'consultation',
-    @Query('search') search?: string,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    // This endpoint is an alias for getMyApplications
-    // It ensures users can only see their own application history
-    return this.getMyApplications(req, type, search, startDate, endDate, page, limit);
+  // -------------------------------------
+  // FIND ID — SEND VERIFICATION
+  // -------------------------------------
+
+  @ApiOperation({ summary: 'ID 찾기 - 이메일 인증번호 발송' })
+  @ApiResponse({ status: 200, description: '인증번호 발송 성공' })
+  @ApiResponse({ status: 404, description: '해당 이메일로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: RequestEmailVerificationDto })
+  @Post('find-id/email/send')
+  sendFindIdEmailVerification(@Body() dto: RequestEmailVerificationDto) {
+    return this.authService.requestFindIdEmailVerification(dto);
   }
+
+  @ApiOperation({ summary: 'ID 찾기 - 휴대폰 인증번호 발송' })
+  @ApiResponse({ status: 200, description: '인증번호 발송 성공' })
+  @ApiResponse({ status: 404, description: '해당 전화번호로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: RequestPhoneVerificationDto })
+  @Post('find-id/phone/send')
+  sendFindIdPhoneVerification(@Body() dto: RequestPhoneVerificationDto) {
+    return this.authService.requestFindIdPhoneVerification(dto);
+  }
+
+  // -------------------------------------
+  // FIND ID — VERIFY RESULT
+  // -------------------------------------
+
+  @ApiOperation({ summary: 'ID 찾기 - 이메일 인증번호 확인 및 ID 조회' })
+  @ApiResponse({ status: 200, description: 'ID 조회 성공' })
+  @ApiResponse({ status: 400, description: '인증번호가 올바르지 않습니다.' })
+  @ApiResponse({ status: 404, description: '해당 정보로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: FindIdByEmailDto })
+  @Post('find-id/email/verify')
+  findIdByEmail(@Body() dto: FindIdByEmailDto) {
+    return this.authService.findIdByEmail(dto);
+  }
+
+  @ApiOperation({ summary: 'ID 찾기 - 휴대폰 인증번호 확인 및 ID 조회' })
+  @ApiResponse({ status: 200, description: 'ID 조회 성공' })
+  @ApiResponse({ status: 400, description: '인증번호가 올바르지 않습니다.' })
+  @ApiResponse({ status: 404, description: '해당 정보로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: FindIdByPhoneDto })
+  @Post('find-id/phone/verify')
+  findIdByPhone(@Body() dto: FindIdByPhoneDto) {
+    return this.authService.findIdByPhone(dto);
+  }
+
+  // -------------------------------------
+  // FIND PASSWORD — SEND VERIFICATION
+  // -------------------------------------
+
+  @ApiOperation({ summary: '비밀번호 찾기 - 이메일 인증번호 발송' })
+  @ApiResponse({ status: 200, description: '인증번호 발송 성공' })
+  @ApiResponse({ status: 404, description: '해당 정보로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: RequestPasswordResetEmailVerificationDto })
+  @Post('find-password/email/send')
+  sendResetPasswordEmailVerification(
+    @Body() dto: RequestPasswordResetEmailVerificationDto,
+  ) {
+    return this.authService.requestPasswordResetEmailVerification(dto);
+  }
+
+  @ApiOperation({ summary: '비밀번호 찾기 - 휴대폰 인증번호 발송' })
+  @ApiResponse({ status: 200, description: '인증번호 발송 성공' })
+  @ApiResponse({ status: 404, description: '해당 정보로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: RequestPasswordResetPhoneVerificationDto })
+  @Post('find-password/phone/send')
+  sendResetPasswordPhoneVerification(
+    @Body() dto: RequestPasswordResetPhoneVerificationDto,
+  ) {
+    return this.authService.requestPasswordResetPhoneVerification(dto);
+  }
+
+  // -------------------------------------
+  // FIND PASSWORD — VERIFY
+  // -------------------------------------
+
+  @ApiOperation({ summary: '비밀번호 찾기 - 이메일 인증번호 확인 및 비밀번호 재설정 토큰 발급' })
+  @ApiResponse({ status: 200, description: '인증 성공, 비밀번호 재설정 토큰 발급' })
+  @ApiResponse({ status: 400, description: '인증번호가 올바르지 않습니다.' })
+  @ApiResponse({ status: 404, description: '해당 정보로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: FindPasswordByEmailDto })
+  @Post('find-password/email/verify')
+  findPasswordByEmail(@Body() dto: FindPasswordByEmailDto) {
+    return this.authService.findPasswordByEmail(dto);
+  }
+
+  @ApiOperation({ summary: '비밀번호 찾기 - 휴대폰 인증번호 확인 및 비밀번호 재설정 토큰 발급' })
+  @ApiResponse({ status: 200, description: '인증 성공, 비밀번호 재설정 토큰 발급' })
+  @ApiResponse({ status: 400, description: '인증번호가 올바르지 않습니다.' })
+  @ApiResponse({ status: 404, description: '해당 정보로 가입된 회원이 없습니다.' })
+  @ApiBody({ type: FindPasswordByPhoneDto })
+  @Post('find-password/phone/verify')
+  findPasswordByPhone(@Body() dto: FindPasswordByPhoneDto) {
+    return this.authService.findPasswordByPhone(dto);
+  }
+
+  // -------------------------------------
+  // PASSWORD RESET (after verification)
+  // -------------------------------------
+
+  @ApiOperation({ summary: '비밀번호 재설정' })
+  @ApiResponse({ status: 200, description: '비밀번호 재설정 성공' })
+  @ApiResponse({ status: 400, description: '토큰이 유효하지 않거나 만료되었습니다.' })
+  @ApiBody({ type: ResetPasswordDto })
+  @Post('reset-password')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
+  // -------------------------------------
+  // SNS LOGIN (OAuth)
+  // -------------------------------------
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Google 로그인 시작', description: 'Google OAuth 인증을 시작합니다. 브라우저에서 이 엔드포인트로 리다이렉트하세요.' })
+  async googleAuth() {
+    // Guard handles OAuth flow - this method won't be called if redirect happens
+  }
+
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @ApiOperation({ summary: 'Google 로그인 콜백', description: 'Google OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
+  @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
+  async googleAuthCallback(@Req() req: any, @Res() res: any) {
+    // After successful Google authentication
+    const { accessToken, member } = req.user;
+    
+    // Redirect to frontend with token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=google`);
+  }
+
+  @Get('kakao')
+  @UseGuards(AuthGuard('kakao'))
+  @ApiOperation({ summary: 'Kakao 로그인 시작', description: 'Kakao OAuth 인증을 시작합니다. 브라우저에서 이 엔드포인트로 리다이렉트하세요.' })
+  async kakaoAuth() {
+    // Guard handles OAuth flow - this method won't be called if redirect happens
+  }
+
+  @Get('kakao/callback')
+  @UseGuards(AuthGuard('kakao'))
+  @ApiOperation({ summary: 'Kakao 로그인 콜백', description: 'Kakao OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
+  @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
+  async kakaoAuthCallback(@Req() req: any, @Res() res: any) {
+    // After successful Kakao authentication
+    const { accessToken, member } = req.user;
+    
+    // Redirect to frontend with token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=kakao`);
+  }
+
+  @Get('naver')
+  @UseGuards(AuthGuard('naver'))
+  @ApiOperation({ summary: 'Naver 로그인 시작', description: 'Naver OAuth 인증을 시작합니다. 브라우저에서 이 엔드포인트로 리다이렉트하세요.' })
+  async naverAuth() {
+    // Guard handles OAuth flow - this method won't be called if redirect happens
+  }
+
+  @Get('naver/callback')
+  @UseGuards(AuthGuard('naver'))
+  @ApiOperation({ summary: 'Naver 로그인 콜백', description: 'Naver OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
+  @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
+  async naverAuthCallback(@Req() req: any, @Res() res: any) {
+    // After successful Naver authentication
+    const { accessToken, member } = req.user;
+    
+    // Redirect to frontend with token
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=naver`);
+  }
+
+
 }

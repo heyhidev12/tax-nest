@@ -151,6 +151,79 @@ export class EasyMailService {
   }
 
   /**
+   * Subscribe a new subscriber to Easy Mail
+   */
+  async subscribeSubscriber(email: string, name?: string): Promise<EasyMailSubscriber> {
+    try {
+      const response = await this.httpClient.post(
+        `/lists/${this.listId}/subscribers`,
+        {
+          email,
+          name: name || '',
+          subscribed: true,
+        },
+      );
+
+      return response.data.subscriber || response.data;
+    } catch (error: any) {
+      this.logger.error(`Failed to subscribe to Easy Mail: ${error.message}`, error.stack);
+      
+      // If subscriber already exists, try to update instead
+      if (error.response?.status === 409 || error.response?.status === 400) {
+        // Try to find and update existing subscriber
+        const subscribers = await this.getSubscribers({ search: email, limit: 1 });
+        const existing = subscribers.subscribers.find(s => s.email === email);
+        if (existing) {
+          return await this.toggleSubscription(existing.id, true);
+        }
+      }
+
+      if (!this.apiKey || error.response?.status === 401) {
+        this.logger.warn('Easy Mail API not configured or unauthorized.');
+        throw new HttpException(
+          'Easy Mail API is not configured',
+          HttpStatus.SERVICE_UNAVAILABLE,
+        );
+      }
+
+      throw new HttpException(
+        `Easy Mail API error: ${error.message}`,
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
+   * Unsubscribe a subscriber from Easy Mail
+   */
+  async unsubscribeSubscriber(email: string): Promise<EasyMailSubscriber | null> {
+    try {
+      // Find subscriber by email
+      const subscribers = await this.getSubscribers({ search: email, limit: 1 });
+      const subscriber = subscribers.subscribers.find(s => s.email === email);
+      
+      if (!subscriber) {
+        return null;
+      }
+
+      // Toggle subscription to false
+      return await this.toggleSubscription(subscriber.id, false);
+    } catch (error: any) {
+      this.logger.error(`Failed to unsubscribe from Easy Mail: ${error.message}`, error.stack);
+      
+      if (!this.apiKey || error.response?.status === 401) {
+        this.logger.warn('Easy Mail API not configured or unauthorized.');
+        return null;
+      }
+
+      throw new HttpException(
+        `Easy Mail API error: ${error.message}`,
+        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
    * Delete subscriber from Easy Mail
    */
   async deleteSubscriber(id: string | number): Promise<void> {

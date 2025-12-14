@@ -215,6 +215,66 @@ export class ColumnService {
     return { success: true, message: '신고가 접수되었습니다.' };
   }
 
+  async hideComment(id: number) {
+    const comment = await this.commentRepo.findOne({ where: { id } });
+    if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    comment.isHidden = true;
+    await this.commentRepo.save(comment);
+    return { success: true, message: '댓글이 숨김 처리되었습니다.' };
+  }
+
+  async toggleCommentVisibility(id: number) {
+    const comment = await this.commentRepo.findOne({ where: { id } });
+    if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    comment.isHidden = !comment.isHidden;
+    await this.commentRepo.save(comment);
+    return { 
+      success: true, 
+      isHidden: comment.isHidden,
+      message: comment.isHidden ? '댓글이 숨김 처리되었습니다.' : '댓글이 다시 노출되었습니다.' 
+    };
+  }
+
+  async findCommentById(id: number) {
+    const comment = await this.commentRepo.findOne({ 
+      where: { id },
+      relations: ['column'],
+    });
+    if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    return comment;
+  }
+
+  // === Report List (신고된 댓글 목록) ===
+  async findReportedComments(page = 1, limit = 20) {
+    const qb = this.commentRepo.createQueryBuilder('comment')
+      .leftJoinAndSelect('comment.column', 'column')
+      .where('comment.isReported = :isReported', { isReported: true })
+      .andWhere('comment.isHidden = :isHidden', { isHidden: false })
+      .orderBy('comment.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    // 응답 포맷
+    const formattedItems = items.map((item, index) => ({
+      no: total - ((page - 1) * limit + index),
+      id: item.id,
+      columnId: item.columnId,
+      contentName: item.column?.name || '-',
+      body: item.body,
+      bodyPreview: item.body.length > 50 ? item.body.slice(0, 50) + '...' : item.body,
+      authorName: item.authorName || '-',
+      memberId: item.memberId,
+      isReported: item.isReported,
+      isHidden: item.isHidden,
+      createdAt: item.createdAt,
+      createdAtFormatted: this.formatDateTime(item.createdAt),
+    }));
+
+    return { items: formattedItems, total, page, limit };
+  }
+
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
   private formatDateTime(date: Date): string {
     const d = new Date(date);

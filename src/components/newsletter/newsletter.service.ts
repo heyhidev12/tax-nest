@@ -23,40 +23,33 @@ export class NewsletterService {
     private readonly easyMailService: EasyMailService,
   ) {}
 
-  // POST /newsletter/subscribe - 뉴스레터 구독 (이름 + 이메일)
+  // POST /newsletter/subscribe - 뉴스레터 구독 (이름 + 이메일) - Easy Mail API 사용
   async subscribe(name: string | undefined, email: string) {
-    // 이미 구독 중인지 확인
-    const existing = await this.subscriberRepo.findOne({ where: { email } });
-    
-    if (existing) {
-      if (existing.isSubscribed) {
+    try {
+      // Easy Mail에 구독
+      await this.easyMailService.subscribeSubscriber(email, name);
+      return { success: true, message: '뉴스레터 구독이 완료되었습니다.' };
+    } catch (error: any) {
+      // 이미 구독 중인 경우
+      if (error.response?.status === 409 || error.message?.includes('already')) {
         throw new ConflictException('이미 구독 중인 이메일입니다.');
       }
-      // 구독 취소했던 경우 다시 구독
-      if (name) existing.name = name;
-      existing.isSubscribed = true;
-      existing.unsubscribedAt = null;
-      await this.subscriberRepo.save(existing);
-      return { success: true, message: '뉴스레터 구독이 재개되었습니다.' };
+      throw error;
     }
-
-    // 새로운 구독자
-    const subscriber = this.subscriberRepo.create({ name, email });
-    await this.subscriberRepo.save(subscriber);
-    return { success: true, message: '뉴스레터 구독이 완료되었습니다.' };
   }
 
-  // 구독 취소
+  // 구독 취소 - Easy Mail API 사용
   async unsubscribe(email: string) {
-    const subscriber = await this.subscriberRepo.findOne({ where: { email } });
-    if (!subscriber || !subscriber.isSubscribed) {
-      return { success: true, message: '구독 중이 아닙니다.' };
+    try {
+      const result = await this.easyMailService.unsubscribeSubscriber(email);
+      if (!result) {
+        return { success: true, message: '구독 중이 아닙니다.' };
+      }
+      return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
+    } catch (error: any) {
+      // Easy Mail API 오류 시에도 성공으로 처리 (이미 취소된 경우 등)
+      return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
     }
-
-    subscriber.isSubscribed = false;
-    subscriber.unsubscribedAt = new Date();
-    await this.subscriberRepo.save(subscriber);
-    return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
   }
 
   // GET /admin/newsletter - 관리자용 구독자 목록 (Easy Mail에서 가져오기)
@@ -225,32 +218,55 @@ export class NewsletterService {
     };
   }
 
-  // GET /newsletter/me - 회원의 뉴스레터 구독 정보 조회
+  // GET /newsletter/me - 회원의 뉴스레터 구독 정보 조회 (Easy Mail에서 확인)
   async getMemberSubscription(memberId: number) {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
-    return {
-      email: member.email,
-      isSubscribed: member.newsletterSubscribed,
-      subscriptionLabel: member.newsletterSubscribed ? 'Y' : 'N',
-    };
+    
+    // Easy Mail에서 구독 상태 확인
+    try {
+      const subscribers = await this.easyMailService.getSubscribers({ 
+        search: member.email, 
+        limit: 1 
+      });
+      const easyMailSubscriber = subscribers.subscribers.find(s => s.email === member.email);
+      const isSubscribed = easyMailSubscriber?.subscribed ?? member.newsletterSubscribed;
+      
+      return {
+        email: member.email,
+        isSubscribed,
+        subscriptionLabel: isSubscribed ? 'Y' : 'N',
+      };
+    } catch (error) {
+      // Easy Mail API 오류 시 Member 엔티티의 값 사용
+      return {
+        email: member.email,
+        isSubscribed: member.newsletterSubscribed,
+        subscriptionLabel: member.newsletterSubscribed ? 'Y' : 'N',
+      };
+    }
   }
 
-  // POST /newsletter/me/unsubscribe - 회원의 뉴스레터 구독 취소
+  // POST /newsletter/me/unsubscribe - 회원의 뉴스레터 구독 취소 (Easy Mail API 사용)
   async unsubscribeMember(memberId: number) {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
     
-    if (!member.newsletterSubscribed) {
-      return { success: true, message: '이미 구독 취소된 상태입니다.' };
+    // Easy Mail에서 구독 취소
+    try {
+      await this.easyMailService.unsubscribeSubscriber(member.email);
+    } catch (error) {
+      // Easy Mail API 오류는 무시 (이미 취소된 경우 등)
     }
-
+    
+    // Member 엔티티도 업데이트
     member.newsletterSubscribed = false;
     await this.memberRepo.save(member);
+    
     return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
   }
 

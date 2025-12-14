@@ -15,6 +15,7 @@ import { AdminMembersController } from './controllers/admin-members.controller';
 import { AdminSettingsController } from './controllers/admin-settings.controller';
 import { AdminNewsletterController } from './controllers/admin-newsletter.controller';
 import { AdminContentController } from './controllers/admin-content.controller';
+import { AdminCommentsController } from './controllers/admin-comments.controller';
 import { RolesGuard } from './roles.guard';
 
 @Module({
@@ -38,6 +39,7 @@ import { RolesGuard } from './roles.guard';
     AdminSettingsController,
     AdminNewsletterController,
     AdminContentController,
+    AdminCommentsController,
   ],
   exports: [TypeOrmModule, AdminAuthService, AdminJwtStrategy, RolesGuard],
 })

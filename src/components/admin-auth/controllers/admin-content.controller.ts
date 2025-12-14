@@ -728,16 +728,50 @@ export class AdminContentController {
     return this.businessAreaService.findAll({ ...query, includeHidden: true });
   }
 
-  @ApiOperation({ summary: '업무분야 대분류 카테고리 목록 (드롭다운용)' })
-  @Get('business-areas/categories/major')
-  getBusinessAreaMajorCategories() {
-    return this.businessAreaService.getMajorCategories();
-  }
+  @ApiOperation({ summary: '업무분야 카테고리 목록 (인사이트 중분류에서 가져오기, 드롭다운용)' })
+  @ApiResponse({ status: 200, description: '카테고리 목록 조회 성공. "업종별"과 "컨설팅"이 기본으로 포함됩니다.' })
+  @Get('business-areas/categories')
+  async getBusinessAreaCategories() {
+    // 모든 인사이트 카테고리의 중분류(서브카테고리)를 가져옴
+    // "업종별"과 "컨설팅"이 기본으로 포함되어야 함
+    const allMajors = await this.categoryService.findAllMajor({
+      includeHidden: true,
+      page: 1,
+      limit: 100,
+    });
 
-  @ApiOperation({ summary: '업무분야 중분류 카테고리 목록 (드롭다운용)' })
-  @Get('business-areas/categories/minor')
-  getBusinessAreaMinorCategories(@Query('majorCategory') majorCategory: string) {
-    return this.businessAreaService.getMinorCategories(majorCategory);
+    // 모든 대분류의 중분류를 수집
+    const allCategories: string[] = [];
+    for (const major of allMajors.items) {
+      const minors = await this.categoryService.findMinorsByMajor(major.id, {
+        includeHidden: true,
+        page: 1,
+        limit: 100,
+      });
+      const categoryNames = minors.items.map(m => m.name);
+      allCategories.push(...categoryNames);
+    }
+
+    // 중복 제거
+    const uniqueCategories = Array.from(new Set(allCategories));
+
+    // "업종별"과 "컨설팅"이 없으면 기본값으로 추가
+    // (실제로는 admin이 insights 카테고리 관리에서 생성해야 함)
+    const defaultCategories = ['업종별', '컨설팅'];
+    for (const defaultCat of defaultCategories) {
+      if (!uniqueCategories.includes(defaultCat)) {
+        uniqueCategories.push(defaultCat);
+      }
+    }
+
+    // 정렬: 기본 카테고리 먼저, 나머지는 알파벳순
+    return uniqueCategories.sort((a, b) => {
+      const aIsDefault = defaultCategories.includes(a);
+      const bIsDefault = defaultCategories.includes(b);
+      if (aIsDefault && !bIsDefault) return -1;
+      if (!aIsDefault && bIsDefault) return 1;
+      return a.localeCompare(b, 'ko');
+    });
   }
 
   @ApiOperation({ summary: '업무분야 상세' })
@@ -761,8 +795,8 @@ export class AdminContentController {
         name: { type: 'string', description: '업무분야명 (필수)' },
         subDescription: { type: 'string', description: '부제목 (선택)' },
         imageUrl: { type: 'string', description: '대표 이미지 URL (필수)' },
-        majorCategory: { type: 'string', description: '대분류 카테고리 (필수)' },
-        minorCategory: { type: 'string', description: '중분류 카테고리 (선택)' },
+        majorCategory: { type: 'string', description: '카테고리 (필수, 인사이트 중분류에서 선택: 예: 업종별, 컨설팅)' },
+        minorCategory: { type: 'string', description: '세부 카테고리 (선택, 예: 제조업, 도·소매업 등)' },
         overview: { type: 'string', description: '개요 (필수, 텍스트)' },
         body: { type: 'string', description: '본문 HTML (필수)' },
         youtubeUrl: { 
@@ -794,8 +828,8 @@ export class AdminContentController {
         name: { type: 'string', description: '업무분야명' },
         subDescription: { type: 'string', description: '부제목' },
         imageUrl: { type: 'string', description: '대표 이미지 URL' },
-        majorCategory: { type: 'string', description: '대분류 카테고리' },
-        minorCategory: { type: 'string', description: '중분류 카테고리' },
+        majorCategory: { type: 'string', description: '카테고리 (인사이트 중분류에서 선택: 예: 업종별, 컨설팅)' },
+        minorCategory: { type: 'string', description: '세부 카테고리 (예: 제조업, 도·소매업 등)' },
         overview: { type: 'string', description: '개요 (텍스트)' },
         body: { type: 'string', description: '본문 HTML' },
         youtubeUrl: { 

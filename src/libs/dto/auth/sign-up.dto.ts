@@ -39,6 +39,9 @@ export class SignUpDto {
   @IsEnum(MemberType, { message: '올바른 회원 유형을 선택해주세요.' })
   memberType: MemberType;
 
+  @ApiProperty({ example: true, description: '뉴스레터 구독 여부', required: false, default: false })
+  newsletters?: boolean;
+
   @ApiProperty({ example: true, description: '약관 동의 여부' })
   @IsNotEmpty({ message: '약관에 동의해주세요.' })
   termsAgreed: boolean;

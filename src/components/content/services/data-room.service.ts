@@ -394,6 +394,30 @@ export class DataRoomService {
     return { success: true, message: '댓글이 숨김 처리되었습니다.' };
   }
 
+  async toggleCommentVisibility(id: number) {
+    const comment = await this.commentRepo.findOne({ 
+      where: { id },
+      relations: ['content', 'content.dataRoom'],
+    });
+    if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    comment.isHidden = !comment.isHidden;
+    await this.commentRepo.save(comment);
+    return { 
+      success: true, 
+      isHidden: comment.isHidden,
+      message: comment.isHidden ? '댓글이 숨김 처리되었습니다.' : '댓글이 다시 노출되었습니다.' 
+    };
+  }
+
+  async findCommentById(id: number) {
+    const comment = await this.commentRepo.findOne({ 
+      where: { id },
+      relations: ['content', 'content.dataRoom'],
+    });
+    if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    return comment;
+  }
+
   async deleteComment(id: number, memberId?: number) {
     const comment = await this.commentRepo.findOne({ where: { id } });
     if (!comment) throw new NotFoundException('댓글을 찾을 수 없습니다.');

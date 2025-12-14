@@ -25,6 +25,7 @@ import { HistoryService } from '../services/history.service';
 import { ColumnService } from '../services/column.service';
 import { DataRoomService } from '../services/data-room.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
+import { ExposureSettingsService } from '../services/exposure-settings.service';
 
 @ApiTags('Content')
 @Controller()
@@ -40,6 +41,7 @@ export class PublicContentController {
     private readonly historyService: HistoryService,
     private readonly columnService: ColumnService,
     private readonly dataRoomService: DataRoomService,
+    private readonly exposureSettingsService: ExposureSettingsService,
   ) {}
 
   // ===== MEMBERS (구성원) =====
@@ -105,12 +107,19 @@ export class PublicContentController {
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const isMainExposedBool = isMainExposed === 'true' ? true : isMainExposed === 'false' ? false : undefined;
 
-    return this.awardService.findAllAwardsPublic({
+    const awardsData = await this.awardService.findAllAwardsPublic({
       page: pageNum,
       limit: limitNum,
       isMainExposed: isMainExposedBool,
       sort: sort || 'latest',
     });
+
+    const isExposed = await this.exposureSettingsService.isAwardsMainExposed();
+
+    return {
+      ...awardsData,
+      isExposed,
+    };
   }
 
   @ApiOperation({ summary: '수상/인증 상세 조회 (공개)' })
@@ -175,6 +184,7 @@ export class PublicContentController {
   @ApiResponse({ status: 201, description: '교육/세미나 신청 성공' })
   @ApiResponse({ status: 400, description: '신청 실패 (정원 마감, 필수 정보 누락 등)' })
   @ApiResponse({ status: 404, description: '교육/세미나를 찾을 수 없습니다' })
+  @ApiBody({ type: ApplySeminarDto })
   @Post('training-seminars/:id/apply')
   async applyToSeminar(
     @Param('id', ParseIntPipe) id: number,
@@ -370,47 +380,6 @@ export class PublicContentController {
     return area;
   }
 
-  // ===== HISTORY (연혁) =====
-
-  @ApiOperation({ summary: '연혁 연도 목록 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '연혁 연도 목록 조회 성공' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
-  @Get('history')
-  async getHistory(
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-    @Query('sort') sort?: 'latest' | 'oldest' | 'order',
-  ) {
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 20;
-
-    return this.historyService.findAllYears({
-      page: pageNum,
-      limit: limitNum,
-      isExposed: true, // Only exposed years
-      sort: sort || 'order',
-      includeHidden: false,
-    });
-  }
-
-  @ApiOperation({ summary: '연혁 연도 상세 조회 (항목 포함, 공개)' })
-  @ApiResponse({ status: 200, description: '연혁 연도 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '연혁을 찾을 수 없습니다' })
-  @Get('history/:id')
-  async getHistoryDetail(@Param('id', ParseIntPipe) id: number) {
-    const year = await this.historyService.findYearById(id);
-    // Only return if exposed
-    if (!year.isExposed) {
-      throw new NotFoundException('연혁을 찾을 수 없습니다.');
-    }
-    // Filter out non-exposed items
-    if (year.items) {
-      year.items = year.items.filter(item => item.isExposed);
-    }
-    return year;
-  }
 
   // ===== INSIGHTS (인사이트) =====
 
@@ -713,8 +682,18 @@ export class PublicContentController {
   @ApiResponse({ status: 201, description: '댓글 작성 성공' })
   @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
   @ApiResponse({ status: 404, description: '아이템을 찾을 수 없습니다' })
-  @ApiBearerAuth('jwt')
+  @ApiResponse({ status: 400, description: '댓글 내용이 없거나 카테고리에 댓글 기능이 비활성화되어 있습니다.' })
+  @ApiBearerAuth('user-auth')
   @UseGuards(JwtAuthGuard)
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['body'],
+      properties: {
+        body: { type: 'string', description: '댓글 내용' },
+      },
+    },
+  })
   @Post('insights/:categoryName/items/:id/comments')
   async createInsightItemComment(
     @Param('categoryName') categoryName: string,
@@ -761,7 +740,7 @@ export class PublicContentController {
   @ApiResponse({ status: 200, description: '댓글 삭제 성공' })
   @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
   @ApiResponse({ status: 404, description: '댓글을 찾을 수 없습니다' })
-  @ApiBearerAuth('jwt')
+  @ApiBearerAuth('user-auth')
   @UseGuards(JwtAuthGuard)
   @Delete('insights/:categoryName/items/:id/comments/:commentId')
   async deleteInsightItemComment(
@@ -783,7 +762,7 @@ export class PublicContentController {
   @ApiResponse({ status: 200, description: '댓글 신고 성공' })
   @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
   @ApiResponse({ status: 404, description: '댓글을 찾을 수 없습니다' })
-  @ApiBearerAuth('jwt')
+  @ApiBearerAuth('user-auth')
   @UseGuards(JwtAuthGuard)
   @Post('insights/:categoryName/items/:id/comments/:commentId/report')
   async reportInsightItemComment(

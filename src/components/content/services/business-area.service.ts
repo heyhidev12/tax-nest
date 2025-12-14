@@ -194,7 +194,7 @@ export class BusinessAreaService {
     return { success: true };
   }
 
-  // 대분류 카테고리 목록 조회 (드롭다운용)
+  // 대분류 카테고리 목록 조회 (드롭다운용) - 더 이상 사용하지 않음, insights 카테고리 사용
   async getMajorCategories(): Promise<string[]> {
     const result = await this.areaRepo
       .createQueryBuilder('area')
@@ -203,7 +203,7 @@ export class BusinessAreaService {
     return result.map((r) => r.majorCategory).filter(Boolean);
   }
 
-  // 중분류 카테고리 목록 조회 (드롭다운용)
+  // 중분류 카테고리 목록 조회 (드롭다운용) - 더 이상 사용하지 않음, insights 카테고리 사용
   async getMinorCategories(majorCategory: string): Promise<string[]> {
     const result = await this.areaRepo
       .createQueryBuilder('area')
