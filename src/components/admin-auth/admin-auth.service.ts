@@ -190,12 +190,13 @@ export class AdminAuthService {
 
     if (!existing) {
       const passwordHash = await bcrypt.hash('admin1234!', 10);
-      await this.adminRepo.save({
+      const superAdmin = this.adminRepo.create({
         loginId: 'superadmin',
         passwordHash,
         name: '최고관리자',
         role: AdminRole.SUPER_ADMIN,
       });
+      await this.adminRepo.save(superAdmin);
       console.log('✅ Super admin created: superadmin / admin1234!');
     }
   }

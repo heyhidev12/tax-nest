@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ComponentsModule } from './components/components.module';
 import { RedisModule } from './libs/redis/redis.module';
+import { UploadModule } from './libs/upload/upload.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RedisModule } from './libs/redis/redis.module';
       }),
     }),
     RedisModule,
+    UploadModule,
     ComponentsModule,
   ],
 })

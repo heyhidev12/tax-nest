@@ -27,7 +27,7 @@ export class AdminUser {
   @Column({ default: true })
   isActive: boolean;
 
-  // JSON 형태로 메뉴 권한 저장 (Module 14 - 권한 설정)
+  // JSON 형태로 메뉴 권한 저장
   @Column({ type: 'json', nullable: true })
   permissions: Record<string, boolean>;
 
