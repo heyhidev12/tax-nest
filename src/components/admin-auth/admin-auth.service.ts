@@ -133,6 +133,7 @@ export class AdminAuthService {
       passwordHash,
       name: dto.name,
       role: dto.role ?? AdminRole.ADMIN,
+      permissions: dto.permissions || {},
     });
 
     const saved = await this.adminRepo.save(admin);
@@ -140,29 +141,44 @@ export class AdminAuthService {
     return {
       id: saved.id,
       loginId: saved.loginId,
-      name: saved.name,
       role: saved.role,
+      isActive: saved.isActive,
+      permissions: saved.permissions,
+      createdAt: saved.createdAt,
     };
   }
 
   async list(page = 1, limit = 20) {
     const [items, total] = await this.adminRepo.findAndCount({
-      select: ['id', 'loginId', 'name', 'role', 'isActive', 'permissions', 'createdAt'],
+      select: ['id', 'loginId', 'role', 'isActive', 'permissions', 'createdAt'],
       order: { createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
     });
 
-    return { items, total, page, limit };
+    // Format response to match requirements: id, loginId, role, isActive, permissions, createdAt
+    const formattedItems = items.map((item) => ({
+      id: item.id,
+      loginId: item.loginId,
+      role: item.role,
+      isActive: item.isActive,
+      permissions: item.permissions || {},
+      createdAt: item.createdAt,
+    }));
+
+    return { items: formattedItems, total, page, limit };
   }
 
-  async delete(id: number) {
+  async delete(id: number, currentAdminId: number) {
     const admin = await this.findById(id);
-    if (admin.role === AdminRole.SUPER_ADMIN) {
-      throw new BadRequestException('최고관리자는 삭제할 수 없습니다.');
+    
+    // Prevent SUPER_ADMIN from deleting their own account
+    if (admin.id === currentAdminId) {
+      throw new BadRequestException('자신의 계정은 삭제할 수 없습니다.');
     }
+    
     await this.adminRepo.remove(admin);
-    return { success: true };
+    return { success: true, message: '관리자가 삭제되었습니다.' };
   }
 
   async updatePermissions(id: number, permissions: Record<string, boolean>) {
@@ -172,11 +188,14 @@ export class AdminAuthService {
     return { success: true };
   }
 
-  async toggleActive(id: number) {
+  async toggleActive(id: number, currentAdminId: number) {
     const admin = await this.findById(id);
-    if (admin.role === AdminRole.SUPER_ADMIN) {
-      throw new BadRequestException('최고관리자는 비활성화할 수 없습니다.');
+    
+    // Prevent deactivating the currently logged-in SUPER_ADMIN
+    if (admin.id === currentAdminId && admin.role === AdminRole.SUPER_ADMIN) {
+      throw new BadRequestException('현재 로그인한 최고관리자 계정은 비활성화할 수 없습니다.');
     }
+    
     admin.isActive = !admin.isActive;
     await this.adminRepo.save(admin);
     return { success: true, isActive: admin.isActive };

@@ -25,4 +25,13 @@ export class CreateAdminDto {
   @IsOptional()
   @IsEnum(AdminRole)
   role?: AdminRole;
+
+  @ApiPropertyOptional({ 
+    example: { content: true, members: false }, 
+    description: '메뉴 권한 객체 (예: { "content": true, "members": false })',
+    type: 'object',
+    additionalProperties: { type: 'boolean' },
+  })
+  @IsOptional()
+  permissions?: Record<string, boolean>;
 }

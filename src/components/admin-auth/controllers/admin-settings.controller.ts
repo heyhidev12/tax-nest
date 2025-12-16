@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
@@ -47,20 +48,24 @@ export class AdminSettingsController {
     return this.adminAuthService.create(dto);
   }
 
-  @ApiOperation({ summary: '관리자 삭제 (SUPER_ADMIN)' })
+  @ApiOperation({ summary: '관리자 삭제 (SUPER_ADMIN)', description: 'SUPER_ADMIN은 자신의 계정을 삭제할 수 없습니다.' })
   @ApiResponse({ status: 200, description: '삭제 성공' })
+  @ApiResponse({ status: 400, description: '자신의 계정은 삭제할 수 없습니다.' })
   @Delete('admins/:id')
   @Roles(AdminRole.SUPER_ADMIN)
-  deleteAdmin(@Param('id', ParseIntPipe) id: number) {
-    return this.adminAuthService.delete(id);
+  deleteAdmin(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const currentAdminId = req.user.id;
+    return this.adminAuthService.delete(id, currentAdminId);
   }
 
-  @ApiOperation({ summary: '관리자 활성화/비활성화 (SUPER_ADMIN)' })
+  @ApiOperation({ summary: '관리자 활성화/비활성화 (SUPER_ADMIN)', description: '현재 로그인한 SUPER_ADMIN은 자신의 계정을 비활성화할 수 없습니다.' })
   @ApiResponse({ status: 200, description: '토글 성공' })
+  @ApiResponse({ status: 400, description: '현재 로그인한 최고관리자 계정은 비활성화할 수 없습니다.' })
   @Patch('admins/:id/toggle-active')
   @Roles(AdminRole.SUPER_ADMIN)
-  toggleActive(@Param('id', ParseIntPipe) id: number) {
-    return this.adminAuthService.toggleActive(id);
+  toggleActive(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const currentAdminId = req.user.id;
+    return this.adminAuthService.toggleActive(id, currentAdminId);
   }
 
   @ApiOperation({ summary: '관리자 권한 수정 (SUPER_ADMIN)' })

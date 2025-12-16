@@ -20,6 +20,11 @@ import { AwardService } from 'src/components/content/services/award.service';
 import { BranchService } from 'src/components/content/services/branch.service';
 import { KeyCustomerService } from 'src/components/content/services/key-customer.service';
 import { BusinessAreaService } from 'src/components/content/services/business-area.service';
+import { InsightsService } from 'src/components/content/services/insights.service';
+import { CreateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/create-category.dto';
+import { UpdateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/update-category.dto';
+import { CreateBusinessAreaItemDto } from 'src/libs/dto/business-area/create-item.dto';
+import { UpdateBusinessAreaItemDto } from 'src/libs/dto/business-area/update-item.dto';
 import { TrainingSeminarService } from 'src/components/content/services/training-seminar.service';
 import { ColumnService } from 'src/components/content/services/column.service';
 import { DataRoomService } from 'src/components/content/services/data-room.service';
@@ -43,6 +48,7 @@ export class AdminContentController {
   constructor(
     private readonly bannerService: MainBannerService,
     private readonly historyService: HistoryService,
+    private readonly insightsService: InsightsService,
     private readonly awardService: AwardService,
     private readonly branchService: BranchService,
     private readonly keyCustomerService: KeyCustomerService,
@@ -722,134 +728,98 @@ export class AdminContentController {
   }
 
   // ===== BUSINESS AREAS =====
-  @ApiOperation({ summary: '업무분야 목록 (검색: 업무분야명, 필터: 콘텐츠타입/대분류/노출여부/메인노출)' })
+  
+  // ===== BUSINESS AREAS - CATEGORIES =====
+  @ApiOperation({ summary: 'Business Areas 카테고리 목록 조회 (Major Category별 그룹화)' })
+  @ApiResponse({ status: 200, description: 'Major Category별로 그룹화된 카테고리 목록' })
+  @Get('business-areas/categories')
+  getBusinessAreaCategories(@Query('includeHidden') includeHidden?: string) {
+    return this.businessAreaService.getCategoriesGroupedByMajor(includeHidden === 'true');
+  }
+
+  @ApiOperation({ summary: 'Major Category별 Business Areas 카테고리 목록' })
+  @ApiResponse({ status: 200, description: 'Major Category별 카테고리 목록' })
+  @Get('business-areas/categories/by-major/:majorCategoryId')
+  getBusinessAreaCategoriesByMajor(
+    @Param('majorCategoryId', ParseIntPipe) majorCategoryId: number,
+    @Query('includeHidden') includeHidden?: string,
+  ) {
+    return this.businessAreaService.getCategoriesByMajorCategory(majorCategoryId, includeHidden === 'true');
+  }
+
+  @ApiOperation({ summary: 'Business Areas 카테고리 상세 조회' })
+  @Get('business-areas/categories/:id')
+  getBusinessAreaCategory(@Param('id', ParseIntPipe) id: number) {
+    return this.businessAreaService.getCategoryById(id, true);
+  }
+
+  @ApiOperation({ summary: 'Business Areas 카테고리 생성', description: 'Major Category는 /admin/insights/subcategories에서 선택' })
+  @Post('business-areas/categories')
+  createBusinessAreaCategory(@Body() dto: CreateBusinessAreaCategoryDto) {
+    return this.businessAreaService.createCategory(dto);
+  }
+
+  @ApiOperation({ summary: 'Business Areas 카테고리 수정' })
+  @Patch('business-areas/categories/:id')
+  updateBusinessAreaCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateBusinessAreaCategoryDto,
+  ) {
+    return this.businessAreaService.updateCategory(id, dto);
+  }
+
+  @ApiOperation({ summary: 'Business Areas 카테고리 삭제', description: '사용 중인 카테고리는 삭제할 수 없습니다.' })
+  @Delete('business-areas/categories/:id')
+  deleteBusinessAreaCategory(@Param('id', ParseIntPipe) id: number) {
+    return this.businessAreaService.deleteCategory(id);
+  }
+
+  @ApiOperation({ summary: 'Business Areas 카테고리 노출 토글' })
+  @Patch('business-areas/categories/:id/toggle-exposure')
+  toggleBusinessAreaCategoryExposure(@Param('id', ParseIntPipe) id: number) {
+    return this.businessAreaService.toggleCategoryExposure(id);
+  }
+
+  // ===== BUSINESS AREAS - ITEMS =====
+  @ApiOperation({ summary: '업무분야 아이템 목록 (검색: 업무분야명, 필터: 대분류/중분류/노출여부/메인노출)' })
   @Get('business-areas')
   listBusinessAreas(@Query() query: any) {
-    return this.businessAreaService.findAll({ ...query, includeHidden: true });
-  }
-
-  @ApiOperation({ summary: '업무분야 카테고리 목록 (인사이트 중분류에서 가져오기, 드롭다운용)' })
-  @ApiResponse({ status: 200, description: '카테고리 목록 조회 성공. "업종별"과 "컨설팅"이 기본으로 포함됩니다.' })
-  @Get('business-areas/categories')
-  async getBusinessAreaCategories() {
-    // 모든 인사이트 카테고리의 중분류(서브카테고리)를 가져옴
-    // "업종별"과 "컨설팅"이 기본으로 포함되어야 함
-    const allMajors = await this.categoryService.findAllMajor({
+    const { majorCategoryId, minorCategoryId, ...rest } = query;
+    return this.businessAreaService.findAll({
+      ...rest,
+      majorCategoryId: majorCategoryId ? Number(majorCategoryId) : undefined,
+      minorCategoryId: minorCategoryId ? Number(minorCategoryId) : undefined,
       includeHidden: true,
-      page: 1,
-      limit: 100,
-    });
-
-    // 모든 대분류의 중분류를 수집
-    const allCategories: string[] = [];
-    for (const major of allMajors.items) {
-      const minors = await this.categoryService.findMinorsByMajor(major.id, {
-        includeHidden: true,
-        page: 1,
-        limit: 100,
-      });
-      const categoryNames = minors.items.map(m => m.name);
-      allCategories.push(...categoryNames);
-    }
-
-    // 중복 제거
-    const uniqueCategories = Array.from(new Set(allCategories));
-
-    // "업종별"과 "컨설팅"이 없으면 기본값으로 추가
-    // (실제로는 admin이 insights 카테고리 관리에서 생성해야 함)
-    const defaultCategories = ['업종별', '컨설팅'];
-    for (const defaultCat of defaultCategories) {
-      if (!uniqueCategories.includes(defaultCat)) {
-        uniqueCategories.push(defaultCat);
-      }
-    }
-
-    // 정렬: 기본 카테고리 먼저, 나머지는 알파벳순
-    return uniqueCategories.sort((a, b) => {
-      const aIsDefault = defaultCategories.includes(a);
-      const bIsDefault = defaultCategories.includes(b);
-      if (aIsDefault && !bIsDefault) return -1;
-      if (!aIsDefault && bIsDefault) return 1;
-      return a.localeCompare(b, 'ko');
     });
   }
 
-  @ApiOperation({ summary: '업무분야 상세' })
+  @ApiOperation({ summary: '업무분야 아이템 상세' })
   @Get('business-areas/:id')
   getBusinessArea(@Param('id', ParseIntPipe) id: number) {
     return this.businessAreaService.findById(id);
   }
 
-  @ApiOperation({ summary: '업무분야 생성' })
-  @ApiBody({
-    description: '업무분야 생성 정보',
-    schema: {
-      type: 'object',
-      required: ['contentType', 'name', 'imageUrl', 'majorCategory', 'overview', 'body'],
-      properties: {
-        contentType: { 
-          type: 'string', 
-          enum: ['A', 'B', 'C'], 
-          description: '콘텐츠 타입 (필수: A, B, C)' 
-        },
-        name: { type: 'string', description: '업무분야명 (필수)' },
-        subDescription: { type: 'string', description: '부제목 (선택)' },
-        imageUrl: { type: 'string', description: '대표 이미지 URL (필수)' },
-        majorCategory: { type: 'string', description: '카테고리 (필수, 인사이트 중분류에서 선택: 예: 업종별, 컨설팅)' },
-        minorCategory: { type: 'string', description: '세부 카테고리 (선택, 예: 제조업, 도·소매업 등)' },
-        overview: { type: 'string', description: '개요 (필수, 텍스트)' },
-        body: { type: 'string', description: '본문 HTML (필수)' },
-        youtubeUrl: { 
-          type: 'string', 
-          description: 'YouTube URL (선택, 여러 개는 JSON 배열 또는 콤마 구분)' 
-        },
-        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (기본: false)' },
-        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
-        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
-      },
-    },
+  @ApiOperation({ 
+    summary: '업무분야 아이템 생성',
+    description: 'Major Category는 /admin/insights/subcategories에서, Minor Category는 Business Areas categories에서 선택' 
   })
   @Post('business-areas')
-  createBusinessArea(@Body() body: any) {
-    return this.businessAreaService.create(body);
+  createBusinessAreaItem(@Body() dto: CreateBusinessAreaItemDto) {
+    return this.businessAreaService.createItem(dto);
   }
 
-  @ApiOperation({ summary: '업무분야 수정' })
-  @ApiBody({
-    description: '업무분야 수정 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        contentType: { 
-          type: 'string', 
-          enum: ['A', 'B', 'C'], 
-          description: '콘텐츠 타입' 
-        },
-        name: { type: 'string', description: '업무분야명' },
-        subDescription: { type: 'string', description: '부제목' },
-        imageUrl: { type: 'string', description: '대표 이미지 URL' },
-        majorCategory: { type: 'string', description: '카테고리 (인사이트 중분류에서 선택: 예: 업종별, 컨설팅)' },
-        minorCategory: { type: 'string', description: '세부 카테고리 (예: 제조업, 도·소매업 등)' },
-        overview: { type: 'string', description: '개요 (텍스트)' },
-        body: { type: 'string', description: '본문 HTML' },
-        youtubeUrl: { 
-          type: 'string', 
-          description: 'YouTube URL (여러 개는 JSON 배열 또는 콤마 구분)' 
-        },
-        isMainExposed: { type: 'boolean', description: '메인 노출 여부' },
-        isExposed: { type: 'boolean', description: '노출 여부' },
-        displayOrder: { type: 'number', description: '표시 순서' },
-      },
-    },
-  })
+  @ApiOperation({ summary: '업무분야 아이템 수정' })
   @Patch('business-areas/:id')
-  updateBusinessArea(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
-    return this.businessAreaService.update(id, body);
+  updateBusinessAreaItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateBusinessAreaItemDto,
+  ) {
+    return this.businessAreaService.updateItem(id, dto);
   }
 
-  @ApiOperation({ summary: '업무분야 삭제' })
+  @ApiOperation({ summary: '업무분야 아이템 삭제' })
   @Delete('business-areas/:id')
-  deleteBusinessArea(@Param('id', ParseIntPipe) id: number) {
+  deleteBusinessAreaItem(@Param('id', ParseIntPipe) id: number) {
     return this.businessAreaService.delete(id);
   }
 

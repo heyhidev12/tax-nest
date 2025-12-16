@@ -36,6 +36,7 @@ async function bootstrap() {
     .addTag('Consultations', '상담 요청')
     .addTag('Newsletter', '뉴스레터')
     .addTag('Upload', '파일 업로드 (이미지/비디오)')
+    .addTag('Insights', '인사이트 (카테고리/서브카테고리/아이템)')
     .addTag('Admin Auth', '관리자 인증')
     .addTag('Admin Consultations', '관리자 - 상담 관리')
     .addTag('Admin Members', '관리자 - 회원 관리')

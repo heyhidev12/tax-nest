@@ -4,22 +4,16 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
-
-export enum BusinessAreaContentType {
-  A = 'A',  // A타입
-  B = 'B',  // B타입 (컨설팅)
-  C = 'C',  // C타입 (커스텀)
-}
+import { InsightsSubcategory } from './insights-subcategory.entity';
+import { BusinessAreaCategory } from './business-area-category.entity';
 
 @Entity('business_areas')
 export class BusinessArea {
   @PrimaryGeneratedColumn()
   id: number;
-
-  // 콘텐츠 타입 (필수) - A~C
-  @Column({ type: 'enum', enum: BusinessAreaContentType })
-  contentType: BusinessAreaContentType;
 
   // 업무분야명 (필수)
   @Column()
@@ -33,12 +27,27 @@ export class BusinessArea {
   @Column()
   imageUrl: string;
 
-  // 업무분야 (대분류/중분류 - Dropdown)
+  /**
+   * Major Category ID - References InsightsSubcategory (업종별, 컨설팅, etc.)
+   * This comes from /admin/insights/subcategories
+   */
   @Column()
-  majorCategory: string;
+  majorCategoryId: number;
 
-  @Column({ nullable: true })
-  minorCategory: string;
+  @ManyToOne(() => InsightsSubcategory, { onDelete: 'RESTRICT', nullable: false })
+  @JoinColumn({ name: 'majorCategoryId', referencedColumnName: 'id' })
+  majorCategory: InsightsSubcategory;
+
+  /**
+   * Minor Category ID - References BusinessAreaCategory
+   * This is a Business Areas-only category created by admin
+   */
+  @Column()
+  minorCategoryId: number;
+
+  @ManyToOne(() => BusinessAreaCategory, { onDelete: 'RESTRICT', nullable: false })
+  @JoinColumn({ name: 'minorCategoryId', referencedColumnName: 'id' })
+  minorCategory: BusinessAreaCategory;
 
   // 개요 (필수)
   @Column({ type: 'text' })
@@ -67,6 +76,13 @@ export class BusinessArea {
 
   @UpdateDateColumn()
   updatedAt: Date;
+}
+
+// Keep enum for backward compatibility (may be removed later if not needed)
+export enum BusinessAreaContentType {
+  A = 'A',
+  B = 'B',
+  C = 'C',
 }
 
 

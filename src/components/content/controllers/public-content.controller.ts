@@ -335,9 +335,17 @@ export class PublicContentController {
   @ApiResponse({ status: 200, description: '업무분야 목록 조회 성공' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiOperation({ summary: '업무분야 계층 구조 데이터 조회 (Accordion UI용)', description: 'Major Category별로 그룹화된 계층 구조 데이터 반환' })
+  @ApiResponse({ status: 200, description: '계층 구조 데이터 조회 성공' })
+  @Get('business-areas/hierarchical')
+  getBusinessAreasHierarchical() {
+    return this.businessAreaService.getHierarchicalData(false);
+  }
+
+  @ApiOperation({ summary: '업무분야 목록 조회' })
   @ApiQuery({ name: 'search', required: false, type: String, description: '업무분야명으로 검색' })
-  @ApiQuery({ name: 'contentType', required: false, enum: ['A', 'B', 'C'], description: '콘텐츠 타입 필터링' })
-  @ApiQuery({ name: 'majorCategory', required: false, type: String, description: '대분류 카테고리 필터링' })
+  @ApiQuery({ name: 'majorCategoryId', required: false, type: Number, description: 'Major Category ID 필터링' })
+  @ApiQuery({ name: 'minorCategoryId', required: false, type: Number, description: 'Minor Category ID 필터링' })
   @ApiQuery({ name: 'isMainExposed', required: false, type: Boolean, description: '메인 노출 여부로 필터링' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
   @Get('business-areas')
@@ -345,8 +353,8 @@ export class PublicContentController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
-    @Query('contentType') contentType?: string,
-    @Query('majorCategory') majorCategory?: string,
+    @Query('majorCategoryId') majorCategoryId?: string,
+    @Query('minorCategoryId') minorCategoryId?: string,
     @Query('isMainExposed') isMainExposed?: string,
     @Query('sort') sort?: 'latest' | 'oldest' | 'order',
   ) {
@@ -358,8 +366,8 @@ export class PublicContentController {
       page: pageNum,
       limit: limitNum,
       search,
-      contentType: contentType as any,
-      majorCategory,
+      majorCategoryId: majorCategoryId ? Number(majorCategoryId) : undefined,
+      minorCategoryId: minorCategoryId ? Number(minorCategoryId) : undefined,
       isExposed: true, // Only exposed business areas
       isMainExposed: isMainExposedBool,
       sort: sort || 'order',

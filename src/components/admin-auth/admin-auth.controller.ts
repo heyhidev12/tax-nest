@@ -25,7 +25,7 @@ export class AdminAuthController {
   @UseGuards(AdminJwtAuthGuard)
   @Get('me')
   getMyProfile(@Req() req: any) {
-    return this.adminAuthService.getMyProfile(req.user.adminId);
+    return this.adminAuthService.getMyProfile(req.user.id);
   }
 
   @ApiOperation({ summary: '내 정보 수정 (이름 변경)' })
@@ -34,7 +34,7 @@ export class AdminAuthController {
   @UseGuards(AdminJwtAuthGuard)
   @Patch('me')
   updateMyProfile(@Req() req: any, @Body() dto: AdminUpdateProfileDto) {
-    return this.adminAuthService.updateMyProfile(req.user.adminId, dto);
+    return this.adminAuthService.updateMyProfile(req.user.id, dto);
   }
 
   @ApiOperation({ summary: '비밀번호 변경' })
@@ -45,6 +45,6 @@ export class AdminAuthController {
   @UseGuards(AdminJwtAuthGuard)
   @Patch('password')
   changePassword(@Req() req: any, @Body() dto: AdminChangePasswordDto) {
-    return this.adminAuthService.changePassword(req.user.adminId, dto);
+    return this.adminAuthService.changePassword(req.user.id, dto);
   }
 }

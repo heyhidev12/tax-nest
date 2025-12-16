@@ -1,12 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { BusinessArea, BusinessAreaContentType } from 'src/libs/entity/business-area.entity';
+import { BusinessArea } from 'src/libs/entity/business-area.entity';
+import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
+import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
+import { CreateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/create-category.dto';
+import { UpdateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/update-category.dto';
+import { CreateBusinessAreaItemDto } from 'src/libs/dto/business-area/create-item.dto';
+import { UpdateBusinessAreaItemDto } from 'src/libs/dto/business-area/update-item.dto';
 
 interface BusinessAreaListOptions {
   search?: string;
-  contentType?: BusinessAreaContentType;
-  majorCategory?: string;
+  majorCategoryId?: number;
+  minorCategoryId?: number;
   isExposed?: boolean;
   isMainExposed?: boolean;
   sort?: 'latest' | 'oldest' | 'order';
@@ -20,18 +26,237 @@ export class BusinessAreaService {
   constructor(
     @InjectRepository(BusinessArea)
     private readonly areaRepo: Repository<BusinessArea>,
+    @InjectRepository(BusinessAreaCategory)
+    private readonly categoryRepo: Repository<BusinessAreaCategory>,
+    @InjectRepository(InsightsSubcategory)
+    private readonly insightsSubcategoryRepo: Repository<InsightsSubcategory>,
   ) {}
 
-  async create(data: Partial<BusinessArea>) {
-    const area = this.areaRepo.create(data);
-    return this.areaRepo.save(area);
+  // ========== CATEGORY METHODS ==========
+
+  async createCategory(dto: CreateBusinessAreaCategoryDto) {
+    // Validate major category exists and is exposed
+    const majorCategory = await this.insightsSubcategoryRepo.findOne({
+      where: { id: dto.majorCategoryId, isExposed: true },
+    });
+    if (!majorCategory) {
+      throw new NotFoundException('Major Category를 찾을 수 없습니다.');
+    }
+
+    const category = this.categoryRepo.create({
+      majorCategoryId: dto.majorCategoryId,
+      name: dto.name,
+      isExposed: dto.isExposed ?? true,
+    });
+
+    return this.categoryRepo.save(category);
+  }
+
+  async getAllCategories(includeHidden = false) {
+    const where = includeHidden ? {} : { isExposed: true };
+    const categories = await this.categoryRepo.find({
+      where,
+      relations: ['majorCategory'],
+      order: { createdAt: 'ASC' },
+    });
+
+    return categories.map((cat) => ({
+      id: cat.id,
+      majorCategory: {
+        id: cat.majorCategory.id,
+        name: cat.majorCategory.name,
+        sections: cat.majorCategory.sections || [],
+        isExposed: cat.majorCategory.isExposed,
+        displayOrder: cat.majorCategory.displayOrder,
+      },
+      name: cat.name,
+      isExposed: cat.isExposed,
+      createdAt: cat.createdAt,
+      updatedAt: cat.updatedAt,
+    }));
+  }
+
+  async getCategoriesByMajorCategory(majorCategoryId: number, includeHidden = false) {
+    // Validate major category exists
+    const majorCategory = await this.insightsSubcategoryRepo.findOne({
+      where: { id: majorCategoryId },
+    });
+    if (!majorCategory) {
+      throw new NotFoundException('Major Category를 찾을 수 없습니다.');
+    }
+
+    const where: any = { majorCategoryId };
+    if (!includeHidden) {
+      where.isExposed = true;
+    }
+
+    const categories = await this.categoryRepo.find({
+      where,
+      relations: ['majorCategory'],
+      order: { createdAt: 'ASC' },
+    });
+
+    return categories.map((cat) => ({
+      id: cat.id,
+      majorCategory: {
+        id: cat.majorCategory.id,
+        name: cat.majorCategory.name,
+        sections: cat.majorCategory.sections || [],
+        isExposed: cat.majorCategory.isExposed,
+        displayOrder: cat.majorCategory.displayOrder,
+      },
+      name: cat.name,
+      isExposed: cat.isExposed,
+      createdAt: cat.createdAt,
+      updatedAt: cat.updatedAt,
+    }));
+  }
+
+  async getCategoryById(id: number, includeHidden = false) {
+    const where: any = { id };
+    if (!includeHidden) {
+      where.isExposed = true;
+    }
+
+    const category = await this.categoryRepo.findOne({
+      where,
+      relations: ['majorCategory'],
+    });
+
+    if (!category) {
+      throw new NotFoundException('Category를 찾을 수 없습니다.');
+    }
+
+    return {
+      id: category.id,
+      majorCategory: {
+        id: category.majorCategory.id,
+        name: category.majorCategory.name,
+        sections: category.majorCategory.sections || [],
+        isExposed: category.majorCategory.isExposed,
+        displayOrder: category.majorCategory.displayOrder,
+      },
+      name: category.name,
+      isExposed: category.isExposed,
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+    };
+  }
+
+  async updateCategory(id: number, dto: UpdateBusinessAreaCategoryDto) {
+    const category = await this.categoryRepo.findOne({ where: { id } });
+    if (!category) {
+      throw new NotFoundException('Category를 찾을 수 없습니다.');
+    }
+
+    if (dto.name) category.name = dto.name;
+    if (dto.isExposed !== undefined) category.isExposed = dto.isExposed;
+
+    return this.categoryRepo.save(category);
+  }
+
+  async deleteCategory(id: number) {
+    const category = await this.categoryRepo.findOne({ where: { id } });
+    if (!category) {
+      throw new NotFoundException('Category를 찾을 수 없습니다.');
+    }
+
+    // Check if category is used by any items
+    const itemCount = await this.areaRepo.count({ where: { minorCategoryId: id } });
+    if (itemCount > 0) {
+      throw new BadRequestException(
+        `Category가 ${itemCount}개의 아이템에서 사용 중이어서 삭제할 수 없습니다.`,
+      );
+    }
+
+    await this.categoryRepo.remove(category);
+    return { success: true };
+  }
+
+  async toggleCategoryExposure(id: number) {
+    const category = await this.categoryRepo.findOne({ where: { id } });
+    if (!category) {
+      throw new NotFoundException('Category를 찾을 수 없습니다.');
+    }
+
+    category.isExposed = !category.isExposed;
+    await this.categoryRepo.save(category);
+    return { success: true, isExposed: category.isExposed };
+  }
+
+  /**
+   * Get categories grouped by major category for admin UI
+   */
+  async getCategoriesGroupedByMajor(includeHidden = false) {
+    const categories = await this.getAllCategories(includeHidden);
+    
+    // Group by major category
+    const grouped: Record<number, any> = {};
+    for (const cat of categories) {
+      const majorId = cat.majorCategory.id;
+      if (!grouped[majorId]) {
+        grouped[majorId] = {
+          majorCategory: cat.majorCategory,
+          categories: [],
+        };
+      }
+      grouped[majorId].categories.push({
+        id: cat.id,
+        name: cat.name,
+        isExposed: cat.isExposed,
+        createdAt: cat.createdAt,
+        updatedAt: cat.updatedAt,
+      });
+    }
+
+    return Object.values(grouped);
+  }
+
+  // ========== ITEM METHODS ==========
+
+  async createItem(dto: CreateBusinessAreaItemDto) {
+    // Validate major category exists and is exposed
+    const majorCategory = await this.insightsSubcategoryRepo.findOne({
+      where: { id: dto.majorCategory.id, isExposed: true },
+    });
+    if (!majorCategory) {
+      throw new NotFoundException('Major Category를 찾을 수 없습니다.');
+    }
+
+    // Validate minor category exists, is exposed, and belongs to the major category
+    const minorCategory = await this.categoryRepo.findOne({
+      where: { id: dto.minorCategory.id, majorCategoryId: dto.majorCategory.id, isExposed: true },
+    });
+    if (!minorCategory) {
+      throw new BadRequestException('Minor Category를 찾을 수 없거나 선택한 Major Category에 속하지 않습니다.');
+    }
+
+    const item = this.areaRepo.create({
+      name: dto.name,
+      subDescription: dto.subDescription,
+      imageUrl: dto.imageUrl,
+      majorCategoryId: dto.majorCategory.id,
+      minorCategoryId: dto.minorCategory.id,
+      overview: dto.overview,
+      body: dto.body,
+      youtubeUrl: dto.youtubeUrl,
+      isMainExposed: dto.isMainExposed ?? false,
+      isExposed: dto.isExposed ?? true,
+      displayOrder: dto.displayOrder ?? 0,
+    });
+
+    const saved = await this.areaRepo.save(item);
+    return this.areaRepo.findOne({
+      where: { id: saved.id },
+      relations: ['majorCategory', 'minorCategory'],
+    });
   }
 
   async findAll(options: BusinessAreaListOptions = {}) {
     const { 
       search, 
-      contentType, 
-      majorCategory, 
+      majorCategoryId,
+      minorCategoryId,
       isExposed,
       isMainExposed,
       sort = 'order',
@@ -40,7 +265,9 @@ export class BusinessAreaService {
       includeHidden = false 
     } = options;
     
-    const qb = this.areaRepo.createQueryBuilder('area');
+    const qb = this.areaRepo.createQueryBuilder('area')
+      .leftJoinAndSelect('area.majorCategory', 'majorCategory')
+      .leftJoinAndSelect('area.minorCategory', 'minorCategory');
 
     // 노출 여부 필터
     if (!includeHidden) {
@@ -54,14 +281,14 @@ export class BusinessAreaService {
       qb.andWhere('area.isMainExposed = :isMainExposed', { isMainExposed });
     }
 
-    // 콘텐츠 타입 필터
-    if (contentType) {
-      qb.andWhere('area.contentType = :contentType', { contentType });
+    // 대분류 필터
+    if (majorCategoryId) {
+      qb.andWhere('area.majorCategoryId = :majorCategoryId', { majorCategoryId });
     }
 
-    // 대분류 필터
-    if (majorCategory) {
-      qb.andWhere('area.majorCategory = :majorCategory', { majorCategory });
+    // 중분류 필터
+    if (minorCategoryId) {
+      qb.andWhere('area.minorCategoryId = :minorCategoryId', { minorCategoryId });
     }
 
     // 업무분야명 검색
@@ -107,12 +334,24 @@ export class BusinessAreaService {
       return {
         no,
         id: item.id,
-        contentType: item.contentType,
-        contentTypeLabel: this.getContentTypeLabel(item.contentType),
         name: item.name,
         subDescription: item.subDescription,
-        majorCategory: item.majorCategory,
-        minorCategory: item.minorCategory,
+        majorCategory: item.majorCategory
+          ? {
+              id: item.majorCategory.id,
+              name: item.majorCategory.name,
+              sections: item.majorCategory.sections || [],
+              isExposed: item.majorCategory.isExposed,
+              displayOrder: item.majorCategory.displayOrder,
+            }
+          : null,
+        minorCategory: item.minorCategory
+          ? {
+              id: item.minorCategory.id,
+              name: item.minorCategory.name,
+              isExposed: item.minorCategory.isExposed,
+            }
+          : null,
         imageUrl: item.imageUrl,
         youtubeUrl: item.youtubeUrl,
         youtubeCount,
@@ -137,12 +376,41 @@ export class BusinessAreaService {
   }
 
   async findById(id: number) {
-    const area = await this.areaRepo.findOne({ where: { id } });
+    const area = await this.areaRepo.findOne({
+      where: { id },
+      relations: ['majorCategory', 'minorCategory'],
+    });
     if (!area) throw new NotFoundException('업무분야를 찾을 수 없습니다.');
     
     return {
-      ...area,
-      contentTypeLabel: this.getContentTypeLabel(area.contentType),
+      id: area.id,
+      name: area.name,
+      subDescription: area.subDescription,
+      imageUrl: area.imageUrl,
+      majorCategory: area.majorCategory
+        ? {
+            id: area.majorCategory.id,
+            name: area.majorCategory.name,
+            sections: area.majorCategory.sections || [],
+            isExposed: area.majorCategory.isExposed,
+            displayOrder: area.majorCategory.displayOrder,
+          }
+        : null,
+      minorCategory: area.minorCategory
+        ? {
+            id: area.minorCategory.id,
+            name: area.minorCategory.name,
+            isExposed: area.minorCategory.isExposed,
+          }
+        : null,
+      overview: area.overview,
+      body: area.body,
+      youtubeUrl: area.youtubeUrl,
+      isMainExposed: area.isMainExposed,
+      isExposed: area.isExposed,
+      displayOrder: area.displayOrder,
+      createdAt: area.createdAt,
+      updatedAt: area.updatedAt,
       mainExposedLabel: area.isMainExposed ? 'Y' : 'N',
       exposedLabel: area.isExposed ? 'Y' : 'N',
       createdAtFormatted: this.formatDateTime(area.createdAt),
@@ -150,11 +418,50 @@ export class BusinessAreaService {
     };
   }
 
-  async update(id: number, data: Partial<BusinessArea>) {
-    const area = await this.areaRepo.findOne({ where: { id } });
-    if (!area) throw new NotFoundException('업무분야를 찾을 수 없습니다.');
-    Object.assign(area, data);
-    return this.areaRepo.save(area);
+  async updateItem(id: number, dto: UpdateBusinessAreaItemDto) {
+    const item = await this.areaRepo.findOne({ where: { id } });
+    if (!item) {
+      throw new NotFoundException('업무분야를 찾을 수 없습니다.');
+    }
+
+    // If major category is being updated, validate it exists
+    if (dto.majorCategory) {
+      const majorCategory = await this.insightsSubcategoryRepo.findOne({
+        where: { id: dto.majorCategory.id, isExposed: true },
+      });
+      if (!majorCategory) {
+        throw new NotFoundException('Major Category를 찾을 수 없습니다.');
+      }
+      item.majorCategoryId = dto.majorCategory.id;
+    }
+
+    // If minor category is being updated, validate it exists and belongs to major category
+    if (dto.minorCategory) {
+      const majorCategoryId = dto.majorCategory?.id ?? item.majorCategoryId;
+      const minorCategory = await this.categoryRepo.findOne({
+        where: { id: dto.minorCategory.id, majorCategoryId, isExposed: true },
+      });
+      if (!minorCategory) {
+        throw new BadRequestException('Minor Category를 찾을 수 없거나 선택한 Major Category에 속하지 않습니다.');
+      }
+      item.minorCategoryId = dto.minorCategory.id;
+    }
+
+    if (dto.name) item.name = dto.name;
+    if (dto.subDescription !== undefined) item.subDescription = dto.subDescription;
+    if (dto.imageUrl) item.imageUrl = dto.imageUrl;
+    if (dto.overview) item.overview = dto.overview;
+    if (dto.body) item.body = dto.body;
+    if (dto.youtubeUrl !== undefined) item.youtubeUrl = dto.youtubeUrl;
+    if (dto.isMainExposed !== undefined) item.isMainExposed = dto.isMainExposed;
+    if (dto.isExposed !== undefined) item.isExposed = dto.isExposed;
+    if (dto.displayOrder !== undefined) item.displayOrder = dto.displayOrder;
+
+    await this.areaRepo.save(item);
+    return this.areaRepo.findOne({
+      where: { id: item.id },
+      relations: ['majorCategory', 'minorCategory'],
+    });
   }
 
   async delete(id: number) {
@@ -194,37 +501,73 @@ export class BusinessAreaService {
     return { success: true };
   }
 
-  // 대분류 카테고리 목록 조회 (드롭다운용) - 더 이상 사용하지 않음, insights 카테고리 사용
-  async getMajorCategories(): Promise<string[]> {
-    const result = await this.areaRepo
-      .createQueryBuilder('area')
-      .select('DISTINCT area.majorCategory', 'majorCategory')
-      .getRawMany();
-    return result.map((r) => r.majorCategory).filter(Boolean);
-  }
+  /**
+   * Get hierarchical data for public frontend (accordion-style UI)
+   * Groups items by major category and then by minor category
+   */
+  async getHierarchicalData(includeHidden = false) {
+    const where = includeHidden ? {} : { isExposed: true };
+    const items = await this.areaRepo.find({
+      where,
+      relations: ['majorCategory', 'minorCategory'],
+      order: {
+        majorCategoryId: 'ASC',
+        minorCategoryId: 'ASC',
+        displayOrder: 'ASC',
+        createdAt: 'DESC',
+      },
+    });
 
-  // 중분류 카테고리 목록 조회 (드롭다운용) - 더 이상 사용하지 않음, insights 카테고리 사용
-  async getMinorCategories(majorCategory: string): Promise<string[]> {
-    const result = await this.areaRepo
-      .createQueryBuilder('area')
-      .select('DISTINCT area.minorCategory', 'minorCategory')
-      .where('area.majorCategory = :majorCategory', { majorCategory })
-      .getRawMany();
-    return result.map((r) => r.minorCategory).filter(Boolean);
-  }
+    // Group by major category, then by minor category
+    const grouped: Record<number, any> = {};
 
-  // 콘텐츠 타입 라벨
-  private getContentTypeLabel(contentType: BusinessAreaContentType): string {
-    switch (contentType) {
-      case BusinessAreaContentType.A:
-        return 'A타입 (업종별)';
-      case BusinessAreaContentType.B:
-        return 'B타입 (컨설팅)';
-      case BusinessAreaContentType.C:
-        return 'C타입 (커스텀)';
-      default:
-        return '기타';
+    for (const item of items) {
+      const majorId = item.majorCategoryId;
+      const minorId = item.minorCategoryId;
+
+      if (!grouped[majorId]) {
+        grouped[majorId] = {
+          majorCategory: {
+            id: item.majorCategory.id,
+            name: item.majorCategory.name,
+            sections: item.majorCategory.sections || [],
+            isExposed: item.majorCategory.isExposed,
+            displayOrder: item.majorCategory.displayOrder,
+          },
+          minorCategories: {},
+        };
+      }
+
+      if (!grouped[majorId].minorCategories[minorId]) {
+        grouped[majorId].minorCategories[minorId] = {
+          id: item.minorCategory.id,
+          name: item.minorCategory.name,
+          isExposed: item.minorCategory.isExposed,
+          items: [],
+        };
+      }
+
+      grouped[majorId].minorCategories[minorId].items.push({
+        id: item.id,
+        name: item.name,
+        subDescription: item.subDescription,
+        imageUrl: item.imageUrl,
+        overview: item.overview,
+        body: item.body,
+        youtubeUrl: item.youtubeUrl,
+        isMainExposed: item.isMainExposed,
+        isExposed: item.isExposed,
+        displayOrder: item.displayOrder,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      });
     }
+
+    // Convert to array format
+    return Object.values(grouped).map((group) => ({
+      majorCategory: group.majorCategory,
+      minorCategories: Object.values(group.minorCategories),
+    }));
   }
 
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)

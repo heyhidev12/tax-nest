@@ -19,7 +19,7 @@ import { UploadModule } from './libs/upload/upload.module';
         database: process.env.DB_NAME,
         autoLoadEntities: true,
         synchronize: true,
-        logging: true,
+        logging: ['error'],
       }),
     }),
     RedisModule,
