@@ -60,20 +60,16 @@ export class BranchService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
+    // 응답 포맷: 전체 지점 정보 + 관리자용 메타데이터
     const formattedItems = items.map((item, index) => ({
+      // 목록 번호 (최신순 기준 역순 번호)
       no: total - ((page - 1) * limit + index),
-      id: item.id,
-      name: item.name,
-      address: item.address,
-      phoneNumber: item.phoneNumber,
-      fax: item.fax,
-      email: item.email,
-      displayOrder: item.displayOrder,
-      isExposed: item.isExposed,
+      // 엔티티의 모든 필드 포함
+      ...item,
+      // 관리자 UI 편의를 위한 추가 필드
       exposedLabel: item.isExposed ? 'Y' : 'N',
-      createdAt: item.createdAt,
       createdAtFormatted: this.formatDateTime(item.createdAt),
+      updatedAtFormatted: this.formatDateTime(item.updatedAt),
     }));
 
     return { items: formattedItems, total, page, limit };

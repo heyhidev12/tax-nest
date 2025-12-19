@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNumber, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsBoolean, IsNumber, IsObject, IsOptional, IsString, ValidateNested, IsArray, ArrayMinSize, IsUrl } from 'class-validator';
 import { Type } from 'class-transformer';
-import { MajorCategoryDto, MinorCategoryDto } from './create-item.dto';
+import { MajorCategoryDto, MinorCategoryDto, SectionContentDto } from './create-item.dto';
 
 export class UpdateBusinessAreaItemDto {
   @ApiPropertyOptional({ example: '전기·전자·반도체 제조업', description: '업무분야명' })
@@ -44,15 +44,39 @@ export class UpdateBusinessAreaItemDto {
   @IsString()
   overview?: string;
 
-  @ApiPropertyOptional({ example: '<p>본문 HTML</p>', description: '본문 HTML' })
+  @ApiPropertyOptional({ 
+    example: '<p>본문 HTML</p>', 
+    description: '본문 HTML (deprecated - use sectionContents instead)' 
+  })
   @IsOptional()
   @IsString()
   body?: string;
 
-  @ApiPropertyOptional({ example: 'https://youtube.com/watch?v=xxx', description: 'YouTube URL' })
+  @ApiPropertyOptional({ 
+    description: 'Section-based content array. Each section from the majorCategory should have its own content block.',
+    example: [
+      { section: '발생원인', content: '<p>Content for 발생원인 section</p>' },
+      { section: '리스크', content: '<p>Content for 리스크 section</p>' },
+      { section: '체크포인트', content: '<p>Content for 체크포인트 section</p>' }
+    ],
+    type: [Object]
+  })
   @IsOptional()
-  @IsString()
-  youtubeUrl?: string;
+  @IsArray({ message: 'sectionContents는 배열이어야 합니다.' })
+  @ArrayMinSize(1, { message: '최소 하나의 섹션 본문이 필요합니다.' })
+  @ValidateNested({ each: true })
+  @Type(() => SectionContentDto)
+  sectionContents?: SectionContentDto[];
+
+  @ApiPropertyOptional({ 
+    example: ['https://www.youtube.com/watch?v=xxxx', 'https://youtu.be/yyyy'], 
+    description: 'YouTube URLs array (optional, empty array allowed)',
+    type: [String]
+  })
+  @IsOptional()
+  @IsArray({ message: 'youtubeUrls는 배열이어야 합니다.' })
+  @IsUrl({}, { each: true, message: '올바른 YouTube URL 형식이 아닙니다.' })
+  youtubeUrls?: string[];
 
   @ApiPropertyOptional({ example: true, description: '메인 노출 여부' })
   @IsOptional()

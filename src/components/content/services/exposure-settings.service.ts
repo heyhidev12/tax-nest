@@ -38,29 +38,29 @@ export class ExposureSettingsService {
   // 편의 메서드들
   async isAwardsMainExposed(): Promise<boolean> {
     const value = await this.get('awards_main');
-    return value?.exposed ?? false; // Default: N (false)
+    return value?.isExposed?? false; // Default: N (false)
   }
 
-  async setAwardsMainExposed(exposed: boolean) {
-    return this.set('awards_main', { exposed });
+  async setAwardsMainExposed(isExposed: boolean) {
+    return this.set('awards_main', { isExposed});
   }
 
   async isNewsletterPageExposed(): Promise<boolean> {
     const value = await this.get('newsletter_page');
-    return value?.exposed ?? false; // Default: N (false)
+    return value?.isExposed?? false; // Default: N (false)
   }
 
-  async setNewsletterPageExposed(exposed: boolean) {
-    return this.set('newsletter_page', { exposed });
+  async setNewsletterPageExposed(isExposed: boolean) {
+    return this.set('newsletter_page', { isExposed});
   }
 
   async isHistoryPageExposed(): Promise<boolean> {
     const value = await this.get('history_page');
-    return value?.exposed ?? false; // Default: N (false)
+    return value?.isExposed?? false; // Default: N (false)
   }
 
-  async setHistoryPageExposed(exposed: boolean) {
-    return this.set('history_page', { exposed });
+  async setHistoryPageExposed(isExposed: boolean) {
+    return this.set('history_page', { isExposed});
   }
 }
 

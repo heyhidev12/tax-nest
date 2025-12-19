@@ -13,10 +13,11 @@ import { ColumnArticle, ColumnComment } from 'src/libs/entity/column.entity';
 import { DataRoom, DataRoomContent, DataRoomComment } from 'src/libs/entity/data-room.entity';
 import { MajorCategory, MinorCategory } from 'src/libs/entity/category.entity';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
+import { Member } from 'src/libs/entity/member.entity';
 import { ExposureSettings } from 'src/libs/entity/exposure-settings.entity';
 import { InsightsCategory } from 'src/libs/entity/insights-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
-import { InsightsItem } from 'src/libs/entity/insights-item.entity';
+import { InsightsItem, InsightsComment, InsightsCommentReport } from 'src/libs/entity/insights-item.entity';
 import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
 
 // Services
@@ -34,7 +35,6 @@ import { TaxMemberService } from './services/tax-member.service';
 import { ExposureSettingsService } from './services/exposure-settings.service';
 import { InsightsService } from './services/insights.service';
 import { PublicContentController } from './controllers/public-content.controller';
-import { PublicInsightsController } from './controllers/public-insights.controller';
 
 @Module({
   imports: [
@@ -57,10 +57,13 @@ import { PublicInsightsController } from './controllers/public-insights.controll
       MajorCategory,
       MinorCategory,
       TaxMember,
+      Member,
       ExposureSettings,
       InsightsCategory,
       InsightsSubcategory,
       InsightsItem,
+      InsightsComment,
+      InsightsCommentReport,
       BusinessAreaCategory,
     ]),
   ],
@@ -79,7 +82,7 @@ import { PublicInsightsController } from './controllers/public-insights.controll
     ExposureSettingsService,
     InsightsService,
   ],
-  controllers: [PublicContentController, PublicInsightsController],
+  controllers: [PublicContentController],
   exports: [
     MainBannerService,
     HistoryService,

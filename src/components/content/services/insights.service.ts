@@ -3,7 +3,8 @@ import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository, In } from 'typeorm';
 import { InsightsCategory } from 'src/libs/entity/insights-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
-import { InsightsItem } from 'src/libs/entity/insights-item.entity';
+import { InsightsItem, InsightsComment, InsightsCommentReport } from 'src/libs/entity/insights-item.entity';
+import { Member } from 'src/libs/entity/member.entity';
 import { CreateCategoryDto } from 'src/libs/dto/insights/create-category.dto';
 import { UpdateCategoryDto } from 'src/libs/dto/insights/update-category.dto';
 import { CreateSubcategoryDto } from 'src/libs/dto/insights/create-subcategory.dto';
@@ -21,6 +22,12 @@ export class InsightsService {
     private readonly subcategoryRepo: Repository<InsightsSubcategory>,
     @InjectRepository(InsightsItem)
     private readonly itemRepo: Repository<InsightsItem>,
+    @InjectRepository(InsightsComment)
+    private readonly commentRepo: Repository<InsightsComment>,
+    @InjectRepository(InsightsCommentReport)
+    private readonly reportRepo: Repository<InsightsCommentReport>,
+    @InjectRepository(Member)
+    private readonly memberRepo: Repository<Member>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -348,6 +355,8 @@ export class InsightsService {
       commentsLabel: item.commentsLabel,
       isExposed: item.isExposed,
       exposedLabel: item.exposedLabel,
+      viewCount: item.viewCount || 0,
+      commentCount: item.commentCount || 0,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }));
@@ -394,6 +403,8 @@ export class InsightsService {
       commentsLabel: item.commentsLabel,
       isExposed: item.isExposed,
       exposedLabel: item.exposedLabel,
+      viewCount: item.viewCount || 0,
+      commentCount: item.commentCount || 0,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     };
@@ -433,9 +444,573 @@ export class InsightsService {
       commentsLabel: item.commentsLabel,
       isExposed: item.isExposed,
       exposedLabel: item.exposedLabel,
+      viewCount: item.viewCount || 0,
+      commentCount: item.commentCount || 0,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
     }));
+  }
+
+  // ========== USER-FACING METHODS ==========
+
+  /**
+   * Get paginated list of exposed insights with optional filters
+   */
+  async getPublicInsights(options: {
+    page?: number;
+    limit?: number;
+    categoryId?: number;
+    subcategoryId?: number;
+  }) {
+    const page = options.page || 1;
+    const limit = options.limit || 20;
+    const skip = (page - 1) * limit;
+
+    const qb = this.itemRepo
+      .createQueryBuilder('item')
+      .leftJoinAndSelect('item.category', 'category')
+      .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .where('item.isExposed = :isExposed', { isExposed: true });
+
+    if (options.categoryId) {
+      qb.andWhere('item.categoryId = :categoryId', { categoryId: options.categoryId });
+    }
+
+    if (options.subcategoryId) {
+      qb.andWhere('item.subcategoryId = :subcategoryId', { subcategoryId: options.subcategoryId });
+    }
+
+    const [items, total] = await qb
+      .orderBy('item.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit)
+      .getManyAndCount();
+
+    // Return frontend-friendly format
+    const formattedItems = items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      thumbnailUrl: item.thumbnailUrl,
+      content: item.content,
+      categoryId: item.categoryId,
+      category: item.category
+        ? {
+            id: item.category.id,
+            name: item.category.name,
+            type: item.category.type,
+          }
+        : undefined,
+      subcategoryId: item.subcategoryId,
+      subcategory: item.subcategory
+        ? {
+            id: item.subcategory.id,
+            name: item.subcategory.name,
+            sections: item.subcategory.sections || [],
+          }
+        : undefined,
+      enableComments: item.enableComments,
+      commentsLabel: item.commentsLabel,
+      isExposed: item.isExposed,
+      exposedLabel: item.exposedLabel,
+      viewCount: item.viewCount || 0,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+
+    return {
+      items: formattedItems,
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Get a single exposed insight by ID
+   */
+  async getPublicInsightById(id: number) {
+    const item = await this.itemRepo.findOne({
+      where: { id, isExposed: true },
+      relations: ['category', 'subcategory'],
+    });
+
+    if (!item) {
+      throw new NotFoundException('인사이트를 찾을 수 없습니다.');
+    }
+
+    // Return frontend-friendly format
+    return {
+      id: item.id,
+      title: item.title,
+      thumbnailUrl: item.thumbnailUrl,
+      content: item.content,
+      categoryId: item.categoryId,
+      category: item.category
+        ? {
+            id: item.category.id,
+            name: item.category.name,
+            type: item.category.type,
+          }
+        : undefined,
+      subcategoryId: item.subcategoryId,
+      subcategory: item.subcategory
+        ? {
+            id: item.subcategory.id,
+            name: item.subcategory.name,
+            sections: item.subcategory.sections || [],
+          }
+        : undefined,
+      enableComments: item.enableComments,
+      commentsLabel: item.commentsLabel,
+      isExposed: item.isExposed,
+      exposedLabel: item.exposedLabel,
+      viewCount: item.viewCount || 0,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  /**
+   * Increment view count for an insight
+   */
+  async incrementViewCount(id: number) {
+    const item = await this.itemRepo.findOne({ where: { id, isExposed: true } });
+    if (!item) {
+      throw new NotFoundException('인사이트를 찾을 수 없습니다.');
+    }
+
+    item.viewCount = (item.viewCount || 0) + 1;
+    await this.itemRepo.save(item);
+
+    return { success: true, message: '조회수가 증가되었습니다.', viewCount: item.viewCount };
+  }
+
+  // ========== COMMENT METHODS ==========
+
+  /**
+   * Get comments for an insight
+   */
+  async getComments(itemId: number) {
+    // Verify item exists and is exposed
+    const item = await this.itemRepo.findOne({ where: { id: itemId, isExposed: true } });
+    if (!item) {
+      throw new NotFoundException('인사이트를 찾을 수 없습니다.');
+    }
+
+    const comments = await this.commentRepo.find({
+      where: { itemId },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      total: comments.length,
+      items: comments.map((comment) => ({
+        id: comment.id,
+        body: comment.isHidden ? '해당 댓글은 다수 사용자의 신고에 의해 가려졌습니다.' : comment.body,
+        authorName: comment.authorName || '-',
+        memberId: comment.memberId,
+        isHidden: comment.isHidden,
+        isReported: comment.isReported,
+        createdAt: comment.createdAt,
+      })),
+    };
+  }
+
+  /**
+   * Create a comment for an insight
+   */
+  async createComment(itemId: number, dto: { body: string; memberId?: number; authorName?: string }) {
+    // Verify item exists and is exposed
+    const item = await this.itemRepo.findOne({ where: { id: itemId, isExposed: true } });
+    if (!item) {
+      throw new NotFoundException('인사이트를 찾을 수 없습니다.');
+    }
+
+    // Check if comments are enabled
+    if (!item.enableComments) {
+      throw new BadRequestException('이 인사이트는 댓글 기능이 비활성화되어 있습니다.');
+    }
+
+    // Use transaction to ensure atomicity
+    return await this.dataSource.transaction(async (manager) => {
+      const commentRepo = manager.getRepository(InsightsComment);
+      const itemRepo = manager.getRepository(InsightsItem);
+
+      const comment = commentRepo.create({
+        itemId,
+        body: dto.body.trim(),
+        memberId: dto.memberId ?? null,
+        authorName: dto.authorName ?? null,
+      } as InsightsComment);
+
+      const savedComment = await commentRepo.save(comment);
+
+      // Atomically increment commentCount
+      await itemRepo.increment({ id: itemId }, 'commentCount', 1);
+
+      return {
+        id: savedComment.id,
+        body: savedComment.body,
+        authorName: savedComment.authorName || '-',
+        memberId: savedComment.memberId,
+        createdAt: savedComment.createdAt,
+      };
+    });
+  }
+
+  /**
+   * Delete a comment (only by the author)
+   */
+  async deleteComment(commentId: number, memberId?: number) {
+    return await this.dataSource.transaction(async (manager) => {
+      const commentRepo = manager.getRepository(InsightsComment);
+      const itemRepo = manager.getRepository(InsightsItem);
+
+      const comment = await commentRepo.findOne({
+        where: { id: commentId },
+        relations: ['item'],
+      });
+
+      if (!comment) {
+        throw new NotFoundException('댓글을 찾을 수 없습니다.');
+      }
+
+      // Only the author can delete their comment
+      if (comment.memberId && comment.memberId !== memberId) {
+        throw new BadRequestException('본인의 댓글만 삭제할 수 있습니다.');
+      }
+
+      const itemId = comment.itemId;
+
+      // Delete the comment
+      await commentRepo.remove(comment);
+
+      // Atomically decrement commentCount
+      await itemRepo.decrement({ id: itemId }, 'commentCount', 1);
+
+      // Ensure commentCount doesn't go below 0
+      const item = await itemRepo.findOne({ where: { id: itemId } });
+      if (item && item.commentCount < 0) {
+        item.commentCount = 0;
+        await itemRepo.save(item);
+      }
+
+      return { success: true, message: '댓글이 삭제되었습니다.' };
+    });
+  }
+
+  /**
+   * Get a comment by ID (for admin)
+   */
+  async getCommentById(commentId: number) {
+    const comment = await this.commentRepo.findOne({
+      where: { id: commentId },
+      relations: ['item', 'item.category', 'item.subcategory'],
+    });
+
+    if (!comment) {
+      throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    }
+
+    // Get author info if memberId exists
+    const author = comment.memberId
+      ? await this.memberRepo.findOne({ where: { id: comment.memberId } })
+      : null;
+
+    // Get latest reporter info
+    const latestReport = await this.reportRepo.findOne({
+      where: { commentId },
+      relations: ['reporter'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      comment: {
+        id: comment.id,
+        body: comment.body,
+        authorName: comment.authorName || '-',
+        memberId: comment.memberId,
+        isReported: comment.isReported,
+        isHidden: comment.isHidden,
+        isHiddenLabel: comment.isHidden ? 'Y' : 'N',
+        createdAt: comment.createdAt,
+      },
+      author: author
+        ? {
+            id: author.id,
+            loginId: author.loginId,
+          }
+        : null,
+      reporter: latestReport?.reporter
+        ? {
+            id: latestReport.reporter.id,
+            loginId: latestReport.reporter.loginId,
+          }
+        : null,
+      insight: comment.item
+        ? {
+            id: comment.item.id,
+            title: comment.item.title,
+            categoryId: comment.item.categoryId,
+            category: comment.item.category
+              ? {
+                  id: comment.item.category.id,
+                  name: comment.item.category.name,
+                  type: comment.item.category.type,
+                }
+              : undefined,
+            subcategory: comment.item.subcategory
+              ? {
+                  id: comment.item.subcategory.id,
+                  name: comment.item.subcategory.name,
+                }
+              : undefined,
+          }
+        : undefined,
+    };
+  }
+
+  /**
+   * Toggle comment visibility (for admin)
+   */
+  async toggleCommentVisibility(commentId: number) {
+    const comment = await this.commentRepo.findOne({ where: { id: commentId } });
+    if (!comment) {
+      throw new NotFoundException('댓글을 찾을 수 없습니다.');
+    }
+
+    comment.isHidden = !comment.isHidden;
+    await this.commentRepo.save(comment);
+
+    return {
+      success: true,
+      isHidden: comment.isHidden,
+      isHiddenLabel: comment.isHidden ? 'Y' : 'N',
+    };
+  }
+
+  /**
+   * Delete a comment (for admin - no memberId check)
+   */
+  async adminDeleteComment(commentId: number) {
+    return await this.dataSource.transaction(async (manager) => {
+      const commentRepo = manager.getRepository(InsightsComment);
+      const itemRepo = manager.getRepository(InsightsItem);
+
+      const comment = await commentRepo.findOne({
+        where: { id: commentId },
+        relations: ['item'],
+      });
+
+      if (!comment) {
+        throw new NotFoundException('댓글을 찾을 수 없습니다.');
+      }
+
+      const itemId = comment.itemId;
+
+      // Delete the comment
+      await commentRepo.remove(comment);
+
+      // Atomically decrement commentCount
+      await itemRepo.decrement({ id: itemId }, 'commentCount', 1);
+
+      // Ensure commentCount doesn't go below 0
+      const item = await itemRepo.findOne({ where: { id: itemId } });
+      if (item && item.commentCount < 0) {
+        item.commentCount = 0;
+        await itemRepo.save(item);
+      }
+
+      return { success: true, message: '댓글이 삭제되었습니다.' };
+    });
+  }
+
+  /**
+   * Report a comment
+   * @param commentId - The comment ID to report
+   * @param reporterId - The ID of the user reporting (from authentication)
+   */
+  async reportComment(commentId: number, reporterId: number) {
+    return await this.dataSource.transaction(async (manager) => {
+      const commentRepo = manager.getRepository(InsightsComment);
+      const reportRepo = manager.getRepository(InsightsCommentReport);
+
+      // Find the comment
+      const comment = await commentRepo.findOne({ where: { id: commentId } });
+      if (!comment) {
+        throw new NotFoundException('댓글을 찾을 수 없습니다.');
+      }
+
+      // Prevent self-reporting
+      if (comment.memberId === reporterId) {
+        throw new BadRequestException('본인의 댓글은 신고할 수 없습니다.');
+      }
+
+      // Check if already reported by this user
+      const existingReport = await reportRepo.findOne({
+        where: { commentId, reporterId },
+      });
+
+      if (existingReport) {
+        // Already reported, return success without creating duplicate
+        return { success: true, message: '이미 신고된 댓글입니다.' };
+      }
+
+      // Create report record
+      const report = reportRepo.create({
+        commentId,
+        reporterId,
+      });
+
+      await reportRepo.save(report);
+
+      // Update comment's isReported flag if not already set
+      if (!comment.isReported) {
+        comment.isReported = true;
+        await commentRepo.save(comment);
+      }
+
+      return { success: true, message: '댓글이 신고되었습니다.' };
+    });
+  }
+
+  /**
+   * Get reported comments with category filtering (for admin)
+   */
+  async getReportedComments(options: { categoryId?: number; page?: number; limit?: number }) {
+    const { categoryId, page = 1, limit = 20 } = options;
+    const skip = (page - 1) * limit;
+
+    // Query comments that have reports
+    // First, get distinct comment IDs that have reports, ordered by latest report date
+    const reportedCommentIds = await this.reportRepo
+      .createQueryBuilder('report')
+      .select('report.commentId', 'commentId')
+      .addSelect('MAX(report.createdAt)', 'latestReportDate')
+      .groupBy('report.commentId')
+      .orderBy('latestReportDate', 'DESC')
+      .getRawMany();
+
+    const reportedIds = reportedCommentIds.map((r) => r.commentId);
+
+    if (reportedIds.length === 0) {
+      return {
+        items: [],
+        total: 0,
+        page,
+        limit,
+      };
+    }
+
+    // Now query the comments with their items and categories
+    const qb = this.commentRepo
+      .createQueryBuilder('comment')
+      .leftJoinAndSelect('comment.item', 'item')
+      .leftJoinAndSelect('item.category', 'category')
+      .where('comment.id IN (:...reportedIds)', { reportedIds })
+      .andWhere('comment.isReported = :isReported', { isReported: true });
+
+    // Filter by category if provided
+    if (categoryId !== undefined) {
+      qb.andWhere('item.categoryId = :categoryId', { categoryId });
+    }
+
+    // Get total count (after category filter)
+    const total = await qb.getCount();
+
+    // Get all matching comments first
+    const allMatchingComments = await qb.getMany();
+
+    // Sort comments by the order from reportedCommentIds (latest report first)
+    const orderedIds = reportedCommentIds.map((r) => r.commentId);
+    const commentOrderMap = new Map(orderedIds.map((id, index) => [id, index]));
+    allMatchingComments.sort((a, b) => {
+      const orderA = commentOrderMap.get(a.id) ?? Infinity;
+      const orderB = commentOrderMap.get(b.id) ?? Infinity;
+      return orderA - orderB;
+    });
+
+    // Apply pagination
+    const comments = allMatchingComments.slice(skip, skip + limit);
+
+    // Fetch member information for authors
+    const memberIds = comments
+      .map((c) => c.memberId)
+      .filter((id): id is number => id !== null && id !== undefined);
+    
+    const authors = memberIds.length > 0
+      ? await this.memberRepo.find({ where: { id: In(memberIds) } })
+      : [];
+    
+    const authorMap = new Map(authors.map((m) => [m.id, m]));
+
+    // Fetch all reports for these comments with reporters
+    const fetchedCommentIds = comments.map((c) => c.id);
+    const allReports = fetchedCommentIds.length > 0
+      ? await this.reportRepo.find({
+          where: { commentId: In(fetchedCommentIds) },
+          relations: ['reporter'],
+          order: { createdAt: 'DESC' },
+        })
+      : [];
+
+    // Group reports by commentId and get the latest report for each
+    const reportMap = new Map<number, InsightsCommentReport>();
+    allReports.forEach((report) => {
+      if (!reportMap.has(report.commentId)) {
+        reportMap.set(report.commentId, report);
+      }
+    });
+
+    // Format response
+    const items = comments.map((comment) => {
+      const latestReport = reportMap.get(comment.id);
+      const author = comment.memberId ? authorMap.get(comment.memberId) : null;
+      const reporter = latestReport?.reporter || null;
+      
+      return {
+        comment: {
+          id: comment.id,
+          body: comment.body,
+        },
+        author: author
+          ? {
+              id: author.id,
+              loginId: author.loginId,
+            }
+          : null,
+        reporter: reporter
+          ? {
+              id: reporter.id,
+              loginId: reporter.loginId,
+            }
+          : null,
+        insight: comment.item
+          ? {
+              id: comment.item.id,
+              title: comment.item.title,
+              categoryId: comment.item.categoryId,
+              category: comment.item.category
+                ? {
+                    id: comment.item.category.id,
+                    name: comment.item.category.name,
+                    type: comment.item.category.type,
+                  }
+                : undefined,
+            }
+          : undefined,
+        isReported: comment.isReported,
+        isHidden: comment.isHidden,
+        createdAt: comment.createdAt,
+      };
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+    };
   }
 }
 

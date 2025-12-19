@@ -231,6 +231,31 @@ export class BusinessAreaService {
       throw new BadRequestException('Minor Category를 찾을 수 없거나 선택한 Major Category에 속하지 않습니다.');
     }
 
+    // Validate sectionContents match the sections from majorCategory
+    if (!dto.sectionContents || dto.sectionContents.length === 0) {
+      throw new BadRequestException('섹션별 본문을 입력해주세요.');
+    }
+    
+    if (!majorCategory.sections || majorCategory.sections.length === 0) {
+      throw new BadRequestException('선택한 Major Category에 섹션이 정의되어 있지 않습니다.');
+    }
+
+    const sectionNames = dto.sectionContents.map(sc => sc.section);
+    const validSections = majorCategory.sections || [];
+    const invalidSections = sectionNames.filter(section => !validSections.includes(section));
+    if (invalidSections.length > 0) {
+      throw new BadRequestException(
+        `다음 섹션들은 선택한 Major Category에 속하지 않습니다: ${invalidSections.join(', ')}`
+      );
+    }
+    // Check if all required sections are provided
+    const missingSections = validSections.filter(section => !sectionNames.includes(section));
+    if (missingSections.length > 0) {
+      throw new BadRequestException(
+        `다음 섹션들의 본문이 필요합니다: ${missingSections.join(', ')}`
+      );
+    }
+
     const item = this.areaRepo.create({
       name: dto.name,
       subDescription: dto.subDescription,
@@ -238,8 +263,8 @@ export class BusinessAreaService {
       majorCategoryId: dto.majorCategory.id,
       minorCategoryId: dto.minorCategory.id,
       overview: dto.overview,
-      body: dto.body,
-      youtubeUrl: dto.youtubeUrl,
+      sectionContents: dto.sectionContents,
+      youtubeUrls: dto.youtubeUrls ?? [],
       isMainExposed: dto.isMainExposed ?? false,
       isExposed: dto.isExposed ?? true,
       displayOrder: dto.displayOrder ?? 0,
@@ -318,18 +343,9 @@ export class BusinessAreaService {
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
 
-      // YouTube URL 개수 계산 (여러 개일 수 있음 - JSON 배열 또는 콤마 구분)
-      let youtubeCount = 0;
-      if (item.youtubeUrl) {
-        try {
-          // JSON 배열인 경우
-          const parsed = JSON.parse(item.youtubeUrl);
-          youtubeCount = Array.isArray(parsed) ? parsed.length : 1;
-        } catch {
-          // 콤마 구분 문자열인 경우
-          youtubeCount = item.youtubeUrl.split(',').filter(url => url.trim()).length;
-        }
-      }
+      // YouTube URLs 배열 처리
+      const youtubeUrls = item.youtubeUrls || [];
+      const youtubeCount = youtubeUrls.length;
 
       return {
         no,
@@ -353,7 +369,9 @@ export class BusinessAreaService {
             }
           : null,
         imageUrl: item.imageUrl,
-        youtubeUrl: item.youtubeUrl,
+        overview: item.overview,
+        sectionContents: item.sectionContents || [],
+        youtubeUrls,
         youtubeCount,
         displayOrder: item.displayOrder,
         isMainExposed: item.isMainExposed,
@@ -404,8 +422,9 @@ export class BusinessAreaService {
           }
         : null,
       overview: area.overview,
-      body: area.body,
-      youtubeUrl: area.youtubeUrl,
+      sectionContents: area.sectionContents || [],
+      youtubeUrls: area.youtubeUrls || [],
+      youtubeCount: (area.youtubeUrls || []).length,
       isMainExposed: area.isMainExposed,
       isExposed: area.isExposed,
       displayOrder: area.displayOrder,
@@ -419,19 +438,24 @@ export class BusinessAreaService {
   }
 
   async updateItem(id: number, dto: UpdateBusinessAreaItemDto) {
-    const item = await this.areaRepo.findOne({ where: { id } });
+    const item = await this.areaRepo.findOne({ 
+      where: { id },
+      relations: ['majorCategory', 'minorCategory'],
+    });
     if (!item) {
       throw new NotFoundException('업무분야를 찾을 수 없습니다.');
     }
 
-    // If major category is being updated, validate it exists
+    // Get the current or new major category for validation
+    let majorCategory: InsightsSubcategory | null = item.majorCategory;
     if (dto.majorCategory) {
-      const majorCategory = await this.insightsSubcategoryRepo.findOne({
+      const foundMajorCategory = await this.insightsSubcategoryRepo.findOne({
         where: { id: dto.majorCategory.id, isExposed: true },
       });
-      if (!majorCategory) {
+      if (!foundMajorCategory) {
         throw new NotFoundException('Major Category를 찾을 수 없습니다.');
       }
+      majorCategory = foundMajorCategory;
       item.majorCategoryId = dto.majorCategory.id;
     }
 
@@ -447,12 +471,32 @@ export class BusinessAreaService {
       item.minorCategoryId = dto.minorCategory.id;
     }
 
+    // Validate sectionContents if provided
+    if (dto.sectionContents && majorCategory && majorCategory.sections) {
+      const sectionNames = dto.sectionContents.map(sc => sc.section);
+      const validSections = majorCategory.sections || [];
+      const invalidSections = sectionNames.filter(section => !validSections.includes(section));
+      if (invalidSections.length > 0) {
+        throw new BadRequestException(
+          `다음 섹션들은 선택한 Major Category에 속하지 않습니다: ${invalidSections.join(', ')}`
+        );
+      }
+      // Check if all required sections are provided
+      const missingSections = validSections.filter(section => !sectionNames.includes(section));
+      if (missingSections.length > 0) {
+        throw new BadRequestException(
+          `다음 섹션들의 본문이 필요합니다: ${missingSections.join(', ')}`
+        );
+      }
+    }
+
     if (dto.name) item.name = dto.name;
     if (dto.subDescription !== undefined) item.subDescription = dto.subDescription;
     if (dto.imageUrl) item.imageUrl = dto.imageUrl;
     if (dto.overview) item.overview = dto.overview;
-    if (dto.body) item.body = dto.body;
-    if (dto.youtubeUrl !== undefined) item.youtubeUrl = dto.youtubeUrl;
+    if (dto.body !== undefined) item.body = dto.body;
+    if (dto.sectionContents !== undefined) item.sectionContents = dto.sectionContents;
+    if (dto.youtubeUrls !== undefined) item.youtubeUrls = dto.youtubeUrls;
     if (dto.isMainExposed !== undefined) item.isMainExposed = dto.isMainExposed;
     if (dto.isExposed !== undefined) item.isExposed = dto.isExposed;
     if (dto.displayOrder !== undefined) item.displayOrder = dto.displayOrder;
@@ -553,8 +597,9 @@ export class BusinessAreaService {
         subDescription: item.subDescription,
         imageUrl: item.imageUrl,
         overview: item.overview,
-        body: item.body,
-        youtubeUrl: item.youtubeUrl,
+        sectionContents: item.sectionContents || [],
+        youtubeUrls: item.youtubeUrls || [],
+        youtubeCount: (item.youtubeUrls || []).length,
         isMainExposed: item.isMainExposed,
         isExposed: item.isExposed,
         displayOrder: item.displayOrder,

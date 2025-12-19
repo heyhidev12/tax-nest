@@ -12,7 +12,14 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiBody,
+} from '@nestjs/swagger';
 import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { MainBannerService } from 'src/components/content/services/main-banner.service';
 import { HistoryService } from 'src/components/content/services/history.service';
@@ -20,7 +27,6 @@ import { AwardService } from 'src/components/content/services/award.service';
 import { BranchService } from 'src/components/content/services/branch.service';
 import { KeyCustomerService } from 'src/components/content/services/key-customer.service';
 import { BusinessAreaService } from 'src/components/content/services/business-area.service';
-import { InsightsService } from 'src/components/content/services/insights.service';
 import { CreateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/create-category.dto';
 import { UpdateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/update-category.dto';
 import { CreateBusinessAreaItemDto } from 'src/libs/dto/business-area/create-item.dto';
@@ -48,15 +54,11 @@ export class AdminContentController {
   constructor(
     private readonly bannerService: MainBannerService,
     private readonly historyService: HistoryService,
-    private readonly insightsService: InsightsService,
     private readonly awardService: AwardService,
     private readonly branchService: BranchService,
     private readonly keyCustomerService: KeyCustomerService,
     private readonly businessAreaService: BusinessAreaService,
     private readonly trainingSeminarService: TrainingSeminarService,
-    private readonly columnService: ColumnService,
-    private readonly dataRoomService: DataRoomService,
-    private readonly categoryService: CategoryService,
     private readonly taxMemberService: TaxMemberService,
     private readonly exposureSettingsService: ExposureSettingsService,
   ) {}
@@ -75,7 +77,11 @@ export class AdminContentController {
       type: 'object',
       required: ['mediaType', 'mediaUrl'],
       properties: {
-        mediaType: { type: 'string', enum: ['IMAGE', 'VIDEO'], description: '미디어 타입 (필수)' },
+        mediaType: {
+          type: 'string',
+          enum: ['IMAGE', 'VIDEO'],
+          description: '미디어 타입 (필수)',
+        },
         mediaUrl: { type: 'string', description: '미디어 URL (필수)' },
         linkUrl: { type: 'string', description: '링크 URL (선택)' },
         displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
@@ -94,7 +100,11 @@ export class AdminContentController {
     schema: {
       type: 'object',
       properties: {
-        mediaType: { type: 'string', enum: ['IMAGE', 'VIDEO'], description: '미디어 타입' },
+        mediaType: {
+          type: 'string',
+          enum: ['IMAGE', 'VIDEO'],
+          description: '미디어 타입',
+        },
         mediaUrl: { type: 'string', description: '미디어 URL' },
         linkUrl: { type: 'string', description: '링크 URL' },
         displayOrder: { type: 'number', description: '표시 순서' },
@@ -107,16 +117,16 @@ export class AdminContentController {
     return this.bannerService.update(id, body);
   }
 
-  @ApiOperation({ summary: '메인 배너 삭제' })
-  @Delete('banners/:id')
-  deleteBanner(@Param('id', ParseIntPipe) id: number) {
-    return this.bannerService.delete(id);
-  }
-
   @ApiOperation({ summary: '메인 배너 다중 삭제' })
   @Delete('banners/bulk')
   deleteBanners(@Body() dto: AdminDeleteManyDto) {
     return this.bannerService.deleteMany(dto.ids);
+  }
+
+  @ApiOperation({ summary: '메인 배너 삭제' })
+  @Delete('banners/:id')
+  deleteBanner(@Param('id', ParseIntPipe) id: number) {
+    return this.bannerService.delete(id);
   }
 
   @ApiOperation({ summary: '메인 배너 순서 변경' })
@@ -139,7 +149,9 @@ export class AdminContentController {
     },
   })
   @Patch('banners/order')
-  updateBannerOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateBannerOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.bannerService.updateOrder(body.items);
   }
 
@@ -189,16 +201,16 @@ export class AdminContentController {
     return this.historyService.updateYear(id, body);
   }
 
-  @ApiOperation({ summary: '연혁 연도 삭제' })
-  @Delete('history/years/:id')
-  deleteHistoryYear(@Param('id', ParseIntPipe) id: number) {
-    return this.historyService.deleteYear(id);
-  }
-
   @ApiOperation({ summary: '연혁 연도 다중 삭제' })
   @Delete('history/years/bulk')
   deleteHistoryYears(@Body() dto: AdminDeleteManyDto) {
     return this.historyService.deleteYears(dto.ids);
+  }
+
+  @ApiOperation({ summary: '연혁 연도 삭제' })
+  @Delete('history/years/:id')
+  deleteHistoryYear(@Param('id', ParseIntPipe) id: number) {
+    return this.historyService.deleteYear(id);
   }
 
   @ApiOperation({ summary: '연혁 연도 노출 토글' })
@@ -227,7 +239,9 @@ export class AdminContentController {
     },
   })
   @Patch('history/years/order')
-  updateHistoryYearOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateHistoryYearOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.historyService.updateYearOrder(body.items);
   }
 
@@ -275,16 +289,16 @@ export class AdminContentController {
     return this.historyService.updateItem(id, body);
   }
 
-  @ApiOperation({ summary: '연혁 항목 삭제' })
-  @Delete('history/items/:id')
-  deleteHistoryItem(@Param('id', ParseIntPipe) id: number) {
-    return this.historyService.deleteItem(id);
-  }
-
   @ApiOperation({ summary: '연혁 항목 다중 삭제' })
   @Delete('history/items/bulk')
   deleteHistoryItems(@Body() dto: AdminDeleteManyDto) {
     return this.historyService.deleteItems(dto.ids);
+  }
+
+  @ApiOperation({ summary: '연혁 항목 삭제' })
+  @Delete('history/items/:id')
+  deleteHistoryItem(@Param('id', ParseIntPipe) id: number) {
+    return this.historyService.deleteItem(id);
   }
 
   @ApiOperation({ summary: '연혁 항목 노출 토글' })
@@ -313,7 +327,9 @@ export class AdminContentController {
     },
   })
   @Patch('history/items/order')
-  updateHistoryItemOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateHistoryItemOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.historyService.updateItemOrder(body.items);
   }
 
@@ -344,8 +360,19 @@ export class AdminContentController {
     },
   })
   @Post('awards/years')
-  createAwardYear(@Body() body: { yearName: string; isMainExposed?: boolean; isExposed?: boolean }) {
-    return this.awardService.createYear(body.yearName, body.isMainExposed, body.isExposed);
+  createAwardYear(
+    @Body()
+    body: {
+      yearName: string;
+      isMainExposed?: boolean;
+      isExposed?: boolean;
+    },
+  ) {
+    return this.awardService.createYear(
+      body.yearName,
+      body.isMainExposed,
+      body.isExposed,
+    );
   }
 
   @ApiOperation({ summary: '수상/인증 연도 수정' })
@@ -365,16 +392,16 @@ export class AdminContentController {
     return this.awardService.updateYear(id, body);
   }
 
-  @ApiOperation({ summary: '수상/인증 연도 삭제' })
-  @Delete('awards/years/:id')
-  deleteAwardYear(@Param('id', ParseIntPipe) id: number) {
-    return this.awardService.deleteYear(id);
-  }
-
   @ApiOperation({ summary: '수상/인증 연도 다중 삭제' })
   @Delete('awards/years/bulk')
   deleteAwardYears(@Body() dto: AdminDeleteManyDto) {
     return this.awardService.deleteYears(dto.ids);
+  }
+
+  @ApiOperation({ summary: '수상/인증 연도 삭제' })
+  @Delete('awards/years/:id')
+  deleteAwardYear(@Param('id', ParseIntPipe) id: number) {
+    return this.awardService.deleteYear(id);
   }
 
   @ApiOperation({ summary: '수상/인증 연도 노출 토글' })
@@ -409,7 +436,9 @@ export class AdminContentController {
     },
   })
   @Patch('awards/years/order')
-  updateAwardYearOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateAwardYearOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.awardService.updateYearOrder(body.items);
   }
 
@@ -435,7 +464,10 @@ export class AdminContentController {
         name: { type: 'string', description: '수상/인증 명칭 (필수)' },
         source: { type: 'string', description: '출처 (필수)' },
         imageUrl: { type: 'string', description: '이미지 URL (필수)' },
-        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (기본: false)' },
+        isMainExposed: {
+          type: 'boolean',
+          description: '메인 노출 여부 (기본: false)',
+        },
         isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
       },
     },
@@ -443,7 +475,14 @@ export class AdminContentController {
   @Post('awards/years/:yearId/awards')
   createAward(
     @Param('yearId', ParseIntPipe) yearId: number,
-    @Body() body: { name: string; source: string; imageUrl: string; isMainExposed?: boolean; isExposed?: boolean },
+    @Body()
+    body: {
+      name: string;
+      source: string;
+      imageUrl: string;
+      isMainExposed?: boolean;
+      isExposed?: boolean;
+    },
   ) {
     return this.awardService.createAward(yearId, body);
   }
@@ -467,16 +506,16 @@ export class AdminContentController {
     return this.awardService.updateAward(id, body);
   }
 
-  @ApiOperation({ summary: '수상/인증 삭제' })
-  @Delete('awards/:id')
-  deleteAward(@Param('id', ParseIntPipe) id: number) {
-    return this.awardService.deleteAward(id);
-  }
-
   @ApiOperation({ summary: '수상/인증 다중 삭제' })
   @Delete('awards/bulk')
   deleteAwards(@Body() dto: AdminDeleteManyDto) {
     return this.awardService.deleteAwards(dto.ids);
+  }
+
+  @ApiOperation({ summary: '수상/인증 삭제' })
+  @Delete('awards/:id')
+  deleteAward(@Param('id', ParseIntPipe) id: number) {
+    return this.awardService.deleteAward(id);
   }
 
   @ApiOperation({ summary: '수상/인증 노출 토글' })
@@ -511,7 +550,9 @@ export class AdminContentController {
     },
   })
   @Patch('awards/order')
-  updateAwardOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateAwardOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.awardService.updateAwardOrder(body.items);
   }
 
@@ -584,17 +625,16 @@ export class AdminContentController {
   updateBranch(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
     return this.branchService.update(id, body);
   }
+  @ApiOperation({ summary: '본사/지점 다중 삭제' })
+  @Delete('branches/bulk')
+  deleteBranches(@Body() dto: AdminDeleteManyDto) {
+    return this.branchService.deleteMany(dto.ids);
+  }
 
   @ApiOperation({ summary: '본사/지점 삭제' })
   @Delete('branches/:id')
   deleteBranch(@Param('id', ParseIntPipe) id: number) {
     return this.branchService.delete(id);
-  }
-
-  @ApiOperation({ summary: '본사/지점 다중 삭제' })
-  @Delete('branches/bulk')
-  deleteBranches(@Body() dto: AdminDeleteManyDto) {
-    return this.branchService.deleteMany(dto.ids);
   }
 
   @ApiOperation({ summary: '본사/지점 노출 토글' })
@@ -623,7 +663,9 @@ export class AdminContentController {
     },
   })
   @Patch('branches/order')
-  updateBranchOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateBranchOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.branchService.updateOrder(body.items);
   }
 
@@ -648,9 +690,15 @@ export class AdminContentController {
       required: ['logoUrl'],
       properties: {
         logoUrl: { type: 'string', description: '로고 이미지 URL (필수)' },
-        name: { type: 'string', description: '고객사 이름 (선택, 내부 관리용)' },
+        name: {
+          type: 'string',
+          description: '고객사 이름 (선택, 내부 관리용)',
+        },
         displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
-        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (기본: false)' },
+        isMainExposed: {
+          type: 'boolean',
+          description: '메인 노출 여부 (기본: false)',
+        },
         isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
       },
     },
@@ -679,16 +727,16 @@ export class AdminContentController {
     return this.keyCustomerService.update(id, body);
   }
 
-  @ApiOperation({ summary: '주요 고객 삭제' })
-  @Delete('key-customers/:id')
-  deleteKeyCustomer(@Param('id', ParseIntPipe) id: number) {
-    return this.keyCustomerService.delete(id);
-  }
-
   @ApiOperation({ summary: '주요 고객 다중 삭제' })
   @Delete('key-customers/bulk')
   deleteKeyCustomers(@Body() dto: AdminDeleteManyDto) {
     return this.keyCustomerService.deleteMany(dto.ids);
+  }
+
+  @ApiOperation({ summary: '주요 고객 삭제' })
+  @Delete('key-customers/:id')
+  deleteKeyCustomer(@Param('id', ParseIntPipe) id: number) {
+    return this.keyCustomerService.delete(id);
   }
 
   @ApiOperation({ summary: '주요 고객 노출 토글' })
@@ -723,18 +771,27 @@ export class AdminContentController {
     },
   })
   @Patch('key-customers/order')
-  updateKeyCustomerOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateKeyCustomerOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.keyCustomerService.updateOrder(body.items);
   }
 
   // ===== BUSINESS AREAS =====
-  
+
   // ===== BUSINESS AREAS - CATEGORIES =====
-  @ApiOperation({ summary: 'Business Areas 카테고리 목록 조회 (Major Category별 그룹화)' })
-  @ApiResponse({ status: 200, description: 'Major Category별로 그룹화된 카테고리 목록' })
+  @ApiOperation({
+    summary: 'Business Areas 카테고리 목록 조회 (Major Category별 그룹화)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Major Category별로 그룹화된 카테고리 목록',
+  })
   @Get('business-areas/categories')
   getBusinessAreaCategories(@Query('includeHidden') includeHidden?: string) {
-    return this.businessAreaService.getCategoriesGroupedByMajor(includeHidden === 'true');
+    return this.businessAreaService.getCategoriesGroupedByMajor(
+      includeHidden === 'true',
+    );
   }
 
   @ApiOperation({ summary: 'Major Category별 Business Areas 카테고리 목록' })
@@ -744,7 +801,10 @@ export class AdminContentController {
     @Param('majorCategoryId', ParseIntPipe) majorCategoryId: number,
     @Query('includeHidden') includeHidden?: string,
   ) {
-    return this.businessAreaService.getCategoriesByMajorCategory(majorCategoryId, includeHidden === 'true');
+    return this.businessAreaService.getCategoriesByMajorCategory(
+      majorCategoryId,
+      includeHidden === 'true',
+    );
   }
 
   @ApiOperation({ summary: 'Business Areas 카테고리 상세 조회' })
@@ -753,7 +813,10 @@ export class AdminContentController {
     return this.businessAreaService.getCategoryById(id, true);
   }
 
-  @ApiOperation({ summary: 'Business Areas 카테고리 생성', description: 'Major Category는 /admin/insights/subcategories에서 선택' })
+  @ApiOperation({
+    summary: 'Business Areas 카테고리 생성',
+    description: 'Major Category는 /admin/insights/subcategories에서 선택',
+  })
   @Post('business-areas/categories')
   createBusinessAreaCategory(@Body() dto: CreateBusinessAreaCategoryDto) {
     return this.businessAreaService.createCategory(dto);
@@ -768,7 +831,10 @@ export class AdminContentController {
     return this.businessAreaService.updateCategory(id, dto);
   }
 
-  @ApiOperation({ summary: 'Business Areas 카테고리 삭제', description: '사용 중인 카테고리는 삭제할 수 없습니다.' })
+  @ApiOperation({
+    summary: 'Business Areas 카테고리 삭제',
+    description: '사용 중인 카테고리는 삭제할 수 없습니다.',
+  })
   @Delete('business-areas/categories/:id')
   deleteBusinessAreaCategory(@Param('id', ParseIntPipe) id: number) {
     return this.businessAreaService.deleteCategory(id);
@@ -781,7 +847,10 @@ export class AdminContentController {
   }
 
   // ===== BUSINESS AREAS - ITEMS =====
-  @ApiOperation({ summary: '업무분야 아이템 목록 (검색: 업무분야명, 필터: 대분류/중분류/노출여부/메인노출)' })
+  @ApiOperation({
+    summary:
+      '업무분야 아이템 목록 (검색: 업무분야명, 필터: 대분류/중분류/노출여부/메인노출)',
+  })
   @Get('business-areas')
   listBusinessAreas(@Query() query: any) {
     const { majorCategoryId, minorCategoryId, ...rest } = query;
@@ -799,9 +868,10 @@ export class AdminContentController {
     return this.businessAreaService.findById(id);
   }
 
-  @ApiOperation({ 
+  @ApiOperation({
     summary: '업무분야 아이템 생성',
-    description: 'Major Category는 /admin/insights/subcategories에서, Minor Category는 Business Areas categories에서 선택' 
+    description:
+      'Major Category는 /admin/insights/subcategories에서, Minor Category는 Business Areas categories에서 선택',
   })
   @Post('business-areas')
   createBusinessAreaItem(@Body() dto: CreateBusinessAreaItemDto) {
@@ -817,16 +887,16 @@ export class AdminContentController {
     return this.businessAreaService.updateItem(id, dto);
   }
 
-  @ApiOperation({ summary: '업무분야 아이템 삭제' })
-  @Delete('business-areas/:id')
-  deleteBusinessAreaItem(@Param('id', ParseIntPipe) id: number) {
-    return this.businessAreaService.delete(id);
-  }
-
   @ApiOperation({ summary: '업무분야 다중 삭제' })
   @Delete('business-areas/bulk')
   deleteBusinessAreas(@Body() dto: AdminDeleteManyDto) {
     return this.businessAreaService.deleteMany(dto.ids);
+  }
+
+  @ApiOperation({ summary: '업무분야 아이템 삭제' })
+  @Delete('business-areas/:id')
+  deleteBusinessAreaItem(@Param('id', ParseIntPipe) id: number) {
+    return this.businessAreaService.delete(id);
   }
 
   @ApiOperation({ summary: '업무분야 노출 토글' })
@@ -861,16 +931,24 @@ export class AdminContentController {
     },
   })
   @Patch('business-areas/order')
-  updateBusinessAreaOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateBusinessAreaOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.businessAreaService.updateOrder(body.items);
   }
 
   // ===== TRAINING/SEMINARS =====
-  @ApiOperation({ summary: '교육/세미나 목록 조회 (검색: 교육/세미나명, 필터: 유형/모집유형/회원유형/노출여부)' })
+  @ApiOperation({
+    summary:
+      '교육/세미나 목록 조회 (검색: 교육/세미나명, 필터: 유형/모집유형/회원유형/노출여부)',
+  })
   @ApiResponse({ status: 200, description: '목록 조회 성공' })
   @Get('training-seminars')
   listTrainingSeminars(@Query() query: AdminTrainingSeminarQueryDto) {
-    return this.trainingSeminarService.findAll({ ...query, includeHidden: true });
+    return this.trainingSeminarService.findAll({
+      ...query,
+      includeHidden: true,
+    });
   }
 
   @ApiOperation({ summary: '교육/세미나 상세 조회' })
@@ -882,7 +960,10 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '교육/세미나 추가' })
-  @ApiBody({ type: AdminCreateTrainingSeminarDto, description: '교육/세미나 생성 정보' })
+  @ApiBody({
+    type: AdminCreateTrainingSeminarDto,
+    description: '교육/세미나 생성 정보',
+  })
   @ApiResponse({ status: 201, description: '교육/세미나 추가 성공' })
   @ApiResponse({ status: 400, description: '선착순 모집의 경우 정원 필수' })
   @Post('training-seminars')
@@ -891,25 +972,31 @@ export class AdminContentController {
   }
 
   @ApiOperation({ summary: '교육/세미나 수정' })
-  @ApiBody({ type: AdminUpdateTrainingSeminarDto, description: '교육/세미나 수정 정보' })
+  @ApiBody({
+    type: AdminUpdateTrainingSeminarDto,
+    description: '교육/세미나 수정 정보',
+  })
   @ApiResponse({ status: 200, description: '교육/세미나 수정 성공' })
   @ApiResponse({ status: 404, description: '교육/세미나 없음' })
   @ApiResponse({ status: 400, description: '선착순 모집의 경우 정원 필수' })
   @Patch('training-seminars/:id')
-  updateTrainingSeminar(@Param('id', ParseIntPipe) id: number, @Body() dto: AdminUpdateTrainingSeminarDto) {
+  updateTrainingSeminar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminUpdateTrainingSeminarDto,
+  ) {
     return this.trainingSeminarService.update(id, dto as any);
-  }
-
-  @ApiOperation({ summary: '교육/세미나 삭제' })
-  @Delete('training-seminars/:id')
-  deleteTrainingSeminar(@Param('id', ParseIntPipe) id: number) {
-    return this.trainingSeminarService.delete(id);
   }
 
   @ApiOperation({ summary: '교육/세미나 다중 삭제' })
   @Delete('training-seminars/bulk')
   deleteTrainingSeminars(@Body() dto: AdminDeleteManyDto) {
     return this.trainingSeminarService.deleteMany(dto.ids);
+  }
+
+  @ApiOperation({ summary: '교육/세미나 삭제' })
+  @Delete('training-seminars/:id')
+  deleteTrainingSeminar(@Param('id', ParseIntPipe) id: number) {
+    return this.trainingSeminarService.delete(id);
   }
 
   @ApiOperation({ summary: '교육/세미나 노출 토글' })
@@ -930,10 +1017,7 @@ export class AdminContentController {
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @Get('training-seminars/:id/applications')
-  listApplications(
-    @Param('id', ParseIntPipe) id: number,
-    @Query() query: any,
-  ) {
+  listApplications(@Param('id', ParseIntPipe) id: number, @Query() query: any) {
     return this.trainingSeminarService.findApplications(id, query);
   }
 
@@ -967,571 +1051,23 @@ export class AdminContentController {
     return this.trainingSeminarService.updateApplicationStatus(id, body.status);
   }
 
-  @ApiOperation({ summary: '신청 삭제' })
-  @Delete('training-seminar-applications/:id')
-  deleteApplication(@Param('id', ParseIntPipe) id: number) {
-    return this.trainingSeminarService.deleteApplication(id);
-  }
-
   @ApiOperation({ summary: '신청 다중 삭제' })
   @Delete('training-seminar-applications/bulk')
   deleteApplications(@Body() dto: AdminDeleteManyDto) {
     return this.trainingSeminarService.deleteApplications(dto.ids);
   }
 
-  // ===== INSIGHTS (인사이트) =====
-  
-  // GET admin/content/insights - 모든 카테고리 목록 조회
-  @ApiOperation({ summary: '인사이트 카테고리 목록 조회 (column 포함)' })
-  @ApiResponse({ status: 200, description: '카테고리 목록 조회 성공' })
-  @ApiQuery({ name: 'search', required: false, description: '카테고리명 검색' })
-  @ApiQuery({ name: 'boardType', required: false, enum: ['갤러리', '스니펫', '게시판'], description: '게시판 유형 필터' })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 20 })
-  @Get('insights')
-  async listInsightCategories(
-    @Query('search') search?: string,
-    @Query('boardType') boardType?: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    const pageNum = Number(page);
-    const limitNum = Number(limit);
-
-    // 모든 카테고리 조회 (data rooms + column 기본 카테고리)
-    const roomsResult = await this.dataRoomService.findAllRooms({
-      search,
-      boardType,
-      page: pageNum,
-      limit: limitNum,
-      includeHidden: true,
-    });
-
-    // Column은 기본 카테고리이므로 목록에 포함
-    const shouldIncludeColumn = !search ||
-      search.toLowerCase().includes('column') ||
-      search.toLowerCase().includes('칼럼');
-
-    if (shouldIncludeColumn && (!boardType || boardType === '갤러리')) {
-      // Column 카테고리의 실제 아이템 개수 조회
-      const columnCountResult = await this.columnService.findAll({
-        includeHidden: true,
-        page: 1,
-        limit: 1,
-      });
-
-      // Column 카테고리 정보 추가
-      const columnCategory = {
-        id: 0, // 특별 ID로 표시
-        name: 'column',
-        nameLabel: 'Column',
-        boardType: '갤러리',
-        boardTypeLabel: '갤러리',
-        exposureType: 'ALL',
-        exposureTypeLabel: '전체',
-        enableComments: false,
-        commentsLabel: 'N',
-        isExposed: true,
-        exposedLabel: 'Y',
-        contentCount: columnCountResult.total,
-        createdAt: new Date(),
-        createdAtFormatted: '',
-        updatedAt: new Date(),
-        updatedAtFormatted: '',
-        isDefault: true, // 기본 카테고리 표시
-      };
-
-      return {
-        items: [columnCategory, ...roomsResult.items],
-        total: roomsResult.total + 1,
-        page: roomsResult.page,
-        limit: roomsResult.limit,
-      };
-    }
-
-    return roomsResult;
-  }
-
-  // POST admin/content/insights - 새 카테고리 생성
-  @ApiOperation({ summary: '인사이트 카테고리 생성' })
-  @ApiResponse({ status: 201, description: '카테고리 생성 성공' })
-  @ApiBody({
-    description: '카테고리 생성 정보',
-    schema: {
-      type: 'object',
-      required: ['name', 'boardType'],
-      properties: {
-        name: { type: 'string', description: '카테고리명 (필수)' },
-        boardType: { type: 'string', enum: ['갤러리', '스니펫', '게시판'], description: '게시판 유형 (필수: 갤러리/스니펫/게시판 중 선택)' },
-        exposureType: { type: 'string', enum: ['ALL', 'GENERAL', 'INSURANCE', 'OTHER'], description: '노출 유형 (기본: ALL)' },
-        enableComments: { type: 'boolean', description: '댓글 기능 사용 여부 (기본: false)' },
-        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
-      },
-    },
-  })
-  @Post('insights')
-  async createInsightCategory(@Body() body: any) {
-    if (!body.name || !body.boardType) {
-      throw new BadRequestException('카테고리명과 게시판 유형이 필요합니다.');
-    }
-    // 게시판 유형 검증 (3가지 고정 타입만 허용)
-    const allowedBoardTypes = ['갤러리', '스니펫', '게시판'];
-    if (!allowedBoardTypes.includes(body.boardType)) {
-      throw new BadRequestException(`게시판 유형은 ${allowedBoardTypes.join(', ')} 중 하나여야 합니다.`);
-    }
-    // 카테고리는 data room으로 저장
-    const room = await this.dataRoomService.createRoom(body);
-    // 동시에 MajorCategory도 생성 (서브카테고리 관리를 위해)
-    try {
-      await this.categoryService.createMajor(body.name, body.isExposed !== false);
-    } catch (error) {
-      // MajorCategory 생성 실패 시 data room도 롤백하지 않음 (이미 생성됨)
-      // 로그만 남기고 계속 진행
-    }
-    return room;
-  }
-
-  // GET admin/content/insights/:categoryName - 카테고리 상세 조회
-  @ApiOperation({ summary: '인사이트 카테고리 상세 조회' })
-  @ApiResponse({ status: 200, description: '카테고리 상세 조회 성공' })
-  @Get('insights/:categoryName')
-  async getInsightCategory(
-    @Param('categoryName') categoryName: string,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      // Column 카테고리는 특별 처리
-      const columnCountResult = await this.columnService.findAll({
-        includeHidden: true,
-        page: 1,
-        limit: 1,
-      });
-      return {
-        id: 0,
-        name: 'column',
-        nameLabel: 'Column',
-        boardType: '갤러리',
-        boardTypeLabel: '갤러리',
-        exposureType: 'ALL',
-        exposureTypeLabel: '전체',
-        enableComments: false,
-        commentsLabel: 'N',
-        isExposed: true,
-        exposedLabel: 'Y',
-        contentCount: columnCountResult.total,
-        isDefault: true,
-      };
-    }
-    // 다른 카테고리는 data room으로 조회
-    return this.dataRoomService.findRoomByName(categoryName);
-  }
-
-  // PATCH admin/content/insights/:categoryName - 카테고리 수정
-  @ApiOperation({ summary: '인사이트 카테고리 수정' })
-  @ApiResponse({ status: 200, description: '카테고리 수정 성공' })
-  @ApiBody({
-    description: '카테고리 수정 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        boardType: { type: 'string', enum: ['갤러리', '스니펫', '게시판'] },
-        exposureType: { type: 'string', enum: ['ALL', 'GENERAL', 'INSURANCE', 'OTHER'] },
-        enableComments: { type: 'boolean' },
-        isExposed: { type: 'boolean' },
-      },
-    },
-  })
-  @Patch('insights/:categoryName')
-  async updateInsightCategory(
-    @Param('categoryName') categoryName: string,
-    @Body() body: any,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      throw new BadRequestException('column 카테고리는 수정할 수 없습니다.');
-    }
-    // 게시판 유형 검증
-    if (body.boardType) {
-      const allowedBoardTypes = ['갤러리', '스니펫', '게시판'];
-      if (!allowedBoardTypes.includes(body.boardType)) {
-        throw new BadRequestException(`게시판 유형은 ${allowedBoardTypes.join(', ')} 중 하나여야 합니다.`);
-      }
-    }
-    const room = await this.dataRoomService.findRoomByName(categoryName);
-    return this.dataRoomService.updateRoom(room.id, body);
-  }
-
-  // DELETE admin/content/insights/:categoryName - 카테고리 삭제
-  @ApiOperation({ summary: '인사이트 카테고리 삭제' })
-  @ApiResponse({ status: 200, description: '카테고리 삭제 성공' })
-  @Delete('insights/:categoryName')
-  async deleteInsightCategory(
-    @Param('categoryName') categoryName: string,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      throw new BadRequestException('column 카테고리는 삭제할 수 없습니다.');
-    }
-    const room = await this.dataRoomService.findRoomByName(categoryName);
-    return this.dataRoomService.deleteRoom(room.id);
-  }
-
-  // PATCH admin/content/insights/:categoryName/toggle-exposure - 카테고리 노출 토글
-  @ApiOperation({ summary: '인사이트 카테고리 노출 토글' })
-  @ApiResponse({ status: 200, description: '토글 성공' })
-  @Patch('insights/:categoryName/toggle-exposure')
-  async toggleInsightCategoryExposure(
-    @Param('categoryName') categoryName: string,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      throw new BadRequestException('column 카테고리의 노출 여부는 변경할 수 없습니다.');
-    }
-    const room = await this.dataRoomService.findRoomByName(categoryName);
-    return this.dataRoomService.toggleRoomExposure(room.id);
-  }
-
-  // GET admin/content/insights/:categoryName/subcategories - 카테고리의 중분류 목록 조회
-  @ApiOperation({ summary: '인사이트 카테고리의 중분류(서브카테고리) 목록 조회' })
-  @ApiResponse({ status: 200, description: '중분류 목록 조회 성공' })
-  @ApiQuery({ name: 'search', required: false, description: '중분류명 검색' })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 20 })
-  @Get('insights/:categoryName/subcategories')
-  async listSubcategories(
-    @Param('categoryName') categoryName: string,
-    @Query('search') search?: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    // 카테고리명으로 MajorCategory 찾기 (없으면 생성)
-    let majorCategory = await this.categoryService.findMajorByName(categoryName);
-    if (!majorCategory) {
-      // MajorCategory가 없으면 생성 (column인 경우 또는 새 카테고리인 경우)
-      majorCategory = await this.categoryService.createMajor(categoryName, true);
-    }
-
-    return this.categoryService.findMinorsByMajor(majorCategory.id, {
-      search,
-      page: Number(page),
-      limit: Number(limit),
-      includeHidden: true,
-    });
-  }
-
-  // POST admin/content/insights/:categoryName/subcategories - 중분류 생성
-  @ApiOperation({ summary: '인사이트 카테고리에 중분류(서브카테고리) 생성' })
-  @ApiResponse({ status: 201, description: '중분류 생성 성공' })
-  @ApiBody({
-    description: '중분류 생성 정보',
-    schema: {
-      type: 'object',
-      required: ['name'],
-      properties: {
-        name: { type: 'string', description: '중분류명 (필수, 예: 업종별, 컨설팅 업무분야)' },
-        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
-      },
-    },
-  })
-  @Post('insights/:categoryName/subcategories')
-  async createSubcategory(
-    @Param('categoryName') categoryName: string,
-    @Body() body: { name: string; isExposed?: boolean },
-  ) {
-    // 카테고리명으로 MajorCategory 찾기 (없으면 생성)
-    let majorCategory = await this.categoryService.findMajorByName(categoryName);
-    if (!majorCategory) {
-      // MajorCategory가 없으면 생성
-      majorCategory = await this.categoryService.createMajor(categoryName, true);
-    }
-
-    return this.categoryService.createMinor(majorCategory.id, body.name, body.isExposed);
-  }
-
-  // PATCH admin/content/insights/:categoryName/subcategories/:id - 중분류 수정
-  @ApiOperation({ summary: '인사이트 중분류 수정' })
-  @ApiResponse({ status: 200, description: '중분류 수정 성공' })
-  @ApiBody({
-    description: '중분류 수정 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: '중분류명' },
-        isExposed: { type: 'boolean', description: '노출 여부' },
-      },
-    },
-  })
-  @Patch('insights/:categoryName/subcategories/:id')
-  async updateSubcategory(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: { name?: string; isExposed?: boolean },
-  ) {
-    return this.categoryService.updateMinor(id, body);
-  }
-
-  // DELETE admin/content/insights/:categoryName/subcategories/:id - 중분류 삭제
-  @ApiOperation({ summary: '인사이트 중분류 삭제' })
-  @ApiResponse({ status: 200, description: '중분류 삭제 성공' })
-  @Delete('insights/:categoryName/subcategories/:id')
-  async deleteSubcategory(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    return this.categoryService.deleteMinor(id);
-  }
-
-  // GET admin/content/insights/:categoryName/items - 카테고리의 아이템 목록 조회
-  @ApiOperation({ summary: '인사이트 카테고리의 아이템 목록 조회' })
-  @ApiResponse({ status: 200, description: '아이템 목록 조회 성공' })
-  @ApiQuery({ name: 'subcategory', required: false, description: '중분류명 필터 (예: 업종별, 컨설팅 업무분야)' })
-  @ApiQuery({ name: 'search', required: false, description: '아이템명 검색' })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 20 })
-  @Get('insights/:categoryName/items')
-  async listInsightItems(
-    @Param('categoryName') categoryName: string,
-    @Query('subcategory') subcategory?: string,
-    @Query('search') search?: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 20,
-  ) {
-    const pageNum = Number(page);
-    const limitNum = Number(limit);
-
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      // Column 카테고리의 아이템 목록 (columns)
-      return this.columnService.findAll({
-        search,
-        categoryName: subcategory, // 중분류명으로 필터링
-        page: pageNum,
-        limit: limitNum,
-        includeHidden: true,
-      });
-    } else {
-      // 다른 카테고리의 아이템 목록 (data room contents)
-      const room = await this.dataRoomService.findRoomByName(categoryName);
-      return this.dataRoomService.findContents(room.id, {
-        search,
-        categoryName: subcategory, // 중분류명으로 필터링
-        page: pageNum,
-        limit: limitNum,
-        includeHidden: true,
-      });
-    }
-  }
-
-  // POST admin/content/insights/:categoryName/items - 카테고리에 아이템 생성
-  @ApiOperation({ summary: '인사이트 카테고리에 아이템 생성' })
-  @ApiResponse({ status: 201, description: '아이템 생성 성공' })
-  @ApiBody({
-    description: '아이템 생성 정보',
-    schema: {
-      type: 'object',
-      required: ['name'],
-      properties: {
-        name: { type: 'string', description: '아이템명 (필수)' },
-        categoryName: { type: 'string', description: '중분류명 (선택, 예: 업종별, 컨설팅 업무분야)' },
-        thumbnailUrl: { type: 'string', description: '썸네일 이미지 URL (column인 경우 필수)' },
-        imageUrl: { type: 'string', description: '대표 이미지 URL (다른 카테고리인 경우 선택)' },
-        body: { type: 'string', description: '본문 HTML' },
-        authorName: { type: 'string', description: '작성자 이름' },
-        isMainExposed: { type: 'boolean', description: '메인 노출 여부 (column인 경우, 기본: false)' },
-        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
-        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
-        attachmentUrl: { type: 'string', description: '첨부파일 URL (다른 카테고리인 경우)' },
-        displayBodyHtml: { type: 'boolean', description: '본문 노출 여부 (다른 카테고리인 경우, 기본: true)' },
-      },
-    },
-  })
-  @Post('insights/:categoryName/items')
-  async createInsightItem(
-    @Param('categoryName') categoryName: string,
-    @Body() body: any,
-  ) {
-    if (!body.name) {
-      throw new BadRequestException('아이템명이 필요합니다.');
-    }
-
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      // Column 카테고리에 아이템 생성
-      if (!body.thumbnailUrl) {
-        throw new BadRequestException('썸네일 이미지 URL이 필요합니다.');
-      }
-      if (!body.body) {
-        throw new BadRequestException('본문이 필요합니다.');
-      }
-      return this.columnService.create({
-        ...body,
-        categoryName: body.categoryName || categoryName,
-      });
-    } else {
-      // 다른 카테고리에 아이템 생성 (data room content)
-      const room = await this.dataRoomService.findRoomByName(categoryName);
-      return this.dataRoomService.createContent(room.id, {
-        ...body,
-        categoryName: body.categoryName || categoryName,
-      });
-    }
-  }
-
-  // GET admin/content/insights/:categoryName/items/:id - 아이템 상세 조회
-  @ApiOperation({ summary: '인사이트 아이템 상세 조회' })
-  @ApiResponse({ status: 200, description: '아이템 상세 조회 성공' })
-  @Get('insights/:categoryName/items/:id')
-  async getInsightItem(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.findById(id);
-    } else {
-      return this.dataRoomService.findContentById(id);
-    }
-  }
-
-  // PATCH admin/content/insights/:categoryName/items/:id - 아이템 수정
-  @ApiOperation({ summary: '인사이트 아이템 수정' })
-  @ApiResponse({ status: 200, description: '아이템 수정 성공' })
-  @ApiBody({
-    description: '아이템 수정 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        name: { type: 'string' },
-        categoryName: { type: 'string' },
-        thumbnailUrl: { type: 'string' },
-        imageUrl: { type: 'string' },
-        body: { type: 'string' },
-        authorName: { type: 'string' },
-        isMainExposed: { type: 'boolean' },
-        isExposed: { type: 'boolean' },
-        displayOrder: { type: 'number' },
-        attachmentUrl: { type: 'string' },
-        displayBodyHtml: { type: 'boolean' },
-      },
-    },
-  })
-  @Patch('insights/:categoryName/items/:id')
-  async updateInsightItem(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: any,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.update(id, body);
-    } else {
-      return this.dataRoomService.updateContent(id, body);
-    }
-  }
-
-  // DELETE admin/content/insights/:categoryName/items/:id - 아이템 삭제
-  @ApiOperation({ summary: '인사이트 아이템 삭제' })
-  @ApiResponse({ status: 200, description: '아이템 삭제 성공' })
-  @Delete('insights/:categoryName/items/:id')
-  async deleteInsightItem(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.delete(id);
-    } else {
-      return this.dataRoomService.deleteContent(id);
-    }
-  }
-
-  // PATCH admin/content/insights/:categoryName/items/:id/toggle-exposure - 아이템 노출 토글
-  @ApiOperation({ summary: '인사이트 아이템 노출 토글' })
-  @ApiResponse({ status: 200, description: '토글 성공' })
-  @Patch('insights/:categoryName/items/:id/toggle-exposure')
-  async toggleInsightItemExposure(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.toggleExposure(id);
-    } else {
-      return this.dataRoomService.toggleContentExposure(id);
-    }
-  }
-
-  // PATCH admin/content/insights/:categoryName/items/:id/toggle-main-exposure - 아이템 메인 노출 토글 (column만)
-  @ApiOperation({ summary: '인사이트 아이템 메인 노출 토글 (column 카테고리만)' })
-  @ApiResponse({ status: 200, description: '토글 성공' })
-  @Patch('insights/:categoryName/items/:id/toggle-main-exposure')
-  async toggleInsightItemMainExposure(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.toggleMainExposure(id);
-    } else {
-      throw new BadRequestException('메인 노출은 column 카테고리에서만 사용할 수 있습니다.');
-    }
-  }
-
-  // DELETE admin/content/insights/:categoryName/items/bulk - 아이템 다중 삭제
-  @ApiOperation({ summary: '인사이트 아이템 다중 삭제' })
-  @ApiResponse({ status: 200, description: '삭제 성공' })
-  @Delete('insights/:categoryName/items/bulk')
-  async deleteInsightItemsBulk(
-    @Param('categoryName') categoryName: string,
-    @Body() dto: AdminDeleteManyDto,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.deleteMany(dto.ids);
-    } else {
-      return this.dataRoomService.deleteContents(dto.ids);
-    }
-  }
-
-  // PATCH admin/content/insights/:categoryName/items/order - 아이템 순서 변경
-  @ApiOperation({ summary: '인사이트 아이템 순서 변경' })
-  @ApiResponse({ status: 200, description: '순서 변경 성공' })
-  @ApiBody({
-    description: '아이템 순서 변경 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              displayOrder: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @Patch('insights/:categoryName/items/order')
-  async updateInsightItemsOrder(
-    @Param('categoryName') categoryName: string,
-    @Body() body: { items: { id: number; displayOrder: number }[] },
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.updateOrder(body.items);
-    } else {
-      throw new BadRequestException('순서 변경은 column 카테고리에서만 지원됩니다.');
-    }
-  }
-
-  // PATCH admin/content/insights/:categoryName/items/:id/increment-view - 아이템 조회수 증가 (data room contents만)
-  @ApiOperation({ summary: '인사이트 아이템 조회수 증가 (data room contents만)' })
-  @ApiResponse({ status: 200, description: '조회수 증가 성공' })
-  @Patch('insights/:categoryName/items/:id/increment-view')
-  async incrementInsightItemView(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      throw new BadRequestException('column 카테고리는 조회수 기능을 지원하지 않습니다.');
-    } else {
-      return this.dataRoomService.incrementViewCount(id);
-    }
+  @ApiOperation({ summary: '신청 삭제' })
+  @Delete('training-seminar-applications/:id')
+  deleteApplication(@Param('id', ParseIntPipe) id: number) {
+    return this.trainingSeminarService.deleteApplication(id);
   }
 
   // ===== TAX MEMBERS (세무사 회원 프로필) =====
-  @ApiOperation({ summary: '구성원 목록 조회 (검색: 보험사명/구성원명, 필터: 업무분야/노출여부)' })
+  @ApiOperation({
+    summary:
+      '구성원 목록 조회 (검색: 보험사명/구성원명, 필터: 업무분야/노출여부)',
+  })
   @ApiResponse({ status: 200, description: '목록 조회 성공' })
   @Get('tax-members')
   listTaxMembers(@Query() query: AdminTaxMemberQueryDto) {
@@ -1559,7 +1095,10 @@ export class AdminContentController {
   @ApiResponse({ status: 200, description: '구성원 수정 성공' })
   @ApiResponse({ status: 404, description: '구성원 없음' })
   @Patch('tax-members/:id')
-  updateTaxMember(@Param('id', ParseIntPipe) id: number, @Body() dto: AdminUpdateTaxMemberDto) {
+  updateTaxMember(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminUpdateTaxMemberDto,
+  ) {
     return this.taxMemberService.update(id, dto);
   }
 
@@ -1601,18 +1140,70 @@ export class AdminContentController {
     },
   })
   @Patch('tax-members/order')
-  updateTaxMemberOrder(@Body() body: { items: { id: number; displayOrder: number }[] }) {
+  updateTaxMemberOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
     return this.taxMemberService.updateOrder(body.items);
   }
 
   // ===== EXPOSURE SETTINGS =====
-  @ApiOperation({ summary: '노출 설정 조회 (Awards Main, Newsletter Page, History Page)' })
+  @ApiOperation({
+    summary: '노출 설정 조회 (Awards Main, Newsletter Page, History Page)',
+  })
   @Get('exposure-settings')
   getExposureSettings() {
     return this.exposureSettingsService.getAll();
   }
 
-  @ApiOperation({ summary: '노출 설정 수정' })
+  @ApiOperation({ summary: 'Awards 메인 노출 설정 (Y/N, 기본: N)' })
+  @ApiBody({
+    description: 'Awards 메인 노출 설정',
+    schema: {
+      type: 'object',
+      required: ['isExposed'],
+      properties: {
+        isExposed: { type: 'boolean', description: '노출 여부 (필수)' },
+      },
+    },
+  })
+  @Patch('exposure-settings/awards-main')
+  setAwardsMainExposure(@Body() body: { isExposed: boolean }) {
+    return this.exposureSettingsService.setAwardsMainExposed(body.isExposed);
+  }
+
+  @ApiOperation({ summary: 'Newsletter 페이지 노출 설정 (Y/N, 기본: N)' })
+  @ApiBody({
+    description: 'Newsletter 페이지 노출 설정',
+    schema: {
+      type: 'object',
+      required: ['isExposed'],
+      properties: {
+        isExposed: { type: 'boolean', description: '노출 여부 (필수)' },
+      },
+    },
+  })
+  @Patch('exposure-settings/newsletter-page')
+  setNewsletterPageExposure(@Body() body: { isExposed: boolean }) {
+    return this.exposureSettingsService.setNewsletterPageExposed(body.isExposed);
+  }
+
+  @ApiOperation({ summary: 'History 페이지 노출 설정 (Y/N, 기본: N)' })
+  @ApiBody({
+    description: 'History 페이지 노출 설정',
+    schema: {
+      type: 'object',
+      required: ['isExposed'],
+      properties: {
+        isExposed: { type: 'boolean', description: '노출 여부 (필수)' },
+      },
+    },
+  })
+  @Patch('exposure-settings/history-page')
+  setHistoryPageExposure(@Body() body: { isExposed: boolean }) {
+    return this.exposureSettingsService.setHistoryPageExposed(body.isExposed);
+  }
+
+  @ApiOperation({ summary: '노출 설정 수정 (Generic, 기타 키용)' })
   @ApiBody({
     description: '노출 설정 수정 정보',
     schema: {
@@ -1624,55 +1215,10 @@ export class AdminContentController {
     },
   })
   @Patch('exposure-settings/:key')
-  updateExposureSetting(@Param('key') key: string, @Body() body: { value: any }) {
+  updateExposureSetting(
+    @Param('key') key: string,
+    @Body() body: { value: any },
+  ) {
     return this.exposureSettingsService.set(key, body.value);
-  }
-
-  @ApiOperation({ summary: 'Awards 메인 노출 설정 (Y/N, 기본: N)' })
-  @ApiBody({
-    description: 'Awards 메인 노출 설정',
-    schema: {
-      type: 'object',
-      required: ['exposed'],
-      properties: {
-        exposed: { type: 'boolean', description: '노출 여부 (필수)' },
-      },
-    },
-  })
-  @Patch('exposure-settings/awards-main')
-  setAwardsMainExposure(@Body() body: { exposed: boolean }) {
-    return this.exposureSettingsService.setAwardsMainExposed(body.exposed);
-  }
-
-  @ApiOperation({ summary: 'Newsletter 페이지 노출 설정 (Y/N, 기본: N)' })
-  @ApiBody({
-    description: 'Newsletter 페이지 노출 설정',
-    schema: {
-      type: 'object',
-      required: ['exposed'],
-      properties: {
-        exposed: { type: 'boolean', description: '노출 여부 (필수)' },
-      },
-    },
-  })
-  @Patch('exposure-settings/newsletter-page')
-  setNewsletterPageExposure(@Body() body: { exposed: boolean }) {
-    return this.exposureSettingsService.setNewsletterPageExposed(body.exposed);
-  }
-
-  @ApiOperation({ summary: 'History 페이지 노출 설정 (Y/N, 기본: N)' })
-  @ApiBody({
-    description: 'History 페이지 노출 설정',
-    schema: {
-      type: 'object',
-      required: ['exposed'],
-      properties: {
-        exposed: { type: 'boolean', description: '노출 여부 (필수)' },
-      },
-    },
-  })
-  @Patch('exposure-settings/history-page')
-  setHistoryPageExposure(@Body() body: { exposed: boolean }) {
-    return this.exposureSettingsService.setHistoryPageExposed(body.exposed);
   }
 }

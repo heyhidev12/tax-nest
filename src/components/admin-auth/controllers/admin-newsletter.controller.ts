@@ -67,6 +67,13 @@ export class AdminNewsletterController {
     return this.newsletterService.toggleSubscription(parsedId);
   }
 
+  @ApiOperation({ summary: '구독자 다중 삭제' })
+  @ApiResponse({ status: 200, description: '삭제 성공' })
+  @Delete('bulk')
+  deleteMany(@Body() dto: AdminDeleteManyDto) {
+    return this.newsletterService.deleteMany(dto.ids);
+  }
+
   @ApiOperation({ summary: '구독자 삭제' })
   @ApiResponse({ status: 200, description: '삭제 성공' })
   @Delete(':id')
@@ -76,10 +83,5 @@ export class AdminNewsletterController {
     return this.newsletterService.delete(parsedId);
   }
 
-  @ApiOperation({ summary: '구독자 다중 삭제' })
-  @ApiResponse({ status: 200, description: '삭제 성공' })
-  @Delete('bulk')
-  deleteMany(@Body() dto: AdminDeleteManyDto) {
-    return this.newsletterService.deleteMany(dto.ids);
-  }
+
 }

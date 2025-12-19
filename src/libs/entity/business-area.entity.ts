@@ -53,13 +53,21 @@ export class BusinessArea {
   @Column({ type: 'text' })
   overview: string;
 
-  // 본문 - HTML (필수)
-  @Column({ type: 'longtext' })
+  // 본문 - HTML (deprecated, kept for backward compatibility)
+  @Column({ type: 'longtext', nullable: true })
   body: string;
 
-  // YouTube URL (선택) - 여러 개 가능 (JSON 배열 또는 콤마 구분 문자열)
-  @Column({ type: 'text', nullable: true })
-  youtubeUrl: string; // JSON 배열 문자열 또는 콤마 구분 문자열로 저장 가능
+  /**
+   * Section-based content - JSON array of section content objects
+   * Each object has: { section: string, content: string }
+   * Example: [{ section: "발생원인", content: "<p>HTML content</p>" }, ...]
+   */
+  @Column({ type: 'json', nullable: true })
+  sectionContents: Array<{ section: string; content: string }>;
+
+  // YouTube URLs (선택) - 여러 개 가능
+  @Column({ type: 'json', nullable: true })
+  youtubeUrls: string[];
 
   // 메인 노출 여부
   @Column({ default: false })

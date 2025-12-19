@@ -1,16 +1,16 @@
 import {
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Query,
-  Post,
   Body,
+  Controller,
   Delete,
+  Get,
   NotFoundException,
   BadRequestException,
-  UseGuards,
+  Param,
+  ParseIntPipe,
+  Post,
+  Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/components/auth/jwt-auth.guard';
@@ -24,6 +24,7 @@ import { BusinessAreaService } from '../services/business-area.service';
 import { HistoryService } from '../services/history.service';
 import { ColumnService } from '../services/column.service';
 import { DataRoomService } from '../services/data-room.service';
+import { InsightsService } from '../services/insights.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
 import { ExposureSettingsService } from '../services/exposure-settings.service';
 
@@ -41,6 +42,7 @@ export class PublicContentController {
     private readonly historyService: HistoryService,
     private readonly columnService: ColumnService,
     private readonly dataRoomService: DataRoomService,
+    private readonly insightsService: InsightsService,
     private readonly exposureSettingsService: ExposureSettingsService,
   ) {}
 
@@ -88,7 +90,31 @@ export class PublicContentController {
     return member;
   }
 
+  // ===== HISTORY (연혁) =====
+
+  @ApiOperation({ summary: '연혁 전체 조회 (연도별 그룹화, 공개)' })
+  @ApiResponse({ status: 200, description: '연혁 전체 조회 성공 (연도별 그룹화된 데이터)' })
+  @Get('history/all')
+  async getAllHistory() {
+    const [data, isExposed] = await Promise.all([
+      this.historyService.getAllHistoryGroupedByYear(),
+      this.exposureSettingsService.isHistoryPageExposed(),
+    ]);
+
+    return {
+      isExposed,
+      data,
+    };
+  }
+
   // ===== AWARDS (수상/인증) =====
+
+  @ApiOperation({ summary: '수상/인증 전체 조회 (연도별 그룹화, 공개)' })
+  @ApiResponse({ status: 200, description: '수상/인증 전체 조회 성공 (연도별 그룹화된 데이터)' })
+  @Get('awards/all')
+  async getAllAwards() {
+    return this.awardService.getAllAwardsGroupedByYear();
+  }
 
   @ApiOperation({ summary: '수상/인증 목록 조회 (공개)' })
   @ApiResponse({ status: 200, description: '수상/인증 목록 조회 성공' })
@@ -120,19 +146,6 @@ export class PublicContentController {
       ...awardsData,
       isExposed,
     };
-  }
-
-  @ApiOperation({ summary: '수상/인증 상세 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '수상/인증 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '수상/인증을 찾을 수 없습니다' })
-  @Get('awards/:id')
-  async getAwardDetail(@Param('id', ParseIntPipe) id: number) {
-    const award = await this.awardService.findAwardById(id);
-    // Only return if exposed
-    if (!award.isExposed) {
-      throw new NotFoundException('수상/인증을 찾을 수 없습니다.');
-    }
-    return award;
   }
 
 
@@ -391,306 +404,70 @@ export class PublicContentController {
 
   // ===== INSIGHTS (인사이트) =====
 
-  @ApiOperation({ summary: '인사이트 카테고리 목록 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '인사이트 카테고리 목록 조회 성공' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'search', required: false, type: String, description: '카테고리명으로 검색' })
-  @ApiQuery({ name: 'boardType', required: false, enum: ['갤러리', '스니펫', '게시판'], description: '게시판 유형 필터링' })
+  @ApiOperation({ summary: '인사이트 목록 조회 (공개, 페이지네이션 및 필터 지원)' })
+  @ApiResponse({ status: 200, description: '인사이트 목록 조회 성공' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1, description: '페이지 번호 (기본: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20, description: '페이지당 항목 수 (기본: 20)' })
+  @ApiQuery({ name: 'categoryId', required: false, type: Number, description: '카테고리 ID 필터링' })
+  @ApiQuery({ name: 'subcategoryId', required: false, type: Number, description: '서브카테고리 ID 필터링' })
   @Get('insights')
   async getInsights(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string,
-    @Query('boardType') boardType?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('subcategoryId') subcategoryId?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
+    const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
+    const subcategoryIdNum = subcategoryId ? parseInt(subcategoryId, 10) : undefined;
 
-    // 모든 카테고리 목록 반환 (data rooms, 노출된 것만)
-    const roomsResult = await this.dataRoomService.findAllRooms({
-      search,
-      boardType,
+    return this.insightsService.getPublicInsights({
       page: pageNum,
       limit: limitNum,
-      isExposed: true, // Only exposed categories
-      includeHidden: false,
+      categoryId: categoryIdNum,
+      subcategoryId: subcategoryIdNum,
     });
-
-    // Column은 기본 카테고리이므로 목록에 포함
-    const shouldIncludeColumn = !search ||
-      search.toLowerCase().includes('column') ||
-      search.toLowerCase().includes('칼럼');
-
-    if (shouldIncludeColumn && (!boardType || boardType === '갤러리')) {
-      // Column 카테고리의 실제 아이템 개수 조회
-      const columnCountResult = await this.columnService.findAll({
-        isExposed: true,
-        includeHidden: false,
-        page: 1,
-        limit: 1,
-      });
-
-      // Column 카테고리 정보 추가
-      const columnCategory = {
-        id: 0, // 특별 ID로 표시
-        name: 'column',
-        nameLabel: 'Column',
-        boardType: '갤러리',
-        boardTypeLabel: '갤러리',
-        exposureType: 'ALL',
-        exposureTypeLabel: '전체',
-        enableComments: false,
-        commentsLabel: 'N',
-        isExposed: true,
-        exposedLabel: 'Y',
-        contentCount: columnCountResult.total,
-        createdAt: new Date(),
-        createdAtFormatted: '',
-        updatedAt: new Date(),
-        updatedAtFormatted: '',
-        isDefault: true, // 기본 카테고리 표시
-      };
-
-      // Column 카테고리를 첫 번째로 추가
-      return {
-        items: [columnCategory, ...roomsResult.items],
-        total: roomsResult.total + 1,
-        page: roomsResult.page,
-        limit: roomsResult.limit,
-      };
-    }
-
-    return roomsResult;
   }
 
-  @ApiOperation({ summary: '인사이트 카테고리 상세 조회 (카테고리 정보 + 아이템 목록 포함)' })
-  @ApiResponse({ status: 200, description: '인사이트 카테고리 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '카테고리를 찾을 수 없습니다' })
-  @ApiQuery({ name: 'subcategory', required: false, type: String, description: '중분류명 필터 (예: 업종별, 컨설팅 업무분야)' })
-  @ApiQuery({ name: 'search', required: false, type: String, description: '아이템명 검색' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @Get('insights/:categoryName')
-  async getInsightCategory(
-    @Param('categoryName') categoryName: string,
-    @Query('subcategory') subcategory?: string,
-    @Query('search') search?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
-  ) {
-    const pageNum = page ? parseInt(page, 10) : 1;
-    const limitNum = limit ? parseInt(limit, 10) : 20;
-
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      // Column 카테고리 정보 + 아이템 목록
-      const columnCountResult = await this.columnService.findAll({
-        search,
-        categoryName: subcategory, // 중분류명으로 필터링
-        page: pageNum,
-        limit: limitNum,
-        isExposed: true, // Only exposed columns
-        includeHidden: false,
-      });
-
-      // Column 카테고리 정보
-      const categoryInfo = {
-        id: 0,
-        name: 'column',
-        nameLabel: 'Column',
-        boardType: '갤러리',
-        boardTypeLabel: '갤러리',
-        exposureType: 'ALL',
-        exposureTypeLabel: '전체',
-        enableComments: false,
-        commentsLabel: 'N',
-        isExposed: true,
-        exposedLabel: 'Y',
-        isDefault: true,
-      };
-
-      return {
-        category: categoryInfo,
-        items: columnCountResult.items,
-        pagination: {
-          total: columnCountResult.total,
-          page: columnCountResult.page,
-          limit: columnCountResult.limit,
-        },
-      };
-    } else {
-      // 다른 카테고리 정보 + 아이템 목록
-      try {
-        const matchingRoom = await this.dataRoomService.findRoomByName(categoryName);
-        // 카테고리가 노출되지 않았으면 에러
-        if (!matchingRoom.isExposed) {
-          throw new NotFoundException(`카테고리 "${categoryName}"를 찾을 수 없습니다.`);
-        }
-
-        // 해당 카테고리의 콘텐츠 목록 반환 (노출된 것만)
-        const contentsResult = await this.dataRoomService.findContents(matchingRoom.id, {
-          search,
-          categoryName: subcategory, // 중분류명으로 필터링
-          page: pageNum,
-          limit: limitNum,
-          isExposed: true, // Only exposed contents
-          includeHidden: false,
-        });
-
-        // 카테고리 정보
-        const categoryInfo = {
-          id: matchingRoom.id,
-          name: matchingRoom.name,
-          nameLabel: matchingRoom.name,
-          boardType: matchingRoom.boardType,
-          boardTypeLabel: matchingRoom.boardTypeLabel,
-          exposureType: matchingRoom.exposureType,
-          exposureTypeLabel: matchingRoom.exposureTypeLabel,
-          enableComments: matchingRoom.enableComments,
-          commentsLabel: matchingRoom.commentsLabel,
-          isExposed: matchingRoom.isExposed,
-          exposedLabel: matchingRoom.exposedLabel,
-          isDefault: false,
-        };
-
-        return {
-          category: categoryInfo,
-          items: contentsResult.items,
-          pagination: {
-            total: contentsResult.total,
-            page: contentsResult.page,
-            limit: contentsResult.limit,
-          },
-        };
-      } catch (error) {
-        if (error instanceof NotFoundException) {
-          throw error;
-        }
-        throw new NotFoundException(`카테고리 "${categoryName}"를 찾을 수 없습니다.`);
-      }
-    }
+  @ApiOperation({ summary: '인사이트 상세 조회 (공개)' })
+  @ApiResponse({ status: 200, description: '인사이트 상세 조회 성공' })
+  @ApiResponse({ status: 404, description: '인사이트를 찾을 수 없습니다' })
+  @Get('insights/:id')
+  async getInsightDetail(@Param('id', ParseIntPipe) id: number) {
+    return this.insightsService.getPublicInsightById(id);
   }
 
-  @ApiOperation({ summary: '인사이트 아이템 상세 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '인사이트 아이템 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '아이템을 찾을 수 없습니다' })
-  @Get('insights/:categoryName/items/:id')
-  async getInsightItemDetail(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      // Column 아이템 상세
-      const column = await this.columnService.findById(id);
-      // Only return if exposed
-      if (!column.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      return column;
-    } else {
-      // 다른 카테고리의 아이템 상세 (data room content)
-      const content = await this.dataRoomService.findContentById(id);
-      // Only return if exposed
-      if (!content.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      // 카테고리도 노출되어야 함
-      if (content.dataRoom && !content.dataRoom.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      return content;
-    }
-  }
-
-  @ApiOperation({ summary: '인사이트 아이템 조회수 증가 (공개)' })
+  @ApiOperation({ summary: '인사이트 조회수 증가 (공개)' })
   @ApiResponse({ status: 200, description: '조회수 증가 성공' })
-  @ApiResponse({ status: 404, description: '아이템을 찾을 수 없습니다' })
-  @Post('insights/:categoryName/items/:id/increment-view')
-  async incrementInsightViewCount(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    // Column은 조회수 기능 없음 (필요시 추가 가능)
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      // Column은 조회수 증가 없이 그냥 성공 반환
-      return { success: true, message: '조회수가 증가되었습니다.' };
-    } else {
-      // 다른 카테고리의 아이템 조회수 증가 (data room content)
-      const content = await this.dataRoomService.findContentById(id);
-      // Only increment if exposed
-      if (!content.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      // 카테고리도 노출되어야 함
-      if (content.dataRoom && !content.dataRoom.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      return this.dataRoomService.incrementViewCount(id);
-    }
+  @ApiResponse({ status: 404, description: '인사이트를 찾을 수 없습니다' })
+  @Post('insights/:id/increment-view')
+  async incrementInsightViewCount(@Param('id', ParseIntPipe) id: number) {
+    return this.insightsService.incrementViewCount(id);
   }
 
-  // ===== COMMENTS (댓글) =====
+  // ===== INSIGHTS COMMENTS (인사이트 댓글) =====
 
-  @ApiOperation({ summary: '인사이트 아이템 댓글 목록 조회 (공개)' })
+  @ApiOperation({ summary: '인사이트 댓글 목록 조회 (공개)' })
   @ApiResponse({ status: 200, description: '댓글 목록 조회 성공' })
-  @ApiResponse({ status: 404, description: '아이템을 찾을 수 없습니다' })
-  @Get('insights/:categoryName/items/:id/comments')
-  async getInsightItemComments(
-    @Param('categoryName') categoryName: string,
-    @Param('id', ParseIntPipe) id: number,
-  ) {
-    // Check if item exists and is exposed
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      const column = await this.columnService.findById(id);
-      if (!column.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      // Note: Column category always has comments enabled (default)
-      const comments = await this.columnService.findComments(id);
-      return {
-        total: comments.length,
-        items: comments.map((comment) => ({
-          id: comment.id,
-          body: comment.isHidden ? '해당 댓글은 다수 사용자의 신고에 의해 가려졌습니다.' : comment.body,
-          authorName: comment.authorName || '-',
-          memberId: comment.memberId,
-          isHidden: comment.isHidden,
-          isReported: comment.isReported,
-          createdAt: comment.createdAt,
-          createdAtFormatted: this.formatCommentDate(comment.createdAt),
-        })),
-      };
-    } else {
-      const content = await this.dataRoomService.findContentById(id);
-      if (!content.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      // Check if category has comments enabled
-      if (content.dataRoom && !content.dataRoom.enableComments) {
-        throw new BadRequestException('이 카테고리는 댓글 기능이 비활성화되어 있습니다.');
-      }
-      const comments = await this.dataRoomService.findComments(id);
-      return {
-        total: comments.length,
-        items: comments.map((comment) => ({
-          id: comment.id,
-          body: comment.isHidden ? '해당 댓글은 다수 사용자의 신고에 의해 가려졌습니다.' : comment.body,
-          authorName: comment.authorName || '-',
-          memberId: comment.memberId,
-          isHidden: comment.isHidden,
-          isReported: comment.isReported,
-          createdAt: comment.createdAt,
-          createdAtFormatted: this.formatCommentDate(comment.createdAt),
-        })),
-      };
-    }
+  @ApiResponse({ status: 404, description: '인사이트를 찾을 수 없습니다' })
+  @Get('insights/:id/comments')
+  async getInsightComments(@Param('id', ParseIntPipe) id: number) {
+    const result = await this.insightsService.getComments(id);
+    return {
+      ...result,
+      items: result.items.map((comment) => ({
+        ...comment,
+        createdAtFormatted: this.formatCommentDate(comment.createdAt),
+      })),
+    };
   }
 
-  @ApiOperation({ summary: '인사이트 아이템 댓글 작성 (인증 필요)' })
+  @ApiOperation({ summary: '인사이트 댓글 작성 (인증 필요)' })
   @ApiResponse({ status: 201, description: '댓글 작성 성공' })
   @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
-  @ApiResponse({ status: 404, description: '아이템을 찾을 수 없습니다' })
-  @ApiResponse({ status: 400, description: '댓글 내용이 없거나 카테고리에 댓글 기능이 비활성화되어 있습니다.' })
+  @ApiResponse({ status: 404, description: '인사이트를 찾을 수 없습니다' })
+  @ApiResponse({ status: 400, description: '댓글 내용이 없거나 댓글 기능이 비활성화되어 있습니다.' })
   @ApiBearerAuth('user-auth')
   @UseGuards(JwtAuthGuard)
   @ApiBody({
@@ -702,9 +479,8 @@ export class PublicContentController {
       },
     },
   })
-  @Post('insights/:categoryName/items/:id/comments')
-  async createInsightItemComment(
-    @Param('categoryName') categoryName: string,
+  @Post('insights/:id/comments')
+  async createInsightComment(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { body: string },
     @Req() req: any,
@@ -716,73 +492,49 @@ export class PublicContentController {
     const memberId = req.user?.sub; // JWT payload에서 member ID 가져오기
     const memberEmail = req.user?.email;
 
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      const column = await this.columnService.findById(id);
-      if (!column.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      // Column category always has comments enabled
-      return this.columnService.createComment(id, {
-        body: body.body.trim(),
-        memberId,
-        authorName: memberEmail || '회원',
-      });
-    } else {
-      const content = await this.dataRoomService.findContentById(id);
-      if (!content.isExposed) {
-        throw new NotFoundException('아이템을 찾을 수 없습니다.');
-      }
-      // Check if category has comments enabled
-      if (content.dataRoom && !content.dataRoom.enableComments) {
-        throw new BadRequestException('이 카테고리는 댓글 기능이 비활성화되어 있습니다.');
-      }
-      return this.dataRoomService.createComment(id, {
-        body: body.body.trim(),
-        memberId,
-        authorName: memberEmail || '회원',
-      });
-    }
+    return this.insightsService.createComment(id, {
+      body: body.body.trim(),
+      memberId,
+      authorName: memberEmail || '회원',
+    });
   }
 
-  @ApiOperation({ summary: '인사이트 아이템 댓글 삭제 (인증 필요, 본인 댓글만)' })
+  @ApiOperation({ summary: '인사이트 댓글 삭제 (인증 필요, 본인 댓글만)' })
   @ApiResponse({ status: 200, description: '댓글 삭제 성공' })
   @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
   @ApiResponse({ status: 404, description: '댓글을 찾을 수 없습니다' })
   @ApiBearerAuth('user-auth')
   @UseGuards(JwtAuthGuard)
-  @Delete('insights/:categoryName/items/:id/comments/:commentId')
-  async deleteInsightItemComment(
-    @Param('categoryName') categoryName: string,
+  @Delete('insights/:id/comments/:commentId')
+  async deleteInsightComment(
     @Param('id', ParseIntPipe) id: number,
     @Param('commentId', ParseIntPipe) commentId: number,
     @Req() req: any,
   ) {
     const memberId = req.user?.sub;
-
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.deleteComment(commentId, memberId);
-    } else {
-      return this.dataRoomService.deleteComment(commentId, memberId);
-    }
+    return this.insightsService.deleteComment(commentId, memberId);
   }
 
-  @ApiOperation({ summary: '인사이트 아이템 댓글 신고 (인증 필요)' })
+  @ApiOperation({ summary: '인사이트 댓글 신고 (인증 필요)' })
   @ApiResponse({ status: 200, description: '댓글 신고 성공' })
   @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
   @ApiResponse({ status: 404, description: '댓글을 찾을 수 없습니다' })
+  @ApiResponse({ status: 400, description: '본인의 댓글은 신고할 수 없습니다.' })
   @ApiBearerAuth('user-auth')
   @UseGuards(JwtAuthGuard)
-  @Post('insights/:categoryName/items/:id/comments/:commentId/report')
-  async reportInsightItemComment(
-    @Param('categoryName') categoryName: string,
+  @Post('insights/:id/comments/:commentId/report')
+  async reportInsightComment(
     @Param('id', ParseIntPipe) id: number,
     @Param('commentId', ParseIntPipe) commentId: number,
+    @Req() req: any,
   ) {
-    if (categoryName === 'column' || categoryName.toLowerCase() === 'column') {
-      return this.columnService.reportComment(commentId);
-    } else {
-      return this.dataRoomService.reportComment(commentId);
+    // Get reporter ID from authenticated user (do NOT accept from body)
+    const reporterId = req.user?.sub || req.user?.id;
+    if (!reporterId) {
+      throw new BadRequestException('인증 정보가 없습니다.');
     }
+
+    return this.insightsService.reportComment(commentId, reporterId);
   }
 
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm)

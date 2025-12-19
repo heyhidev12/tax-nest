@@ -218,6 +218,51 @@ export class HistoryService {
     return { success: true };
   }
 
+  /**
+   * Get all exposed history items grouped by year (for user pages)
+   * Returns data grouped by year, sorted by year descending, items by month/date descending
+   */
+  async getAllHistoryGroupedByYear() {
+    // Fetch all exposed years with their exposed items
+    const years = await this.yearRepo.find({
+      where: { isExposed: true },
+      relations: ['items'],
+      order: { year: 'DESC' },
+    });
+
+    // Filter and format items, then group by year
+    const groupedData = years
+      .map((year) => {
+        // Filter only exposed items
+        const exposedItems = (year.items || [])
+          .filter((item) => item.isExposed)
+          .sort((a, b) => {
+            // Sort by month descending, then by createdAt descending
+            const monthA = a.month || 0;
+            const monthB = b.month || 0;
+            if (monthA !== monthB) {
+              return monthB - monthA; // Descending
+            }
+            return b.createdAt.getTime() - a.createdAt.getTime(); // Descending
+          })
+          .map((item) => ({
+            id: item.id,
+            month: item.month,
+            content: item.content,
+            displayOrder: item.displayOrder,
+            createdAt: item.createdAt,
+          }));
+
+        return {
+          year: year.year,
+          items: exposedItems,
+        };
+      })
+      .filter((group) => group.items.length > 0); // Only include years with items
+
+    return groupedData;
+  }
+
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
   private formatDateTime(date: Date): string {
     const d = new Date(date);

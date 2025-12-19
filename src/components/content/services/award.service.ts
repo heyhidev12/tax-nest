@@ -364,6 +364,58 @@ export class AwardService {
     return { success: true };
   }
 
+  /**
+   * Get all exposed awards grouped by year (for user pages)
+   * Returns data grouped by year, sorted by year descending, items by createdAt descending
+   */
+  async getAllAwardsGroupedByYear() {
+    // Fetch all exposed awards with their year relations
+    const awards = await this.awardRepo.find({
+      where: { isExposed: true },
+      relations: ['awardYear'],
+      order: { createdAt: 'DESC' },
+    });
+
+    // Filter only awards where the year is also exposed
+    const exposedAwards = awards.filter(
+      (award) => award.awardYear && award.awardYear.isExposed,
+    );
+
+    // Group by year (extract year number from yearName)
+    const yearMap = new Map<number, Award[]>();
+
+    exposedAwards.forEach((award) => {
+      // Extract year number from yearName (e.g., "2025" -> 2025)
+      const yearNum = parseInt(award.awardYear.yearName, 10);
+      if (!isNaN(yearNum)) {
+        if (!yearMap.has(yearNum)) {
+          yearMap.set(yearNum, []);
+        }
+        yearMap.get(yearNum)!.push(award);
+      }
+    });
+
+    // Convert to array format, sorted by year descending
+    const groupedData = Array.from(yearMap.entries())
+      .sort((a, b) => b[0] - a[0]) // Sort years descending
+      .map(([year, items]) => ({
+        year,
+        items: items
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()) // Sort items by createdAt descending
+          .map((award) => ({
+            id: award.id,
+            name: award.name,
+            source: award.source,
+            imageUrl: award.imageUrl,
+            isMainExposed: award.isMainExposed,
+            displayOrder: award.displayOrder,
+            createdAt: award.createdAt,
+          })),
+      }));
+
+    return groupedData;
+  }
+
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
   private formatDateTime(date: Date): string {
     const d = new Date(date);
