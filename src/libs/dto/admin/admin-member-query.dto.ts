@@ -9,7 +9,7 @@ export class AdminMemberQueryDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ example: 'GENERAL', enum: MemberType, description: '회원 유형 필터 (GENERAL: 일반회원, CORPORATE: 법인대표/직원, INSURANCE: 보험사 직원)' })
+  @ApiPropertyOptional({ example: 'GENERAL', enum: MemberType, description: '회원 유형 필터 (GENERAL: 일반회원, OTHER: 법인대표/직원, INSURANCE: 보험사 직원)' })
   @IsOptional()
   @IsEnum(MemberType)
   memberType?: MemberType;

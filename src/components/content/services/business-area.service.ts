@@ -4,6 +4,7 @@ import { Repository, In } from 'typeorm';
 import { BusinessArea } from 'src/libs/entity/business-area.entity';
 import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
+import { TaxMember } from 'src/libs/entity/tax-member.entity';
 import { CreateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/create-category.dto';
 import { UpdateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/update-category.dto';
 import { CreateBusinessAreaItemDto } from 'src/libs/dto/business-area/create-item.dto';
@@ -13,6 +14,8 @@ interface BusinessAreaListOptions {
   search?: string;
   majorCategoryId?: number;
   minorCategoryId?: number;
+  memberId?: number; // Filter by member ID (matches minorCategory.name with member workAreas)
+  minorCategoryName?: string; // Filter by minor category name directly
   isExposed?: boolean;
   isMainExposed?: boolean;
   sort?: 'latest' | 'oldest' | 'order';
@@ -30,6 +33,8 @@ export class BusinessAreaService {
     private readonly categoryRepo: Repository<BusinessAreaCategory>,
     @InjectRepository(InsightsSubcategory)
     private readonly insightsSubcategoryRepo: Repository<InsightsSubcategory>,
+    @InjectRepository(TaxMember)
+    private readonly taxMemberRepo: Repository<TaxMember>,
   ) {}
 
   // ========== CATEGORY METHODS ==========
@@ -282,6 +287,8 @@ export class BusinessAreaService {
       search, 
       majorCategoryId,
       minorCategoryId,
+      memberId,
+      minorCategoryName,
       isExposed,
       isMainExposed,
       sort = 'order',
@@ -314,6 +321,30 @@ export class BusinessAreaService {
     // 중분류 필터
     if (minorCategoryId) {
       qb.andWhere('area.minorCategoryId = :minorCategoryId', { minorCategoryId });
+    }
+
+    // Filter by memberId: Get member's workAreas, then filter by minorCategory.name
+    if (memberId) {
+      const member = await this.taxMemberRepo.findOne({ where: { id: memberId } });
+      if (!member) {
+        throw new NotFoundException('구성원을 찾을 수 없습니다.');
+      }
+
+      // Get workAreas array (filter out empty/null values)
+      const workAreas = (member.workAreas || []).filter(Boolean);
+      
+      if (workAreas.length === 0) {
+        // If member has no workAreas, return empty result
+        qb.andWhere('1 = 0'); // Always false condition
+      } else {
+        // Filter business areas where minorCategory.name is in the member's workAreas
+        qb.andWhere('minorCategory.name IN (:...workAreas)', { workAreas });
+      }
+    }
+
+    // Filter by minorCategoryName directly
+    if (minorCategoryName) {
+      qb.andWhere('minorCategory.name = :minorCategoryName', { minorCategoryName });
     }
 
     // 업무분야명 검색

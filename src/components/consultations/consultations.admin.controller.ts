@@ -4,7 +4,7 @@ import {
   Query,
   Param,
   ParseIntPipe,
-  Patch,
+  Post,
   Body,
   Delete,
   UseGuards,
@@ -43,7 +43,7 @@ export class AdminConsultationsController {
     return this.consultationsService.adminGetOne(id);
   }
 
-  @Patch(':id/answer')
+  @Post(':id/answer')
   setAnswer(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { answer: string; status?: ConsultationStatus },

@@ -1,11 +1,7 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { ConsultationStatus } from '../enums/consultations.enum';
 import { MemberFlag } from '../enums/members.enum';
+import { Member } from './member.entity';
 
 @Entity('consultations')
 export class Consultation {
@@ -47,9 +43,26 @@ export class Consultation {
   @Column({ default: false })
   termsAgreed: boolean;
 
+  /**
+   * 회원/비회원 구분
+   * - MEMBER: 로그인한 회원이 신청한 상담
+   * - NON_MEMBER: 비회원(게스트)이 신청한 상담
+   */
   // 회원/비회원 구분
   @Column({ type: 'enum', enum: MemberFlag, default: MemberFlag.NON_MEMBER })
   memberFlag: MemberFlag;
+
+  /**
+   * 상담 신청한 회원 (선택)
+   * - 로그인한 회원이 상담을 신청한 경우에만 설정
+   * - 비회원(게스트)의 상담은 null
+   */
+  @Column({ nullable: true })
+  memberId?: number | null;
+
+  @ManyToOne(() => Member, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'memberId' })
+  member?: Member | null;
 
   // 진행 상태 (기본: 신청완료, 관리자에서 완료로 변경)
   @Column({ type: 'enum', enum: ConsultationStatus, default: ConsultationStatus.PENDING })

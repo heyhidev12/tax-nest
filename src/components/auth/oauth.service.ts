@@ -1,9 +1,9 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { Member } from 'src/libs/entity/member.entity';
-import { MemberType } from 'src/libs/enums/members.enum';
+import { MemberType, MemberStatus } from 'src/libs/enums/members.enum';
 
 export interface OAuthProfile {
   provider: 'google' | 'kakao' | 'naver';
@@ -31,6 +31,11 @@ export class OAuthService {
     });
 
     if (member) {
+      // Check if member is withdrawn
+      if (member.status === MemberStatus.WITHDRAWN) {
+        throw new UnauthorizedException('탈퇴한 회원은 로그인할 수 없습니다.');
+      }
+
       // Existing user - update profile if needed
       if (member.email !== profile.email || member.name !== profile.name) {
         member.email = profile.email;
@@ -44,6 +49,10 @@ export class OAuthService {
       });
 
       if (existingByEmail) {
+        // Check if existing account is withdrawn
+        if (existingByEmail.status === MemberStatus.WITHDRAWN) {
+          throw new UnauthorizedException('탈퇴한 회원은 로그인할 수 없습니다.');
+        }
         // Link SNS account to existing account
         existingByEmail.provider = profile.provider;
         existingByEmail.providerId = profile.providerId;
@@ -62,12 +71,21 @@ export class OAuthService {
           counter++;
         }
 
+        // Generate a unique phone number placeholder (since it's required and unique)
+        // Use a pattern that won't conflict with real phone numbers
+        let phoneNumber = `01000000000`;
+        let phoneCounter = 1;
+        while (await this.memberRepo.findOne({ where: { phoneNumber } })) {
+          phoneNumber = `0100000000${phoneCounter}`;
+          phoneCounter++;
+        }
+
         member = this.memberRepo.create({
           loginId: finalLoginId,
           passwordHash: undefined, // SNS users don't have password
           name: profile.name,
           email: profile.email,
-          phoneNumber: '', // Will be filled later
+          phoneNumber: phoneNumber, // Unique placeholder, user should update later
           memberType: MemberType.GENERAL,
           isApproved: true, // SNS users are auto-approved
           provider: profile.provider,

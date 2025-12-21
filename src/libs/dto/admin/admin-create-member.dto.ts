@@ -6,7 +6,7 @@ import { IsStrongPassword } from 'src/libs/validators/password.validator';
 import { IsKoreanEnglishName } from 'src/libs/validators/korean-english-name.validator';
 
 export class AdminCreateMemberDto {
-  @ApiProperty({ example: 'GENERAL', enum: MemberType, description: '회원 유형 (GENERAL: 일반회원, CORPORATE: 법인대표/직원, INSURANCE: 보험사 직원)' })
+  @ApiProperty({ example: 'GENERAL', enum: MemberType, description: '회원 유형 (GENERAL: 일반회원, OTHER: 법인대표/직원, INSURANCE: 보험사 직원)' })
   @IsEnum(MemberType, { message: '올바른 회원 유형을 선택해주세요.' })
   memberType: MemberType;
 

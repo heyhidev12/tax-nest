@@ -2,10 +2,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
+import { BusinessArea } from 'src/libs/entity/business-area.entity';
 
 interface TaxMemberListOptions {
   search?: string; // Search by insurance company name (affiliation) or member name
   workArea?: string;
+  businessAreaId?: number; // Filter by business area item ID (matches minorCategory.name)
   isExposed?: boolean;
   sort?: 'latest' | 'oldest' | 'order';
   page?: number;
@@ -18,6 +20,8 @@ export class TaxMemberService {
   constructor(
     @InjectRepository(TaxMember)
     private readonly memberRepo: Repository<TaxMember>,
+    @InjectRepository(BusinessArea)
+    private readonly businessAreaRepo: Repository<BusinessArea>,
   ) {}
 
   async create(data: Partial<TaxMember>) {
@@ -28,7 +32,8 @@ export class TaxMemberService {
   async findAll(options: TaxMemberListOptions = {}) {
     const { 
       search, 
-      workArea, 
+      workArea,
+      businessAreaId,
       isExposed,
       sort = 'order',
       page = 1, 
@@ -55,6 +60,28 @@ export class TaxMemberService {
     if (search) {
       conditions.push('(member.name LIKE :search OR member.affiliation LIKE :search)');
       params.search = `%${search}%`;
+    }
+
+    // Filter by businessAreaId: Get the business area item, then filter by its minorCategory.name
+    if (businessAreaId) {
+      const businessArea = await this.businessAreaRepo.findOne({
+        where: { id: businessAreaId },
+        relations: ['minorCategory'],
+      });
+      
+      if (!businessArea) {
+        throw new NotFoundException('업무분야를 찾을 수 없습니다.');
+      }
+
+      const minorCategoryName = businessArea.minorCategory?.name;
+      if (!minorCategoryName) {
+        throw new NotFoundException('업무분야의 카테고리 정보를 찾을 수 없습니다.');
+      }
+
+      // Filter members where workAreas array contains the minorCategory.name
+      // Using JSON_CONTAINS for MySQL/MariaDB compatibility
+      conditions.push('JSON_CONTAINS(member.workAreas, :minorCategoryName)');
+      params.minorCategoryName = JSON.stringify(minorCategoryName);
     }
 
     if (workArea) {

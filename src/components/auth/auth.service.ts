@@ -9,6 +9,7 @@ import { MembersService } from '../members/members.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Member } from 'src/libs/entity/member.entity';
+import { MemberStatus } from 'src/libs/enums/members.enum';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { VerificationService } from '../verification/verification.service';
@@ -34,8 +35,17 @@ export class AuthService {
     if (dto.password !== dto.passwordConfirm)
       throw new BadRequestException('비밀번호가 일치하지 않습니다.');
 
-    const exists = await this.membersService.findByLoginId(dto.loginId);
-    if (exists) throw new BadRequestException('이미 사용 중인 ID 입니다.');
+    // Check loginId uniqueness
+    const existingLoginId = await this.membersService.findByLoginId(dto.loginId);
+    if (existingLoginId) throw new BadRequestException('이미 사용 중인 아이디입니다.');
+
+    // Check email uniqueness
+    const existingEmail = await this.membersService.findByEmail(dto.email);
+    if (existingEmail) throw new BadRequestException('이미 등록된 이메일입니다.');
+
+    // Check phoneNumber uniqueness
+    const existingPhone = await this.membersService.findByPhoneNumber(dto.phoneNumber);
+    if (existingPhone) throw new BadRequestException('이미 등록된 휴대폰 번호입니다.');
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
@@ -75,6 +85,11 @@ export class AuthService {
   async login(dto) {
     const member = await this.membersService.findByLoginId(dto.loginId);
     if (!member) throw new UnauthorizedException('ID 또는 비밀번호가 올바르지 않습니다.');
+
+    // 탈퇴한 회원은 로그인 불가
+    if (member.status === MemberStatus.WITHDRAWN) {
+      throw new UnauthorizedException('탈퇴한 회원은 로그인할 수 없습니다.');
+    }
 
     // SNS 로그인 사용자는 비밀번호가 없음
     if (!member.passwordHash) {

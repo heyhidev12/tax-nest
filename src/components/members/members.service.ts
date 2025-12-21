@@ -5,6 +5,7 @@ import { Consultation } from 'src/libs/entity/consultation.entity';
 import { In, Repository } from 'typeorm';
 import { MemberStatus, MemberType } from 'src/libs/enums/members.enum';
 import * as bcrypt from 'bcrypt';
+import { AdminUpdateMemberDto } from 'src/libs/dto/admin/admin-update-member.dto';
 
 interface MemberListOptions {
   search?: string;
@@ -38,6 +39,14 @@ export class MembersService {
 
   findByLoginId(loginId: string) {
     return this.memberRepo.findOne({ where: { loginId } });
+  }
+
+  findByEmail(email: string) {
+    return this.memberRepo.findOne({ where: { email } });
+  }
+
+  findByPhoneNumber(phoneNumber: string) {
+    return this.memberRepo.findOne({ where: { phoneNumber } });
   }
 
   create(data: Partial<Member>) {
@@ -75,53 +84,42 @@ export class MembersService {
 
     const qb = this.memberRepo.createQueryBuilder('member');
 
-    // 조건들을 배열로 수집
     const conditions: string[] = [];
     const params: Record<string, any> = {};
 
-    // 회원 유형 필터
     if (memberType) {
       conditions.push('member.memberType = :memberType');
       params.memberType = memberType;
     }
 
-    // 회원 상태 필터 (이용중/탈퇴)
     if (status) {
       conditions.push('member.status = :status');
       params.status = status;
     }
 
-    // 승인 여부 필터
     if (isApproved !== undefined) {
       conditions.push('member.isApproved = :isApproved');
       params.isApproved = isApproved;
     }
 
-    // 검색: 회원 명 또는 휴대폰번호 (이미지 요구사항에 따라)
     if (search) {
       conditions.push('(member.name LIKE :search OR member.phoneNumber LIKE :search)');
       params.search = `%${search}%`;
     }
 
-    // 조건 적용
     if (conditions.length > 0) {
       qb.where(conditions.join(' AND '), params);
     }
 
-    // 정렬 (기본: 최신순 - 등록일 DESC)
     qb.orderBy('member.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
 
-    // 페이지네이션
     const skip = (page - 1) * limit;
     qb.skip(skip).take(limit);
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 회원유형, 아이디, 이름, 이메일, 휴대폰 번호, 뉴스레터 유무, 가입일시, 회원상태
-    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
     const formattedItems = items.map((m, index) => {
-      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest' 
+      const no = sort === 'latest'
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
 
@@ -166,7 +164,6 @@ export class MembersService {
       take: limit,
     });
 
-    // 응답 포맷
     const formattedItems = items.map((m, index) => ({
       no: total - ((page - 1) * limit + index),
       id: m.id,
@@ -184,7 +181,6 @@ export class MembersService {
     return { items: formattedItems, total, page, limit };
   }
 
-  // 회원 승인
   async adminApprove(id: number) {
     const member = await this.findById(id);
     member.isApproved = true;
@@ -192,7 +188,6 @@ export class MembersService {
     return { success: true, message: '회원이 승인되었습니다.' };
   }
 
-  // 회원 승인 취소
   async adminRejectApproval(id: number) {
     const member = await this.findById(id);
     member.isApproved = false;
@@ -200,22 +195,19 @@ export class MembersService {
     return { success: true, message: '회원 승인이 취소되었습니다.' };
   }
 
-  // 회원 상세 조회 (상담 신청 수 포함)
   async adminGetOne(id: number) {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
 
-    // 상담 신청 수 조회 (이름과 전화번호로 매칭)
     const consultationCount = await this.consultationRepo.count({
-      where: { 
+      where: {
         name: member.name,
         phoneNumber: member.phoneNumber,
       },
     });
 
-    // passwordHash 제외
     const { passwordHash, ...rest } = member;
 
     return {
@@ -230,17 +222,27 @@ export class MembersService {
     };
   }
 
-  // 관리자 회원 생성
   async adminCreate(data: CreateMemberData) {
-    // 중복 ID 체크
-    const existing = await this.findByLoginId(data.loginId);
-    if (existing) {
-      throw new BadRequestException('이미 사용 중인 ID입니다.');
+    // Check loginId uniqueness
+    const existingLoginId = await this.findByLoginId(data.loginId);
+    if (existingLoginId) {
+      throw new BadRequestException('이미 사용 중인 아이디입니다.');
+    }
+
+    // Check email uniqueness
+    const existingEmail = await this.findByEmail(data.email);
+    if (existingEmail) {
+      throw new BadRequestException('이미 등록된 이메일입니다.');
+    }
+
+    // Check phoneNumber uniqueness
+    const existingPhone = await this.findByPhoneNumber(data.phoneNumber);
+    if (existingPhone) {
+      throw new BadRequestException('이미 등록된 휴대폰 번호입니다.');
     }
 
     const passwordHash = await bcrypt.hash(data.password, 10);
 
-    // 보험사 회원은 기본 미승인, 나머지는 자동 승인
     const isApproved = data.memberType !== MemberType.INSURANCE;
 
     const member = this.memberRepo.create({
@@ -266,7 +268,6 @@ export class MembersService {
     };
   }
 
-  // 회원 삭제 (다중)
   async adminDeleteMany(ids: number[]) {
     const list = await this.memberRepo.find({ where: { id: In(ids) } });
     if (!list.length) return { success: true, deleted: 0 };
@@ -274,23 +275,69 @@ export class MembersService {
     return { success: true, deleted: list.length, message: '삭제가 완료되었습니다.' };
   }
 
-  // 회원 상태 변경 (탈퇴 처리 등)
   async adminUpdateStatus(id: number, status: MemberStatus) {
     const member = await this.findById(id);
     member.status = status;
     await this.memberRepo.save(member);
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: status === MemberStatus.WITHDRAWN ? '회원 탈퇴 처리되었습니다.' : '회원 상태가 변경되었습니다.',
     };
   }
 
-  // 회원 유형 라벨
+  async adminUpdate(id: number, dto: AdminUpdateMemberDto) {
+    const member = await this.findById(id);
+
+    // Validate email uniqueness if being updated
+    if (dto.email !== undefined && dto.email !== member.email) {
+      const existingEmail = await this.findByEmail(dto.email);
+      if (existingEmail && existingEmail.id !== id) {
+        throw new BadRequestException('이미 등록된 이메일입니다.');
+      }
+    }
+
+    // Validate phoneNumber uniqueness if being updated
+    if (dto.phoneNumber !== undefined && dto.phoneNumber !== member.phoneNumber) {
+      const existingPhone = await this.findByPhoneNumber(dto.phoneNumber);
+      if (existingPhone && existingPhone.id !== id) {
+        throw new BadRequestException('이미 등록된 휴대폰 번호입니다.');
+      }
+    }
+
+    if (dto.memberType !== undefined) {
+      member.memberType = dto.memberType;
+    }
+    if (dto.name !== undefined) {
+      member.name = dto.name;
+    }
+    if (dto.email !== undefined) {
+      member.email = dto.email;
+    }
+    if (dto.phoneNumber !== undefined) {
+      member.phoneNumber = dto.phoneNumber;
+    }
+    if (dto.affiliation !== undefined) {
+      member.affiliation = dto.affiliation;
+    }
+    if (dto.newsletterSubscribed !== undefined) {
+      member.newsletterSubscribed = dto.newsletterSubscribed;
+    }
+    if (dto.status !== undefined) {
+      member.status = dto.status;
+    }
+    if (dto.isApproved !== undefined) {
+      member.isApproved = dto.isApproved;
+    }
+
+    await this.memberRepo.save(member);
+    return this.adminGetOne(id);
+  }
+
   private getMemberTypeLabel(memberType: MemberType): string {
     switch (memberType) {
       case MemberType.GENERAL:
         return '일반회원';
-      case MemberType.CORPORATE:
+      case MemberType.OTHER:
         return '법인대표/직원';
       case MemberType.INSURANCE:
         return '보험사 직원';
@@ -299,7 +346,6 @@ export class MembersService {
     }
   }
 
-  // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
   private formatDateTime(date: Date): string {
     const d = new Date(date);
     const year = d.getFullYear();
@@ -310,24 +356,4 @@ export class MembersService {
     const seconds = String(d.getSeconds()).padStart(2, '0');
     return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
   }
-
-
-
-async findByNameAndPhone(name: string, phone: string) {
-  return this.memberRepo.findOne({
-    where: { name, phoneNumber: phone },
-  });
-}
-
-async findByPhone(phone: string) {
-  return this.memberRepo.findOne({
-    where: { phoneNumber: phone },
-  });
-}
-
-async updatePassword(memberId: number, newPassword: string) {
-  const member = await this.findById(memberId);
-  member.passwordHash = await bcrypt.hash(newPassword, 10);
-  await this.memberRepo.save(member);
-}
 }

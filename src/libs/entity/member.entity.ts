@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { MemberType, MemberStatus } from '../enums/members.enum';
+import { MemberType,MemberStatus } from '../enums/members.enum';
 
 @Entity('members')
 export class Member {
@@ -22,10 +22,10 @@ export class Member {
   @Column({ length: 50 })
   name: string;
 
-  @Column()
+  @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ unique: true })
   phoneNumber: string;
 
   @Column({ type: 'enum', enum: MemberType })

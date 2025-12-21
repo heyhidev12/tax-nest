@@ -55,22 +55,33 @@ export class PublicContentController {
   @ApiQuery({ name: 'search', required: false, type: String, description: '이름 또는 소속명으로 검색' })
   @ApiQuery({ name: 'workArea', required: false, type: String, description: '업무 분야로 필터링' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
+  @ApiOperation({ summary: '구성원 목록 조회 (공개)' })
+  @ApiResponse({ status: 200, description: '구성원 목록 조회 성공' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
+  @ApiQuery({ name: 'search', required: false, type: String, description: '구성원명 또는 소속명으로 검색' })
+  @ApiQuery({ name: 'workArea', required: false, type: String, description: '업무분야명으로 필터링' })
+  @ApiQuery({ name: 'businessAreaId', required: false, type: Number, description: '업무분야 항목 ID로 필터링 (해당 업무분야의 minorCategory.name과 일치하는 구성원만 반환)' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
   @Get('members')
   async getMembers(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('workArea') workArea?: string,
+    @Query('businessAreaId') businessAreaId?: string,
     @Query('sort') sort?: 'latest' | 'oldest' | 'order',
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
+    const businessAreaIdNum = businessAreaId ? parseInt(businessAreaId, 10) : undefined;
 
     return this.taxMemberService.findAll({
       page: pageNum,
       limit: limitNum,
       search,
       workArea,
+      businessAreaId: businessAreaIdNum,
       isExposed: true, // Only exposed members
       sort: sort || 'order',
       includeHidden: false,
@@ -359,6 +370,8 @@ export class PublicContentController {
   @ApiQuery({ name: 'search', required: false, type: String, description: '업무분야명으로 검색' })
   @ApiQuery({ name: 'majorCategoryId', required: false, type: Number, description: 'Major Category ID 필터링' })
   @ApiQuery({ name: 'minorCategoryId', required: false, type: Number, description: 'Minor Category ID 필터링' })
+  @ApiQuery({ name: 'memberId', required: false, type: Number, description: '구성원 ID로 필터링 (해당 구성원의 workAreas와 일치하는 minorCategory.name을 가진 업무분야만 반환)' })
+  @ApiQuery({ name: 'minorCategoryName', required: false, type: String, description: 'Minor Category 이름으로 직접 필터링' })
   @ApiQuery({ name: 'isMainExposed', required: false, type: Boolean, description: '메인 노출 여부로 필터링' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
   @Get('business-areas')
@@ -368,12 +381,15 @@ export class PublicContentController {
     @Query('search') search?: string,
     @Query('majorCategoryId') majorCategoryId?: string,
     @Query('minorCategoryId') minorCategoryId?: string,
+    @Query('memberId') memberId?: string,
+    @Query('minorCategoryName') minorCategoryName?: string,
     @Query('isMainExposed') isMainExposed?: string,
     @Query('sort') sort?: 'latest' | 'oldest' | 'order',
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const isMainExposedBool = isMainExposed === 'true' ? true : isMainExposed === 'false' ? false : undefined;
+    const memberIdNum = memberId ? parseInt(memberId, 10) : undefined;
 
     return this.businessAreaService.findAll({
       page: pageNum,
@@ -381,6 +397,8 @@ export class PublicContentController {
       search,
       majorCategoryId: majorCategoryId ? Number(majorCategoryId) : undefined,
       minorCategoryId: minorCategoryId ? Number(minorCategoryId) : undefined,
+      memberId: memberIdNum,
+      minorCategoryName,
       isExposed: true, // Only exposed business areas
       isMainExposed: isMainExposedBool,
       sort: sort || 'order',

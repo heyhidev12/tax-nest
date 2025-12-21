@@ -17,6 +17,7 @@ import { AdminMemberQueryDto } from 'src/libs/dto/admin/admin-member-query.dto';
 import { AdminCreateMemberDto } from 'src/libs/dto/admin/admin-create-member.dto';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 import { MemberStatus } from 'src/libs/enums/members.enum';
+import { AdminUpdateMemberDto } from 'src/libs/dto/admin/admin-update-member.dto';
 
 @ApiTags('Admin Members')
 @ApiBearerAuth('admin-auth')
@@ -52,6 +53,17 @@ export class AdminMembersController {
   @Post()
   create(@Body() dto: AdminCreateMemberDto) {
     return this.membersService.adminCreate(dto);
+  }
+
+  @ApiOperation({ summary: '회원 정보 수정' })
+  @ApiResponse({ status: 200, description: '회원 정보 수정 성공' })
+  @ApiResponse({ status: 404, description: '회원 없음' })
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: AdminUpdateMemberDto,
+  ) {
+    return this.membersService.adminUpdate(id, dto);
   }
 
   @ApiOperation({ summary: '회원 상세 조회' })

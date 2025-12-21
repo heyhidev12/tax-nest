@@ -45,6 +45,7 @@ import { AdminTrainingSeminarQueryDto } from 'src/libs/dto/admin/admin-training-
 import { AdminCreateTrainingSeminarDto } from 'src/libs/dto/admin/admin-create-training-seminar.dto';
 import { AdminUpdateTrainingSeminarDto } from 'src/libs/dto/admin/admin-update-training-seminar.dto';
 import { ApplicationStatus } from 'src/libs/entity/training-seminar.entity';
+import { UpdateHistoryYearOrderDto } from 'src/libs/dto/history/update-year-order.dto';
 
 @ApiTags('Admin Content')
 @ApiBearerAuth('admin-auth')
@@ -185,6 +186,13 @@ export class AdminContentController {
     return this.historyService.createYear(body.year, body.isExposed);
   }
 
+  @ApiOperation({ summary: '연혁 연도 순서 변경' })
+  @ApiBody({ type: UpdateHistoryYearOrderDto })
+  @Patch('history/years/order')
+  updateHistoryYearOrder(@Body() dto: UpdateHistoryYearOrderDto) {
+    return this.historyService.updateYearOrder(dto.items);
+  }
+
   @ApiOperation({ summary: '연혁 연도 수정' })
   @ApiBody({
     description: '연혁 연도 수정 정보',
@@ -207,6 +215,8 @@ export class AdminContentController {
     return this.historyService.deleteYears(dto.ids);
   }
 
+ 
+
   @ApiOperation({ summary: '연혁 연도 삭제' })
   @Delete('history/years/:id')
   deleteHistoryYear(@Param('id', ParseIntPipe) id: number) {
@@ -219,31 +229,7 @@ export class AdminContentController {
     return this.historyService.toggleYearExposure(id);
   }
 
-  @ApiOperation({ summary: '연혁 연도 순서 변경' })
-  @ApiBody({
-    description: '연혁 연도 순서 변경 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              displayOrder: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @Patch('history/years/order')
-  updateHistoryYearOrder(
-    @Body() body: { items: { id: number; displayOrder: number }[] },
-  ) {
-    return this.historyService.updateYearOrder(body.items);
-  }
+  
 
   @ApiOperation({ summary: '연혁 항목 목록 (연도별)' })
   @Get('history/years/:yearId/items')
@@ -375,6 +361,32 @@ export class AdminContentController {
     );
   }
 
+   @ApiOperation({ summary: '수상/인증 연도 순서 변경' })
+  @ApiBody({
+    description: '수상/인증 연도 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Patch('awards/years/order')
+  updateAwardYearOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
+    return this.awardService.updateYearOrder(body.items);
+  }
+
   @ApiOperation({ summary: '수상/인증 연도 수정' })
   @ApiBody({
     description: '수상/인증 연도 수정 정보',
@@ -416,31 +428,7 @@ export class AdminContentController {
     return this.awardService.toggleYearMainExposure(id);
   }
 
-  @ApiOperation({ summary: '수상/인증 연도 순서 변경' })
-  @ApiBody({
-    description: '수상/인증 연도 순서 변경 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              displayOrder: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @Patch('awards/years/order')
-  updateAwardYearOrder(
-    @Body() body: { items: { id: number; displayOrder: number }[] },
-  ) {
-    return this.awardService.updateYearOrder(body.items);
-  }
+ 
 
   @ApiOperation({ summary: '수상/인증 목록 (연도별)' })
   @Get('awards/years/:yearId/awards')
@@ -487,6 +475,32 @@ export class AdminContentController {
     return this.awardService.createAward(yearId, body);
   }
 
+   @ApiOperation({ summary: '수상/인증 순서 변경' })
+  @ApiBody({
+    description: '수상/인증 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Patch('awards/order')
+  updateAwardOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
+    return this.awardService.updateAwardOrder(body.items);
+  }
+
   @ApiOperation({ summary: '수상/인증 수정' })
   @ApiBody({
     description: '수상/인증 수정 정보',
@@ -530,31 +544,7 @@ export class AdminContentController {
     return this.awardService.toggleAwardMainExposure(id);
   }
 
-  @ApiOperation({ summary: '수상/인증 순서 변경' })
-  @ApiBody({
-    description: '수상/인증 순서 변경 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              displayOrder: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @Patch('awards/order')
-  updateAwardOrder(
-    @Body() body: { items: { id: number; displayOrder: number }[] },
-  ) {
-    return this.awardService.updateAwardOrder(body.items);
-  }
+ 
 
   // ===== BRANCHES =====
   @ApiOperation({ summary: '본사/지점 목록' })
@@ -596,6 +586,32 @@ export class AdminContentController {
   @Post('branches')
   createBranch(@Body() body: any) {
     return this.branchService.create(body);
+  }
+
+   @ApiOperation({ summary: '본사/지점 순서 변경' })
+  @ApiBody({
+    description: '본사/지점 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Patch('branches/order')
+  updateBranchOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
+    return this.branchService.updateOrder(body.items);
   }
 
   @ApiOperation({ summary: '본사/지점 수정' })
@@ -643,31 +659,7 @@ export class AdminContentController {
     return this.branchService.toggleExposure(id);
   }
 
-  @ApiOperation({ summary: '본사/지점 순서 변경' })
-  @ApiBody({
-    description: '본사/지점 순서 변경 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              displayOrder: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @Patch('branches/order')
-  updateBranchOrder(
-    @Body() body: { items: { id: number; displayOrder: number }[] },
-  ) {
-    return this.branchService.updateOrder(body.items);
-  }
+ 
 
   // ===== KEY CUSTOMERS =====
   @ApiOperation({ summary: '주요 고객 목록' })
@@ -706,6 +698,32 @@ export class AdminContentController {
   @Post('key-customers')
   createKeyCustomer(@Body() body: any) {
     return this.keyCustomerService.create(body);
+  }
+
+     @ApiOperation({ summary: '주요 고객 순서 변경' })
+  @ApiBody({
+    description: '주요 고객 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Patch('key-customers/order')
+  updateKeyCustomerOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
+    return this.keyCustomerService.updateOrder(body.items);
   }
 
   @ApiOperation({ summary: '주요 고객 수정' })
@@ -751,31 +769,7 @@ export class AdminContentController {
     return this.keyCustomerService.toggleMainExposure(id);
   }
 
-  @ApiOperation({ summary: '주요 고객 순서 변경' })
-  @ApiBody({
-    description: '주요 고객 순서 변경 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              displayOrder: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @Patch('key-customers/order')
-  updateKeyCustomerOrder(
-    @Body() body: { items: { id: number; displayOrder: number }[] },
-  ) {
-    return this.keyCustomerService.updateOrder(body.items);
-  }
+ 
 
   // ===== BUSINESS AREAS =====
 
@@ -878,6 +872,32 @@ export class AdminContentController {
     return this.businessAreaService.createItem(dto);
   }
 
+   @ApiOperation({ summary: '업무분야 순서 변경' })
+  @ApiBody({
+    description: '업무분야 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @Patch('business-areas/order')
+  updateBusinessAreaOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
+    return this.businessAreaService.updateOrder(body.items);
+  }
+
   @ApiOperation({ summary: '업무분야 아이템 수정' })
   @Patch('business-areas/:id')
   updateBusinessAreaItem(
@@ -911,31 +931,7 @@ export class AdminContentController {
     return this.businessAreaService.toggleMainExposure(id);
   }
 
-  @ApiOperation({ summary: '업무분야 순서 변경' })
-  @ApiBody({
-    description: '업무분야 순서 변경 정보',
-    schema: {
-      type: 'object',
-      properties: {
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'number' },
-              displayOrder: { type: 'number' },
-            },
-          },
-        },
-      },
-    },
-  })
-  @Patch('business-areas/order')
-  updateBusinessAreaOrder(
-    @Body() body: { items: { id: number; displayOrder: number }[] },
-  ) {
-    return this.businessAreaService.updateOrder(body.items);
-  }
+ 
 
   // ===== TRAINING/SEMINARS =====
   @ApiOperation({

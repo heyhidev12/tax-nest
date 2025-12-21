@@ -36,7 +36,12 @@ export class ConsultationsService {
     private readonly consultationRepo: Repository<Consultation>,
   ) {}
 
-  async create(dto: CreateConsultationDto) {
+  /**
+   * 상담 신청 생성
+   * - 인증 여부와 관계없이 생성 가능
+   * - controller 에서 memberId / memberFlag 를 세팅해서 넘겨줌
+   */
+  async create(dto: CreateConsultationDto & { memberId?: number | null; memberFlag?: MemberFlag }) {
     // 개인정보 처리 방침 이용 동의 필수 검증
     if (!dto.privacyAgreed) {
       throw new BadRequestException('개인정보 처리 방침 이용에 동의해주세요.');
@@ -56,6 +61,7 @@ export class ConsultationsService {
       privacyAgreed: true,
       termsAgreed: true,
       memberFlag: dto.memberFlag ?? MemberFlag.NON_MEMBER,
+      memberId: dto.memberId ?? null,
       status: ConsultationStatus.PENDING,
     });
 
@@ -64,7 +70,7 @@ export class ConsultationsService {
     return { id: saved.id, createdAt: saved.createdAt };
   }
 
-  // 리스트 (내용은 일부만, 마스킹도 프론트에서 가능)
+  // 간단한 상담 목록 (예: 공개 리스트용)
   async list(page = 1, limit = 10) {
     const [items, total] = await this.consultationRepo.findAndCount({
       order: { createdAt: 'DESC' },
@@ -72,12 +78,12 @@ export class ConsultationsService {
       take: limit,
     });
 
-    // 내용 일부만 보내거나, 프론트에서 마스킹 처리
     const mapped = items.map((c) => ({
       id: c.id,
       name: c.name,
       consultingField: c.consultingField,
-      contentPreview: c.content.slice(0, 30), // 30자 미리보기
+      content: c.content,
+      answer: c.answer,
       status: c.status,
       createdAt: c.createdAt,
     }));
@@ -157,31 +163,22 @@ export class ConsultationsService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 이름, 상담분야, 담당 세무사, 휴대폰 번호, 상담 내용(한 줄), 회원유형, 신청일시
+    // 응답 포맷: No, 이름, 상담분야, 담당 세무사, 휴대폰 번호, 상담 내용 전체, 답변, 회원유형, 신청일시
     // 번호는 정렬 순서에 따라 순차적으로 부여 (최신순: 큰 번호부터, 오래된순: 작은 번호부터)
     const formattedItems = items.map((c, index) => {
-      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
       const no = sort === 'latest' 
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
-      
-      // 상담 내용을 한 줄로 표시 (줄바꿈 제거, 길이 제한)
-      const contentSingleLine = c.content
-        .replace(/\n/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const contentPreview = contentSingleLine.length > 50 
-        ? contentSingleLine.slice(0, 50) + '...' 
-        : contentSingleLine;
 
       return {
         no,
         id: c.id,
-      name: c.name,
-      consultingField: c.consultingField,
-      assignedTaxAccountant: c.assignedTaxAccountant || '-',
-      phoneNumber: c.phoneNumber,
-        contentPreview,
+        name: c.name,
+        consultingField: c.consultingField,
+        assignedTaxAccountant: c.assignedTaxAccountant || '-',
+        phoneNumber: c.phoneNumber,
+        content: c.content,
+        answer: c.answer,
         memberFlag: c.memberFlag,
         memberFlagLabel: c.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
         status: c.status,
@@ -228,11 +225,6 @@ export class ConsultationsService {
       throw new NotFoundException('상담 요청을 찾을 수 없습니다.');
     }
     
-    // 비회원인 경우 답변 작성 불가
-    if (entity.memberFlag === MemberFlag.NON_MEMBER) {
-      throw new BadRequestException('비회원 상담은 답변을 작성할 수 없습니다.');
-    }
-    
     entity.answer = answer;
     entity.status = status;
     const saved = await this.consultationRepo.save(entity);
@@ -254,12 +246,18 @@ export class ConsultationsService {
     return { success: true, deleted: list.length };
   }
 
-  // 사용자별 상담 신청 목록 조회 (이메일 기준)
-  async findUserConsultations(email: string, options: UserConsultationListOptions = {}) {
+  // 사용자별 상담 신청 목록 조회 (회원 기준)
+  // - 기본적으로 memberId 로 조회
+  // - 과거 데이터 호환을 위해 email 도 함께 받아서 memberId 가 없는 기록은 email 로 조회
+  async findUserConsultations(memberId: number, email: string, options: UserConsultationListOptions = {}) {
     const { search, status, sort = 'latest', page = 1, limit = 20, startDate, endDate } = options;
 
-    const qb = this.consultationRepo.createQueryBuilder('c')
-      .where('c.email = :email', { email });
+    const qb = this.consultationRepo
+      .createQueryBuilder('c')
+      .where('(c.memberId = :memberId OR (c.memberId IS NULL AND c.email = :email))', {
+        memberId,
+        email,
+      });
 
     // 상담 내용 또는 상담 분야 검색
     if (search) {
@@ -294,18 +292,11 @@ export class ConsultationsService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷 (UI에 맞게)
+    // 응답 포맷 (UI에 맞게) - 전체 content/answer 제공, 별도의 미리보기 필드는 사용하지 않음
     const formattedItems = items.map((item, index) => {
       const no = sort === 'latest' 
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
-
-      // 상담 내용 미리보기
-      const contentPreview = item.content
-        .replace(/\n/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 100);
 
       return {
         no,
@@ -314,7 +305,7 @@ export class ConsultationsService {
         name: item.name,
         consultingField: item.consultingField,
         content: item.content,
-        contentPreview: contentPreview.length < item.content.length ? contentPreview + '...' : contentPreview,
+        answer: item.answer,
         assignedTaxAccountant: item.assignedTaxAccountant || '-',
         status: item.status,
         statusLabel: item.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',

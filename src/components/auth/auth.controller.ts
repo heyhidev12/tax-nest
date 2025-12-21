@@ -166,7 +166,7 @@ export class AuthController {
       };
     } else if (type === 'consultation') {
       // 상담 신청만 조회 (해당 사용자의 이메일로 필터링됨)
-      const consultations = await this.consultationsService.findUserConsultations(userEmail, options);
+      const consultations = await this.consultationsService.findUserConsultations(member.id, userEmail, options);
       
       return {
         type: 'consultation',
@@ -177,7 +177,7 @@ export class AuthController {
       // 전체 조회 (교육/세미나 + 상담) - 모두 해당 사용자의 이메일로 필터링됨
       const [seminarApplications, consultations] = await Promise.all([
         this.trainingSeminarService.findUserApplications(userEmail, options),
-        this.consultationsService.findUserConsultations(userEmail, options),
+        this.consultationsService.findUserConsultations(member.id, userEmail, options),
       ]);
 
       // 통합 응답

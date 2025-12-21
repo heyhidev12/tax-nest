@@ -35,7 +35,7 @@ export class SignUpDto {
   @Matches(/^01[0-9]{8,9}$/, { message: '올바른 휴대폰 번호 형식이 아닙니다.' })
   phoneNumber: string;
 
-  @ApiProperty({ example: 'GENERAL', enum: MemberType, description: '회원 유형 (GENERAL: 일반회원, CORPORATE: 법인대표/직원, INSURANCE: 보험사 직원)' })
+  @ApiProperty({ example: 'GENERAL', enum: MemberType, description: '회원 유형 (GENERAL: 일반회원, OTHER: 법인대표/직원, INSURANCE: 보험사 직원)' })
   @IsEnum(MemberType, { message: '올바른 회원 유형을 선택해주세요.' })
   memberType: MemberType;
 

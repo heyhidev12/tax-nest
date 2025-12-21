@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { HistoryYear, HistoryItem } from 'src/libs/entity/history.entity';
+import { HistoryYearOrderItemDto } from 'src/libs/dto/history/update-year-order.dto';
 
 interface YearListOptions {
   isExposed?: boolean;
@@ -18,6 +19,7 @@ export class HistoryService {
     private readonly yearRepo: Repository<HistoryYear>,
     @InjectRepository(HistoryItem)
     private readonly itemRepo: Repository<HistoryItem>,
+    private readonly dataSource: DataSource,
   ) {}
 
   // === Year CRUD ===
@@ -136,11 +138,16 @@ export class HistoryService {
     return { success: true, isExposed: year.isExposed, exposedLabel: year.isExposed ? 'Y' : 'N' };
   }
 
-  async updateYearOrder(items: { id: number; displayOrder: number }[]) {
-    for (const item of items) {
-      await this.yearRepo.update(item.id, { displayOrder: item.displayOrder });
-    }
-    return { success: true };
+  async updateYearOrder(items: HistoryYearOrderItemDto[]) {
+    return await this.dataSource.transaction(async (manager) => {
+      const yearRepo = manager.getRepository(HistoryYear);
+      
+      for (const item of items) {
+        await yearRepo.update(item.id, { displayOrder: item.displayOrder });
+      }
+      
+      return { success: true };
+    });
   }
 
   // === Item CRUD ===
