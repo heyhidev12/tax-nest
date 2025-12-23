@@ -22,8 +22,6 @@ import { BranchService } from '../services/branch.service';
 import { KeyCustomerService } from '../services/key-customer.service';
 import { BusinessAreaService } from '../services/business-area.service';
 import { HistoryService } from '../services/history.service';
-import { ColumnService } from '../services/column.service';
-import { DataRoomService } from '../services/data-room.service';
 import { InsightsService } from '../services/insights.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
 import { ExposureSettingsService } from '../services/exposure-settings.service';
@@ -40,8 +38,6 @@ export class PublicContentController {
     private readonly keyCustomerService: KeyCustomerService,
     private readonly businessAreaService: BusinessAreaService,
     private readonly historyService: HistoryService,
-    private readonly columnService: ColumnService,
-    private readonly dataRoomService: DataRoomService,
     private readonly insightsService: InsightsService,
     private readonly exposureSettingsService: ExposureSettingsService,
   ) {}

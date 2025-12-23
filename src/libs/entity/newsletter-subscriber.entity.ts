@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn } from 'typeorm';
 
 @Entity('newsletter_subscribers')
 export class NewsletterSubscriber {
@@ -21,6 +16,10 @@ export class NewsletterSubscriber {
   // 수신 여부 (Y/N)
   @Column({ default: true })
   isSubscribed: boolean;
+
+  // 외부 메일 제공자(Easy Mail/SES 등)와 동기화 상태
+  @Column({ default: true })
+  isMailSynced: boolean;
 
   @CreateDateColumn()
   subscribedAt: Date;

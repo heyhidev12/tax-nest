@@ -32,8 +32,6 @@ import { UpdateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/update
 import { CreateBusinessAreaItemDto } from 'src/libs/dto/business-area/create-item.dto';
 import { UpdateBusinessAreaItemDto } from 'src/libs/dto/business-area/update-item.dto';
 import { TrainingSeminarService } from 'src/components/content/services/training-seminar.service';
-import { ColumnService } from 'src/components/content/services/column.service';
-import { DataRoomService } from 'src/components/content/services/data-room.service';
 import { CategoryService } from 'src/components/content/services/category.service';
 import { TaxMemberService } from 'src/components/content/services/tax-member.service';
 import { ExposureSettingsService } from 'src/components/content/services/exposure-settings.service';

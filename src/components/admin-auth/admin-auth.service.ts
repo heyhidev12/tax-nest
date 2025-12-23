@@ -53,6 +53,7 @@ export class AdminAuthService {
         loginId: admin.loginId,
         name: admin.name,
         role: admin.role,
+        permissions: admin.permissions || {},
       },
     };
   }

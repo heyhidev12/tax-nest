@@ -4,12 +4,12 @@ import {
   Delete,
   Get,
   Param,
-  ParseIntPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { NewsletterService } from 'src/components/newsletter/newsletter.service';
 import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
@@ -81,6 +81,34 @@ export class AdminNewsletterController {
     // Easy Mail IDs can be strings or numbers
     const parsedId = isNaN(Number(id)) ? id : Number(id);
     return this.newsletterService.delete(parsedId);
+  }
+
+  @ApiOperation({ summary: '뉴스레터 발송' })
+  @ApiBody({
+    description: '뉴스레터 발송 요청',
+    schema: {
+      type: 'object',
+      properties: {
+        subject: { type: 'string', description: '제목' },
+        html: { type: 'string', description: 'HTML 본문' },
+        target: {
+          type: 'string',
+          enum: ['ALL', 'MEMBERS', 'SUBSCRIBERS'],
+          default: 'ALL',
+          description: '발송 대상 (기본: ALL)',
+        },
+      },
+      required: ['subject', 'html'],
+    },
+  })
+  @ApiResponse({ status: 200, description: '발송 요청 완료 (배치 전송)' })
+  @Post('send')
+  send(@Body() body: { subject: string; html: string; target?: 'ALL' | 'MEMBERS' | 'SUBSCRIBERS' }) {
+    return this.newsletterService.sendNewsletter({
+      subject: body.subject,
+      html: body.html,
+      target: body.target || 'ALL',
+    });
   }
 
 

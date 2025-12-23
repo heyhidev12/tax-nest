@@ -14,7 +14,7 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { VerificationService } from '../verification/verification.service';
 import { RedisService } from 'src/libs/redis/redis.service';
-import { EasyMailService } from '../newsletter/services/easy-mail.service';
+import { NewsletterService } from '../newsletter/newsletter.service';
 
 @Injectable()
 export class AuthService {
@@ -23,7 +23,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly verification: VerificationService,
     private readonly redisService: RedisService,
-    private readonly easyMailService: EasyMailService,
+    private readonly newsletterService: NewsletterService,
     @InjectRepository(Member)
     private readonly memberRepo: Repository<Member>,
   ) {}
@@ -59,13 +59,13 @@ export class AuthService {
       newsletterSubscribed,
     });
 
-    // If user opted in for newsletters, subscribe them to Easy Mail
+    // If user opted in for newsletters, subscribe them via newsletter service (DB + provider)
     if (newsletterSubscribed) {
       try {
-        await this.easyMailService.subscribeSubscriber(member.email, member.name);
+        await this.newsletterService.subscribe(member.name, member.email);
       } catch (error) {
-        // Log error but don't fail signup if Easy Mail fails
-        console.error('Failed to subscribe to Easy Mail during signup:', error);
+        // Log error but don't fail signup if newsletter sync fails
+        console.error('Failed to subscribe to newsletter during signup:', error);
       }
     }
 

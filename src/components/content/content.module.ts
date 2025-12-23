@@ -9,8 +9,6 @@ import { Branch } from 'src/libs/entity/branch.entity';
 import { KeyCustomer } from 'src/libs/entity/key-customer.entity';
 import { BusinessArea } from 'src/libs/entity/business-area.entity';
 import { TrainingSeminar, TrainingSeminarApplication } from 'src/libs/entity/training-seminar.entity';
-import { ColumnArticle, ColumnComment } from 'src/libs/entity/column.entity';
-import { DataRoom, DataRoomContent, DataRoomComment } from 'src/libs/entity/data-room.entity';
 import { MajorCategory, MinorCategory } from 'src/libs/entity/category.entity';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
 import { Member } from 'src/libs/entity/member.entity';
@@ -28,8 +26,6 @@ import { BranchService } from './services/branch.service';
 import { KeyCustomerService } from './services/key-customer.service';
 import { BusinessAreaService } from './services/business-area.service';
 import { TrainingSeminarService } from './services/training-seminar.service';
-import { ColumnService } from './services/column.service';
-import { DataRoomService } from './services/data-room.service';
 import { CategoryService } from './services/category.service';
 import { TaxMemberService } from './services/tax-member.service';
 import { ExposureSettingsService } from './services/exposure-settings.service';
@@ -49,11 +45,6 @@ import { PublicContentController } from './controllers/public-content.controller
       BusinessArea,
       TrainingSeminar,
       TrainingSeminarApplication,
-      ColumnArticle,
-      ColumnComment,
-      DataRoom,
-      DataRoomContent,
-      DataRoomComment,
       MajorCategory,
       MinorCategory,
       TaxMember,
@@ -75,8 +66,6 @@ import { PublicContentController } from './controllers/public-content.controller
     KeyCustomerService,
     BusinessAreaService,
     TrainingSeminarService,
-    ColumnService,
-    DataRoomService,
     CategoryService,
     TaxMemberService,
     ExposureSettingsService,
@@ -91,8 +80,6 @@ import { PublicContentController } from './controllers/public-content.controller
     KeyCustomerService,
     BusinessAreaService,
     TrainingSeminarService,
-    ColumnService,
-    DataRoomService,
     CategoryService,
     TaxMemberService,
     ExposureSettingsService,
