@@ -28,23 +28,23 @@ async function bootstrap() {
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'user-auth',
     )
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'admin-auth',
+    )
     .addTag('Auth', '회원 인증')
     .addTag('Consultations', '상담 요청')
     .addTag('Newsletter', '뉴스레터')
     .addTag('Upload', '파일 업로드 (이미지/비디오)')
+    .addTag('Admin Auth', '관리자 인증')
+    .addTag('Admin Consultations', '관리자 - 상담 관리')
+    .addTag('Admin Members', '관리자 - 회원 관리')
+    .addTag('Admin Settings', '관리자 - 설정')
+    .addTag('Admin Newsletter', '관리자 - 뉴스레터')
+    .addTag('Admin Content', '관리자 - 콘텐츠 관리')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  
-  // Filter out all admin-related paths from Swagger documentation
-  if (document.paths) {
-    Object.keys(document.paths).forEach((path) => {
-      if (path.startsWith('/admin')) {
-        delete document.paths[path];
-      }
-    });
-  }
-  
   SwaggerModule.setup('api/docs', app, document);
 
   // Seed super admin on startup
