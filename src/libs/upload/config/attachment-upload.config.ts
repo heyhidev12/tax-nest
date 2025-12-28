@@ -12,6 +12,11 @@ const ALLOWED_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
   'application/zip',
   'application/x-zip-compressed',
+  // V-Card formats
+    'application/vcard',
+    'text/vcard',
+    'text/x-vcard',
+    'text/plain'
 ];
 
 export const fileUploadConfig: MulterOptions = {

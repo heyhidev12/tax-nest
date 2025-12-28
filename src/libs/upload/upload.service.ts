@@ -24,6 +24,10 @@ export class UploadService {
     'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
     'application/zip',
     'application/x-zip-compressed',
+    'application/vcard',
+  'text/vcard',
+  'text/x-vcard',
+  'text/plain'
   ];
   
   // File size limits removed - no size restrictions
@@ -166,13 +170,20 @@ export class UploadService {
       throw new BadRequestException('No file provided');
     }
 
-    // Validate file type
-    if (!this.ALLOWED_FILE_TYPES.includes(file.mimetype) &&
-        !file.mimetype.startsWith('application/vnd.')) {
-      throw new BadRequestException(
-        `Invalid file type: ${file.mimetype}. Allowed types: ${this.ALLOWED_FILE_TYPES.join(', ')}, application/vnd.*`,
-      );
+    // // Validate file type
+    // if (!this.ALLOWED_FILE_TYPES.includes(file.mimetype) &&
+    //     !file.mimetype.startsWith('application/vnd.')) {
+    //   throw new BadRequestException(
+    //     `Invalid file type: ${file.mimetype}. Allowed types: ${this.ALLOWED_FILE_TYPES.join(', ')}, application/vnd.*`,
+    //   );
+    // }
+    if (
+      !this.ALLOWED_FILE_TYPES.includes(file.mimetype) &&
+      !file.mimetype.startsWith('application/vnd.')
+    ) {
+      throw new BadRequestException(`Invalid file type: ${file.mimetype}`);
     }
+    
 
     // No file size validation - unlimited size allowed
 
