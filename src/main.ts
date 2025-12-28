@@ -14,7 +14,7 @@ dotenv.config();
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
+
   // Enable validation
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
@@ -61,12 +61,18 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  // Seed super admin on startup
-  const adminService = app.get(AdminAuthService);
-  await adminService.seedSuperAdmin();
+  // Start server first (non-blocking)
+  const port = process.env.PORT ?? 3000;
+  const host = '0.0.0.0';
 
-  await app.listen(process.env.PORT ?? 3000);
-  console.log(`🚀 Application is running on: ${await app.getUrl()}`);
-  console.log(`📚 Swagger docs: ${await app.getUrl()}/api/docs`);
+  await app.listen(port, host);
+  console.log(`🚀 Application is running on: http://${host}:${port}`);
+  console.log(`📚 Swagger docs: http://${host}:${port}/api/docs`);
+
+  // Seed super admin asynchronously (non-blocking)
+  const adminService = app.get(AdminAuthService);
+  adminService.seedSuperAdmin().catch(err => {
+    console.error('❌ Failed to seed super admin:', err.message);
+  });
 }
 bootstrap();

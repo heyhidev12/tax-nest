@@ -18,18 +18,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       password: process.env.REDIS_PASSWORD,
       db: Number(process.env.REDIS_DB) || 0,
       retryStrategy: () => null, // avoid infinite retry
+      connectTimeout: 5000, // 5 seconds
+      lazyConnect: true, // Don't connect immediately
     });
   }
 
   async onModuleInit() {
     if (!this.enabled || !this.client) return;
 
-    try {
-      await this.client.ping();
-      console.log('Redis connected successfully');
-    } catch (error) {
-      console.error('Redis connection error:', error);
-    }
+    // Non-blocking Redis connection check
+    this.client.ping()
+      .then(() => console.log('✅ Redis connected successfully'))
+      .catch(err => console.warn('⚠️  Redis connection failed (non-critical):', err.message));
   }
 
   async onModuleDestroy() {

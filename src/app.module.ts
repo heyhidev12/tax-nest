@@ -19,7 +19,12 @@ import { UploadModule } from './libs/upload/upload.module';
         database: process.env.DB_NAME,
         autoLoadEntities: true,
         synchronize: true,
-        logging: ['error'],
+        logging: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+        connectTimeout: 10000, // 10 seconds
+        acquireTimeout: 10000,
+        extra: {
+          connectionLimit: 10,
+        },
       }),
     }),
     RedisModule,
@@ -27,4 +32,4 @@ import { UploadModule } from './libs/upload/upload.module';
     ComponentsModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }
