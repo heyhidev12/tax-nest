@@ -19,6 +19,14 @@ export class Branch {
   @Column()
   address: string;
 
+  // 위도 (Naver Maps Geocode API로 자동 설정)
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitude: number;
+
+  // 경도 (Naver Maps Geocode API로 자동 설정)
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitude: number;
+
   @Column({ nullable: true })
   phoneNumber: string;
 
@@ -68,6 +76,7 @@ export class Branch {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
 
 
 

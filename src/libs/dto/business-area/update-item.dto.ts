@@ -14,10 +14,13 @@ export class UpdateBusinessAreaItemDto {
   @IsString()
   subDescription?: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/image.jpg', description: '대표 이미지 URL' })
+  @ApiPropertyOptional({
+    example: { id: 10, url: 'https://example.com/image.jpg' },
+    description: '대표 이미지'
+  })
   @IsOptional()
-  @IsString()
-  imageUrl?: string;
+  @IsObject({ message: '이미지 정보가 올바르지 않습니다.' })
+  image?: { id: number; url: string };
 
   @ApiPropertyOptional({ 
     description: 'Major Category (from InsightsSubcategory)', 

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Branch } from 'src/libs/entity/branch.entity';
+import { GeocodingService } from './geocoding.service';
 
 interface BranchListOptions {
   search?: string;
@@ -17,10 +18,21 @@ export class BranchService {
   constructor(
     @InjectRepository(Branch)
     private readonly branchRepo: Repository<Branch>,
+    private readonly geocodingService: GeocodingService,
   ) {}
 
   async create(data: Partial<Branch>) {
     const branch = this.branchRepo.create(data);
+    
+    // Geocode address if provided
+    if (data.address) {
+      const coordinates = await this.geocodingService.geocodeAddress(data.address);
+      if (coordinates) {
+        branch.latitude = coordinates.latitude;
+        branch.longitude = coordinates.longitude;
+      }
+    }
+    
     return this.branchRepo.save(branch);
   }
 
@@ -89,6 +101,20 @@ export class BranchService {
   async update(id: number, data: Partial<Branch>) {
     const branch = await this.branchRepo.findOne({ where: { id } });
     if (!branch) throw new NotFoundException('본사/지점을 찾을 수 없습니다.');
+    
+    // If address is being updated, geocode it
+    if (data.address && data.address !== branch.address) {
+      const coordinates = await this.geocodingService.geocodeAddress(data.address);
+      if (coordinates) {
+        data.latitude = coordinates.latitude;
+        data.longitude = coordinates.longitude;
+      } else {
+        // If geocoding fails, set to null
+        (data as any).latitude = null;
+        (data as any).longitude = null;
+      }
+    }
+    
     Object.assign(branch, data);
     return this.branchRepo.save(branch);
   }

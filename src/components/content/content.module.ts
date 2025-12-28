@@ -16,6 +16,7 @@ import { ExposureSettings } from 'src/libs/entity/exposure-settings.entity';
 import { InsightsCategory } from 'src/libs/entity/insights-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
 import { InsightsItem, InsightsComment, InsightsCommentReport } from 'src/libs/entity/insights-item.entity';
+import { Attachment } from 'src/libs/entity/attachment.entity';
 import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
 
 // Services
@@ -23,6 +24,7 @@ import { MainBannerService } from './services/main-banner.service';
 import { HistoryService } from './services/history.service';
 import { AwardService } from './services/award.service';
 import { BranchService } from './services/branch.service';
+import { GeocodingService } from './services/geocoding.service';
 import { KeyCustomerService } from './services/key-customer.service';
 import { BusinessAreaService } from './services/business-area.service';
 import { TrainingSeminarService } from './services/training-seminar.service';
@@ -30,7 +32,9 @@ import { CategoryService } from './services/category.service';
 import { TaxMemberService } from './services/tax-member.service';
 import { ExposureSettingsService } from './services/exposure-settings.service';
 import { InsightsService } from './services/insights.service';
+import { AttachmentService } from './services/attachment.service';
 import { PublicContentController } from './controllers/public-content.controller';
+import { AttachmentsController } from './controllers/attachments.controller';
 
 @Module({
   imports: [
@@ -55,6 +59,7 @@ import { PublicContentController } from './controllers/public-content.controller
       InsightsItem,
       InsightsComment,
       InsightsCommentReport,
+      Attachment,
       BusinessAreaCategory,
     ]),
   ],
@@ -63,6 +68,7 @@ import { PublicContentController } from './controllers/public-content.controller
     HistoryService,
     AwardService,
     BranchService,
+    GeocodingService,
     KeyCustomerService,
     BusinessAreaService,
     TrainingSeminarService,
@@ -70,8 +76,9 @@ import { PublicContentController } from './controllers/public-content.controller
     TaxMemberService,
     ExposureSettingsService,
     InsightsService,
+    AttachmentService,
   ],
-  controllers: [PublicContentController],
+  controllers: [PublicContentController, AttachmentsController],
   exports: [
     MainBannerService,
     HistoryService,
@@ -84,6 +91,7 @@ import { PublicContentController } from './controllers/public-content.controller
     TaxMemberService,
     ExposureSettingsService,
     InsightsService,
+    AttachmentService,
   ],
 })
 export class ContentModule {}

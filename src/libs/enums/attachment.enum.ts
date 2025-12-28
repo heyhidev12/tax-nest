@@ -1,0 +1,17 @@
+export enum AttachmentFileType {
+  IMAGE = 'IMAGE',
+  VIDEO = 'VIDEO',
+  FILE = 'FILE',
+}
+
+export enum AttachmentTargetType {
+  MEMBER = 'MEMBER',
+  INSIGHT = 'INSIGHT',
+  BANNER = 'BANNER',
+  BUSINESS_AREA = 'BUSINESS_AREA',
+  TAX_MEMBER = 'TAX_MEMBER',
+  KEY_CUSTOMER = 'KEY_CUSTOMER',
+  TRAINING_SEMINAR = 'TRAINING_SEMINAR',
+  AWARD = 'AWARD'
+}
+

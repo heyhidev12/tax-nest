@@ -21,8 +21,13 @@ export class InsightsItem {
   @Column({ length: 200 })
   title: string;
 
-  @Column({ type: 'text', nullable: true })
-  thumbnailUrl: string | null;
+  // 썸네일 이미지 - {id, url} object
+  @Column({ type: 'json', nullable: true })
+  thumbnail: { id: number; url: string } | null;
+
+  // PDF 파일 - {id, url} object
+  @Column({ type: 'json', nullable: true })
+  pdf: { id: number; url: string } | null;
 
   @Column({ type: 'text' })
   content: string;
@@ -55,6 +60,9 @@ export class InsightsItem {
 
   @Column({ default: true })
   isExposed: boolean;
+
+  @Column({ default: false })
+  isMainExposed: boolean;
 
   @Column({ length: 10, default: 'Y' })
   exposedLabel: string;

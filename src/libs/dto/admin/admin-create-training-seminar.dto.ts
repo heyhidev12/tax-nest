@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, IsDateString, IsInt, Min, IsBoolean, ValidateIf, IsArray, ArrayMinSize } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString, IsDateString, IsInt, Min, IsBoolean, ValidateIf, IsArray, ArrayMinSize, IsObject } from 'class-validator';
 import { TrainingSeminarType, RecruitmentType, TargetMemberType } from 'src/libs/entity/training-seminar.entity';
 
 export class AdminCreateTrainingSeminarDto {
@@ -28,10 +28,13 @@ export class AdminCreateTrainingSeminarDto {
   @IsNotEmpty({ message: '회원 유형을 선택해주세요.' })
   targetMemberType: TargetMemberType;
 
-  @ApiPropertyOptional({ example: 'https://example.com/image.jpg', description: '이미지 URL (선택)' })
+  @ApiPropertyOptional({
+    example: { id: 10, url: 'https://example.com/image.jpg' },
+    description: '이미지 (선택)'
+  })
   @IsOptional()
-  @IsString()
-  imageUrl?: string;
+  @IsObject({ message: '이미지 정보가 올바르지 않습니다.' })
+  image?: { id: number; url: string };
 
   @ApiPropertyOptional({ example: '김세무', description: '강사명 (선택)' })
   @IsOptional()

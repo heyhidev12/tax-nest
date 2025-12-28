@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsEmail, IsOptional, IsString, IsUrl, ArrayMaxSize } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsObject, IsOptional, IsString, ArrayMaxSize } from 'class-validator';
 
 export class AdminUpdateTaxMemberDto {
   @ApiPropertyOptional({ example: '홍길동', description: '구성원 명' })
@@ -7,17 +7,21 @@ export class AdminUpdateTaxMemberDto {
   @IsString()
   name?: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/main.jpg', description: '구성원 메인 사진 URL' })
+  @ApiPropertyOptional({
+    example: { id: 10, url: 'https://example.com/main.jpg' },
+    description: '구성원 메인 사진'
+  })
   @IsOptional()
-  @IsString()
-  @IsUrl({}, { message: '올바른 URL 형식이 아닙니다.' })
-  mainPhotoUrl?: string;
+  @IsObject({ message: '메인 사진 정보가 올바르지 않습니다.' })
+  mainPhoto?: { id: number; url: string };
 
-  @ApiPropertyOptional({ example: 'https://example.com/sub.jpg', description: '구성원 서브 사진 URL' })
+  @ApiPropertyOptional({
+    example: { id: 11, url: 'https://example.com/sub.jpg' },
+    description: '구성원 서브 사진'
+  })
   @IsOptional()
-  @IsString()
-  @IsUrl({}, { message: '올바른 URL 형식이 아닙니다.' })
-  subPhotoUrl?: string;
+  @IsObject({ message: '서브 사진 정보가 올바르지 않습니다.' })
+  subPhoto?: { id: number; url: string };
 
   @ApiPropertyOptional({ 
     example: ['세무조정', '세무신고', '법인세'], 
@@ -46,15 +50,21 @@ export class AdminUpdateTaxMemberDto {
   @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다.' })
   email?: string;
 
-  @ApiPropertyOptional({ example: 'https://example.com/vcard.vcf', description: 'V-Card 업로드 URL' })
+  @ApiPropertyOptional({
+    example: { id: 21, url: 'https://example.com/vcard.vcf' },
+    description: 'V-Card 파일'
+  })
   @IsOptional()
-  @IsUrl({}, { message: '올바른 URL 형식이 아닙니다.' })
-  vcardUrl?: string;
+  @IsObject({ message: 'V-Card 정보가 올바르지 않습니다.' })
+  vcard?: { id: number; url: string };
 
-  @ApiPropertyOptional({ example: 'https://example.com/resume.pdf', description: 'PDF 업로드 URL' })
+  @ApiPropertyOptional({
+    example: { id: 22, url: 'https://example.com/resume.pdf' },
+    description: 'PDF 파일'
+  })
   @IsOptional()
-  @IsUrl({}, { message: '올바른 URL 형식이 아닙니다.' })
-  pdfUrl?: string;
+  @IsObject({ message: 'PDF 정보가 올바르지 않습니다.' })
+  pdf?: { id: number; url: string };
 
   @ApiPropertyOptional({ example: '세무 전문가입니다.', description: '한줄 소개' })
   @IsOptional()

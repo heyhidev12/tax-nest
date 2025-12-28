@@ -32,16 +32,24 @@ async function bootstrap() {
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'admin-auth',
     )
+    // User/Public APIs (ordered first)
+    .addTag('App', '애플리케이션')
     .addTag('Auth', '회원 인증')
     .addTag('Consultations', '상담 요청')
     .addTag('Newsletter', '뉴스레터')
-    .addTag('Upload', '파일 업로드 (이미지/비디오)')
+    .addTag('Content', '콘텐츠 조회')
+    .addTag('Attachments', '첨부파일 다운로드')
+    // Admin APIs (ordered after user APIs)
+    .addTag('Admin Uploads', '관리자 - 파일 업로드 (이미지/비디오)')
+    .addTag('Admin Attachments', '관리자 - 첨부파일 관리')
     .addTag('Admin Auth', '관리자 인증')
     .addTag('Admin Consultations', '관리자 - 상담 관리')
     .addTag('Admin Members', '관리자 - 회원 관리')
     .addTag('Admin Settings', '관리자 - 설정')
     .addTag('Admin Newsletter', '관리자 - 뉴스레터')
     .addTag('Admin Content', '관리자 - 콘텐츠 관리')
+    .addTag('Admin Comments', '관리자 - 댓글 관리')
+    .addTag('Admin Attachments', '관리자 - 첨부파일 관리')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

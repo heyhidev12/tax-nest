@@ -23,9 +23,9 @@ export class BusinessArea {
   @Column({ nullable: true })
   subDescription: string;
 
-  // 대표 이미지 URL (필수)
-  @Column()
-  imageUrl: string;
+  // 대표 이미지 (필수) - {id, url} object
+  @Column({ type: 'json' })
+  image: { id: number; url: string };
 
   /**
    * Major Category ID - References InsightsSubcategory (업종별, 컨설팅, etc.)

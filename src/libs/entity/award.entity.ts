@@ -61,7 +61,9 @@ export class Award {
 
   // 이미지 URL (필수)
   @Column()
-  imageUrl: string;
+  // 이미지 - {id, url} object
+  @Column({ type: 'json' })
+  image: { id: number; url: string };
 
   // 메인 노출 여부
   @Column({ default: false })

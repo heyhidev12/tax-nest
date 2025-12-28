@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
+import { UploadService } from 'src/libs/upload/upload.service';
 import { 
   TrainingSeminar, 
   TrainingSeminarApplication, 
@@ -40,6 +41,7 @@ export class TrainingSeminarService {
     private readonly seminarRepo: Repository<TrainingSeminar>,
     @InjectRepository(TrainingSeminarApplication)
     private readonly appRepo: Repository<TrainingSeminarApplication>,
+    private readonly uploadService: UploadService,
   ) {}
 
   // === Seminar CRUD ===
@@ -208,7 +210,7 @@ export class TrainingSeminarService {
         recruitmentTypeLabel: this.getRecruitmentTypeLabel(item.recruitmentType),
         recruitmentEndDate: item.recruitmentEndDate,
         recruitmentEndDateFormatted: this.formatRecruitmentDate(item.recruitmentEndDate),
-        imageUrl: item.imageUrl,
+        image: item.image,
         targetMemberType: item.targetMemberType,
         targetMemberTypeLabel: this.getTargetMemberTypeLabel(item.targetMemberType),
         startDate: item.startDate,
@@ -304,6 +306,17 @@ export class TrainingSeminarService {
         throw new BadRequestException('선착순 모집의 경우 정원을 입력해주세요. (정원은 1명 이상이어야 합니다.)');
       }
     }
+
+    // Handle image cleanup when image is being replaced or removed
+    if (data.image !== undefined) {
+      if (data.image === null && seminar.image) {
+        // Image is being removed
+        await this.uploadService.deleteFileByUrl(seminar.image.url);
+      } else if (data.image && seminar.image && data.image.url !== seminar.image.url) {
+        // Image is being replaced
+        await this.uploadService.deleteFileByUrl(seminar.image.url);
+      }
+    }
     
     // 날짜 문자열을 Date 객체로 변환 (YYYY.MM.DD 또는 YYYY-MM-DD 형식 지원)
     const updateData: any = { ...data };
@@ -379,6 +392,12 @@ export class TrainingSeminarService {
   async delete(id: number) {
     const seminar = await this.seminarRepo.findOne({ where: { id } });
     if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
+
+    // Cleanup S3 file before deleting entity
+    if (seminar.image) {
+      await this.uploadService.deleteFileByUrl(seminar.image.url);
+    }
+
     await this.seminarRepo.remove(seminar);
     return { success: true, message: '삭제가 완료되었습니다.' };
   }
@@ -653,7 +672,7 @@ export class TrainingSeminarService {
         name: seminar?.name || '-',
         type: seminar?.type || '',
         typeLabel: this.getTypeLabel(seminar?.type || TrainingSeminarType.SEMINAR),
-        imageUrl: seminar?.imageUrl || null,
+        image: seminar?.image || null,
         location: seminar?.location || '-',
         endDate: seminar?.endDate || null,
         endDateFormatted: seminar?.endDate ? this.formatDate(seminar.endDate) : null,

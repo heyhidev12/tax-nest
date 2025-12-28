@@ -11,9 +11,9 @@ export class KeyCustomer {
   @PrimaryGeneratedColumn()
   id: number;
 
-  // 로고 이미지 URL (필수)
-  @Column()
-  logoUrl: string;
+  // 로고 이미지 (필수) - {id, url} object
+  @Column({ type: 'json' })
+  logo: { id: number; url: string };
 
   // 고객사 이름 (선택 - 내부 관리용)
   @Column({ nullable: true })
@@ -35,6 +35,8 @@ export class KeyCustomer {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
+
 
 
 

@@ -264,7 +264,7 @@ export class BusinessAreaService {
     const item = this.areaRepo.create({
       name: dto.name,
       subDescription: dto.subDescription,
-      imageUrl: dto.imageUrl,
+      image: dto.image,
       majorCategoryId: dto.majorCategory.id,
       minorCategoryId: dto.minorCategory.id,
       overview: dto.overview,
@@ -399,7 +399,7 @@ export class BusinessAreaService {
               isExposed: item.minorCategory.isExposed,
             }
           : null,
-        imageUrl: item.imageUrl,
+        image: item.image,
         overview: item.overview,
         sectionContents: item.sectionContents || [],
         youtubeUrls,
@@ -435,7 +435,7 @@ export class BusinessAreaService {
       id: area.id,
       name: area.name,
       subDescription: area.subDescription,
-      imageUrl: area.imageUrl,
+      image: area.image,
       majorCategory: area.majorCategory
         ? {
             id: area.majorCategory.id,
@@ -523,7 +523,7 @@ export class BusinessAreaService {
 
     if (dto.name) item.name = dto.name;
     if (dto.subDescription !== undefined) item.subDescription = dto.subDescription;
-    if (dto.imageUrl) item.imageUrl = dto.imageUrl;
+    if (dto.image) item.image = dto.image;
     if (dto.overview) item.overview = dto.overview;
     if (dto.body !== undefined) item.body = dto.body;
     if (dto.sectionContents !== undefined) item.sectionContents = dto.sectionContents;
@@ -626,7 +626,7 @@ export class BusinessAreaService {
         id: item.id,
         name: item.name,
         subDescription: item.subDescription,
-        imageUrl: item.imageUrl,
+        image: item.image,
         overview: item.overview,
         sectionContents: item.sectionContents || [],
         youtubeUrls: item.youtubeUrls || [],

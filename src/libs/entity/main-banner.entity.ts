@@ -19,9 +19,9 @@ export class MainBanner {
   @Column({ type: 'enum', enum: BannerMediaType, default: BannerMediaType.IMAGE })
   mediaType: BannerMediaType;
 
-  // S3/GCS URL
-  @Column()
-  mediaUrl: string;
+  // 미디어 파일 - {id, url} object
+  @Column({ type: 'json' })
+  media: { id: number; url: string };
 
   @Column({ nullable: true })
   linkUrl: string;
@@ -38,6 +38,8 @@ export class MainBanner {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
+
 
 
 

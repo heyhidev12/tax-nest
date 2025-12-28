@@ -23,8 +23,11 @@ export class ItemResponseDto {
   @ApiProperty({ example: '2024년 세무 개편 사항' })
   title: string;
 
-  @ApiProperty({ example: 'https://example.com/thumbnail.jpg', nullable: true })
-  thumbnailUrl: string | null;
+  @ApiProperty({
+    example: { id: 10, url: 'https://example.com/thumbnail.jpg' },
+    nullable: true
+  })
+  thumbnail: { id: number; url: string } | null;
 
   @ApiProperty({ example: '본문 내용입니다...' })
   content: string;
@@ -59,6 +62,9 @@ export class ItemResponseDto {
   @ApiProperty()
   updatedAt: Date;
 }
+
+
+
 
 
 

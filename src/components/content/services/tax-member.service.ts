@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
 import { BusinessArea } from 'src/libs/entity/business-area.entity';
+import { UploadService } from 'src/libs/upload/upload.service';
 
 interface TaxMemberListOptions {
   search?: string; // Search by insurance company name (affiliation) or member name
@@ -22,6 +23,7 @@ export class TaxMemberService {
     private readonly memberRepo: Repository<TaxMember>,
     @InjectRepository(BusinessArea)
     private readonly businessAreaRepo: Repository<BusinessArea>,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(data: Partial<TaxMember>) {
@@ -131,8 +133,8 @@ export class TaxMemberService {
         no,
         id: item.id,
         name: item.name,
-        mainPhotoUrl: item.mainPhotoUrl,
-        subPhotoUrl: item.subPhotoUrl,
+        mainPhoto: item.mainPhoto,
+        subPhoto: item.subPhoto,
         workAreas: item.workAreas || [],
         workArea1st,
         workArea2nd,
@@ -140,8 +142,8 @@ export class TaxMemberService {
         affiliation: item.affiliation || '-',
         phoneNumber: item.phoneNumber,
         email: item.email,
-        vcardUrl: item.vcardUrl,
-        pdfUrl: item.pdfUrl,
+        vcard: item.vcard,
+        pdf: item.pdf,
         oneLineIntro: item.oneLineIntro,
         expertIntro: item.expertIntro,
         mainCases: item.mainCases,
@@ -181,6 +183,21 @@ export class TaxMemberService {
   async delete(id: number) {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
+
+    // Cleanup S3 files before deleting entity
+    if (member.mainPhoto) {
+      await this.uploadService.deleteFileByUrl(member.mainPhoto.url);
+    }
+    if (member.subPhoto) {
+      await this.uploadService.deleteFileByUrl(member.subPhoto.url);
+    }
+    if (member.vcard) {
+      await this.uploadService.deleteFileByUrl(member.vcard.url);
+    }
+    if (member.pdf) {
+      await this.uploadService.deleteFileByUrl(member.pdf.url);
+    }
+
     await this.memberRepo.remove(member);
     return { success: true, message: '삭제가 완료되었습니다.' };
   }

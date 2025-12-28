@@ -2,10 +2,11 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { MainBanner, BannerMediaType } from 'src/libs/entity/main-banner.entity';
+import { UploadService } from 'src/libs/upload/upload.service';
 
 export interface CreateBannerDto {
   mediaType: BannerMediaType;
-  mediaUrl: string;
+  media: { id: number; url: string };
   linkUrl?: string;
   displayOrder?: number;
 }
@@ -15,10 +16,16 @@ export class MainBannerService {
   constructor(
     @InjectRepository(MainBanner)
     private readonly bannerRepo: Repository<MainBanner>,
+    private readonly uploadService: UploadService,
   ) {}
 
   async create(dto: CreateBannerDto) {
-    const banner = this.bannerRepo.create(dto);
+    const banner = this.bannerRepo.create({
+      mediaType: dto.mediaType,
+      media: dto.media,
+      linkUrl: dto.linkUrl,
+      displayOrder: dto.displayOrder,
+    });
     return this.bannerRepo.save(banner);
   }
 
@@ -44,6 +51,12 @@ export class MainBannerService {
 
   async delete(id: number) {
     const banner = await this.findById(id);
+
+    // Cleanup S3 file before deleting entity
+    if (banner.media) {
+      await this.uploadService.deleteFileByUrl(banner.media.url);
+    }
+
     await this.bannerRepo.remove(banner);
     return { success: true };
   }
@@ -69,6 +82,8 @@ export class MainBannerService {
     return { success: true };
   }
 }
+
+
 
 
 

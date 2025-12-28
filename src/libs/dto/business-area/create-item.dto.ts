@@ -62,10 +62,13 @@ export class CreateBusinessAreaItemDto {
   @IsString()
   subDescription?: string;
 
-  @ApiProperty({ example: 'https://example.com/image.jpg', description: '대표 이미지 URL' })
-  @IsNotEmpty({ message: '대표 이미지 URL을 입력해주세요.' })
-  @IsString()
-  imageUrl: string;
+  @ApiProperty({
+    example: { id: 10, url: 'https://example.com/image.jpg' },
+    description: '대표 이미지'
+  })
+  @IsNotEmpty({ message: '대표 이미지를 업로드해주세요.' })
+  @IsObject({ message: '이미지 정보가 올바르지 않습니다.' })
+  image: { id: number; url: string };
 
   @ApiProperty({ 
     description: 'Major Category (from InsightsSubcategory)', 

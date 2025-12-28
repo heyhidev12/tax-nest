@@ -16,13 +16,13 @@ export class TaxMember {
   @Column()
   name: string;
 
-  // 메인 사진 URL (필수)
-  @Column()
-  mainPhotoUrl: string;
+  // 메인 사진 (필수) - {id, url} object
+  @Column({ type: 'json' })
+  mainPhoto: { id: number; url: string };
 
-  // 서브 사진 URL (필수) - 홈/리스트/상세에서 플로팅
-  @Column()
-  subPhotoUrl: string;
+  // 서브 사진 (필수) - {id, url} object
+  @Column({ type: 'json' })
+  subPhoto: { id: number; url: string };
 
   // 업무분야 (3개까지 - 1순위/2순위/3순위)
   @Column({ type: 'json' })
@@ -40,13 +40,13 @@ export class TaxMember {
   @Column({ nullable: true })
   email: string;
 
-  // V-Card 파일 URL (선택)
-  @Column({ nullable: true })
-  vcardUrl: string;
+  // V-Card 파일 (선택) - {id, url} object
+  @Column({ type: 'json', nullable: true })
+  vcard: { id: number; url: string } | null;
 
-  // PDF 파일 URL (선택)
-  @Column({ nullable: true })
-  pdfUrl: string;
+  // PDF 파일 (선택) - {id, url} object
+  @Column({ type: 'json', nullable: true })
+  pdf: { id: number; url: string } | null;
 
   // 한 줄 소개 (필수)
   @Column()
@@ -85,6 +85,8 @@ export class TaxMember {
   @UpdateDateColumn()
   updatedAt: Date;
 }
+
+
 
 
 

@@ -4,6 +4,7 @@ import { DataSource, Repository, In } from 'typeorm';
 import { InsightsCategory } from 'src/libs/entity/insights-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
 import { InsightsItem, InsightsComment, InsightsCommentReport } from 'src/libs/entity/insights-item.entity';
+import { Attachment } from 'src/libs/entity/attachment.entity';
 import { Member } from 'src/libs/entity/member.entity';
 import { CreateCategoryDto } from 'src/libs/dto/insights/create-category.dto';
 import { UpdateCategoryDto } from 'src/libs/dto/insights/update-category.dto';
@@ -12,6 +13,8 @@ import { UpdateSubcategoryDto } from 'src/libs/dto/insights/update-subcategory.d
 import { CreateItemDto } from 'src/libs/dto/insights/create-item.dto';
 import { UpdateItemDto } from 'src/libs/dto/insights/update-item.dto';
 import { VALID_INSIGHTS_SECTIONS } from 'src/libs/enums/insights-sections.enum';
+import { AttachmentService } from './attachment.service';
+import { UploadService } from 'src/libs/upload/upload.service';
 
 @Injectable()
 export class InsightsService {
@@ -28,8 +31,12 @@ export class InsightsService {
     private readonly reportRepo: Repository<InsightsCommentReport>,
     @InjectRepository(Member)
     private readonly memberRepo: Repository<Member>,
+    @InjectRepository(Attachment)
+    private readonly attachmentRepo: Repository<Attachment>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly attachmentService: AttachmentService,
+    private readonly uploadService: UploadService,
   ) {}
 
   // ========== CATEGORY METHODS ==========
@@ -221,6 +228,56 @@ export class InsightsService {
 
   // ========== ITEM METHODS ==========
 
+  /**
+   * Helper method to format item with attachments
+   * @param item The insight item
+   * @param isPublicApi Whether this is for public/user API (returns thumbnail.url only)
+   */
+  private async formatItemWithAttachments(item: InsightsItem, isPublicApi = false) {
+    // Format thumbnail and pdf based on API type
+    const thumbnail = isPublicApi
+      ? (item.thumbnail ? { url: item.thumbnail.url } : null)
+      : item.thumbnail;
+
+    const pdf = isPublicApi
+      ? (item.pdf ? { url: item.pdf.url } : null)
+      : item.pdf;
+
+    return {
+      id: item.id,
+      title: item.title,
+      thumbnail,
+      pdf,
+      content: item.content,
+      categoryId: item.categoryId,
+      category: item.category
+        ? {
+            id: item.category.id,
+            name: item.category.name,
+            type: item.category.type,
+          }
+        : undefined,
+      subcategoryId: item.subcategoryId,
+      subcategory: item.subcategory
+        ? {
+            id: item.subcategory.id,
+            name: item.subcategory.name,
+            sections: item.subcategory.sections || [],
+          }
+        : undefined,
+      enableComments: item.enableComments,
+      commentsLabel: item.commentsLabel,
+      isExposed: item.isExposed,
+      isMainExposed: item.isMainExposed,
+      exposedLabel: item.exposedLabel,
+      viewCount: item.viewCount || 0,
+      commentCount: item.commentCount || 0,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+
   async createItem(dto: CreateItemDto) {
     // Validate category exists and is exposed
     const category = await this.categoryRepo.findOne({ where: { id: dto.categoryId, isActive: true } });
@@ -236,25 +293,36 @@ export class InsightsService {
       throw new NotFoundException('서브카테고리를 찾을 수 없습니다.');
     }
 
+    // Note: Attachments should be uploaded separately via /admin/attachments/upload
+    // with targetType=INSIGHT and targetId set after article creation
+    // The attachments array in DTO is kept for backward compatibility but is deprecated
+
     const item = this.itemRepo.create({
       title: dto.title,
-      thumbnailUrl: dto.thumbnailUrl || null,
+      thumbnail: dto.thumbnail,
+      pdf: dto.pdf,
       content: dto.content,
       categoryId: dto.categoryId,
       subcategoryId: dto.subcategoryId,
       enableComments: dto.enableComments ?? false,
       commentsLabel: dto.commentsLabel || 'N',
       isExposed: dto.isExposed ?? true,
+      isMainExposed: dto.isMainExposed ?? false,
       exposedLabel: dto.exposedLabel || 'Y',
     });
 
     const savedItem = await this.itemRepo.save(item);
 
+    // Note: Attachments should be uploaded via /admin/attachments/upload
+    // with targetType=INSIGHT and targetId=savedItem.id
+
     // Reload with relations for frontend-friendly response
-    return this.itemRepo.findOne({
+    const itemWithRelations = await this.itemRepo.findOne({
       where: { id: savedItem.id },
       relations: ['category', 'subcategory'],
     });
+
+    return await this.formatItemWithAttachments(itemWithRelations!);
   }
 
   async updateItem(id: number, dto: UpdateItemDto) {
@@ -281,29 +349,63 @@ export class InsightsService {
       }
     }
 
+    // Handle thumbnail cleanup when being replaced or removed
+    if (dto.thumbnail !== undefined) {
+      if (dto.thumbnail === null && item.thumbnail) {
+        // Thumbnail is being removed
+        await this.uploadService.deleteFileByUrl(item.thumbnail.url);
+      } else if (dto.thumbnail && item.thumbnail && dto.thumbnail.url !== item.thumbnail.url) {
+        // Thumbnail is being replaced
+        await this.uploadService.deleteFileByUrl(item.thumbnail.url);
+      }
+      item.thumbnail = dto.thumbnail || null;
+    }
+
+    // Handle pdf cleanup when being replaced or removed
+    if (dto.pdf !== undefined) {
+      if (dto.pdf === null && item.pdf) {
+        // PDF is being removed
+        await this.uploadService.deleteFileByUrl(item.pdf.url);
+      } else if (dto.pdf && item.pdf && dto.pdf.url !== item.pdf.url) {
+        // PDF is being replaced
+        await this.uploadService.deleteFileByUrl(item.pdf.url);
+      }
+      item.pdf = dto.pdf || null;
+    }
+
     if (dto.title) item.title = dto.title;
-    if (dto.thumbnailUrl !== undefined) item.thumbnailUrl = dto.thumbnailUrl || null;
     if (dto.content) item.content = dto.content;
     if (dto.categoryId) item.categoryId = dto.categoryId;
     if (dto.subcategoryId) item.subcategoryId = dto.subcategoryId;
     if (dto.enableComments !== undefined) item.enableComments = dto.enableComments;
     if (dto.commentsLabel) item.commentsLabel = dto.commentsLabel;
     if (dto.isExposed !== undefined) item.isExposed = dto.isExposed;
+    if (dto.isMainExposed !== undefined) item.isMainExposed = dto.isMainExposed;
     if (dto.exposedLabel) item.exposedLabel = dto.exposedLabel;
 
     await this.itemRepo.save(item);
 
     // Reload with relations for frontend-friendly response
-    return this.itemRepo.findOne({
+    const updatedItem = await this.itemRepo.findOne({
       where: { id: item.id },
       relations: ['category', 'subcategory'],
     });
+
+    return await this.formatItemWithAttachments(updatedItem!);
   }
 
   async deleteItem(id: number) {
     const item = await this.itemRepo.findOne({ where: { id } });
     if (!item) {
       throw new NotFoundException('아이템을 찾을 수 없습니다.');
+    }
+
+    // Cleanup S3 files before deleting entity
+    if (item.thumbnail) {
+      await this.uploadService.deleteFileByUrl(item.thumbnail.url);
+    }
+    if (item.pdf) {
+      await this.uploadService.deleteFileByUrl(item.pdf.url);
     }
 
     await this.itemRepo.remove(item);
@@ -330,36 +432,7 @@ export class InsightsService {
     });
 
     // Return frontend-friendly format
-    return items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      thumbnailUrl: item.thumbnailUrl,
-      content: item.content,
-      categoryId: item.categoryId,
-      category: item.category
-        ? {
-            id: item.category.id,
-            name: item.category.name,
-            type: item.category.type,
-          }
-        : undefined,
-      subcategoryId: item.subcategoryId,
-      subcategory: item.subcategory
-        ? {
-            id: item.subcategory.id,
-            name: item.subcategory.name,
-            sections: item.subcategory.sections || [],
-          }
-        : undefined,
-      enableComments: item.enableComments,
-      commentsLabel: item.commentsLabel,
-      isExposed: item.isExposed,
-      exposedLabel: item.exposedLabel,
-      viewCount: item.viewCount || 0,
-      commentCount: item.commentCount || 0,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
+    return Promise.all(items.map((item) => this.formatItemWithAttachments(item)));
   }
 
   async getItemById(id: number, includeHidden = false) {
@@ -378,36 +451,7 @@ export class InsightsService {
     }
 
     // Return frontend-friendly format
-    return {
-      id: item.id,
-      title: item.title,
-      thumbnailUrl: item.thumbnailUrl,
-      content: item.content,
-      categoryId: item.categoryId,
-      category: item.category
-        ? {
-            id: item.category.id,
-            name: item.category.name,
-            type: item.category.type,
-          }
-        : undefined,
-      subcategoryId: item.subcategoryId,
-      subcategory: item.subcategory
-        ? {
-            id: item.subcategory.id,
-            name: item.subcategory.name,
-            sections: item.subcategory.sections || [],
-          }
-        : undefined,
-      enableComments: item.enableComments,
-      commentsLabel: item.commentsLabel,
-      isExposed: item.isExposed,
-      exposedLabel: item.exposedLabel,
-      viewCount: item.viewCount || 0,
-      commentCount: item.commentCount || 0,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    };
+    return await this.formatItemWithAttachments(item);
   }
 
   async getAllItems(includeHidden = false) {
@@ -419,36 +463,7 @@ export class InsightsService {
     });
 
     // Return frontend-friendly format
-    return items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      thumbnailUrl: item.thumbnailUrl,
-      content: item.content,
-      categoryId: item.categoryId,
-      category: item.category
-        ? {
-            id: item.category.id,
-            name: item.category.name,
-            type: item.category.type,
-          }
-        : undefined,
-      subcategoryId: item.subcategoryId,
-      subcategory: item.subcategory
-        ? {
-            id: item.subcategory.id,
-            name: item.subcategory.name,
-            sections: item.subcategory.sections || [],
-          }
-        : undefined,
-      enableComments: item.enableComments,
-      commentsLabel: item.commentsLabel,
-      isExposed: item.isExposed,
-      exposedLabel: item.exposedLabel,
-      viewCount: item.viewCount || 0,
-      commentCount: item.commentCount || 0,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
+    return Promise.all(items.map((item) => this.formatItemWithAttachments(item)));
   }
 
   // ========== USER-FACING METHODS ==========
@@ -487,35 +502,7 @@ export class InsightsService {
       .getManyAndCount();
 
     // Return frontend-friendly format
-    const formattedItems = items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      thumbnailUrl: item.thumbnailUrl,
-      content: item.content,
-      categoryId: item.categoryId,
-      category: item.category
-        ? {
-            id: item.category.id,
-            name: item.category.name,
-            type: item.category.type,
-          }
-        : undefined,
-      subcategoryId: item.subcategoryId,
-      subcategory: item.subcategory
-        ? {
-            id: item.subcategory.id,
-            name: item.subcategory.name,
-            sections: item.subcategory.sections || [],
-          }
-        : undefined,
-      enableComments: item.enableComments,
-      commentsLabel: item.commentsLabel,
-      isExposed: item.isExposed,
-      exposedLabel: item.exposedLabel,
-      viewCount: item.viewCount || 0,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
+    const formattedItems = await Promise.all(items.map((item) => this.formatItemWithAttachments(item, true)));
 
     return {
       items: formattedItems,
@@ -539,35 +526,7 @@ export class InsightsService {
     }
 
     // Return frontend-friendly format
-    return {
-      id: item.id,
-      title: item.title,
-      thumbnailUrl: item.thumbnailUrl,
-      content: item.content,
-      categoryId: item.categoryId,
-      category: item.category
-        ? {
-            id: item.category.id,
-            name: item.category.name,
-            type: item.category.type,
-          }
-        : undefined,
-      subcategoryId: item.subcategoryId,
-      subcategory: item.subcategory
-        ? {
-            id: item.subcategory.id,
-            name: item.subcategory.name,
-            sections: item.subcategory.sections || [],
-          }
-        : undefined,
-      enableComments: item.enableComments,
-      commentsLabel: item.commentsLabel,
-      isExposed: item.isExposed,
-      exposedLabel: item.exposedLabel,
-      viewCount: item.viewCount || 0,
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    };
+    return await this.formatItemWithAttachments(item, true);
   }
 
   /**

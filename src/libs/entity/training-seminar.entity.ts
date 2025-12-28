@@ -62,7 +62,9 @@ export class TrainingSeminar {
 
   // 이미지 URL
   @Column({ nullable: true })
-  imageUrl: string;
+  // 이미지 - {id, url} object
+  @Column({ type: 'json' })
+  image: { id: number; url: string };
 
   // 강사명
   @Column({ nullable: true })

@@ -63,7 +63,7 @@ export class KeyCustomerService {
     const formattedItems = items.map((item, index) => ({
       no: total - ((page - 1) * limit + index),
       id: item.id,
-      logoUrl: item.logoUrl,
+      logo: item.logo,
       name: item.name,
       displayOrder: item.displayOrder,
       isMainExposed: item.isMainExposed,
@@ -86,7 +86,7 @@ export class KeyCustomerService {
     return customers.map((item, index) => ({
       no: index + 1,
       id: item.id,
-      logoUrl: item.logoUrl,
+      logo: item.logo,
       name: item.name,
       displayOrder: item.displayOrder,
     }));

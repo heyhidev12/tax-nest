@@ -213,8 +213,6 @@ export class AdminContentController {
     return this.historyService.deleteYears(dto.ids);
   }
 
- 
-
   @ApiOperation({ summary: '연혁 연도 삭제' })
   @Delete('history/years/:id')
   deleteHistoryYear(@Param('id', ParseIntPipe) id: number) {
@@ -226,8 +224,6 @@ export class AdminContentController {
   toggleHistoryYearExposure(@Param('id', ParseIntPipe) id: number) {
     return this.historyService.toggleYearExposure(id);
   }
-
-  
 
   @ApiOperation({ summary: '연혁 항목 목록 (연도별)' })
   @Get('history/years/:yearId/items')
@@ -359,7 +355,7 @@ export class AdminContentController {
     );
   }
 
-   @ApiOperation({ summary: '수상/인증 연도 순서 변경' })
+  @ApiOperation({ summary: '수상/인증 연도 순서 변경' })
   @ApiBody({
     description: '수상/인증 연도 순서 변경 정보',
     schema: {
@@ -426,8 +422,6 @@ export class AdminContentController {
     return this.awardService.toggleYearMainExposure(id);
   }
 
- 
-
   @ApiOperation({ summary: '수상/인증 목록 (연도별)' })
   @Get('awards/years/:yearId/awards')
   listAwards(@Param('yearId', ParseIntPipe) yearId: number) {
@@ -445,11 +439,18 @@ export class AdminContentController {
     description: '수상/인증 생성 정보',
     schema: {
       type: 'object',
-      required: ['name', 'source', 'imageUrl'],
+      required: ['name', 'source', 'image'],
       properties: {
         name: { type: 'string', description: '수상/인증 명칭 (필수)' },
         source: { type: 'string', description: '출처 (필수)' },
-        imageUrl: { type: 'string', description: '이미지 URL (필수)' },
+        image: {
+          type: 'object',
+          description: '이미지 (필수)',
+          properties: {
+            id: { type: 'number', description: 'Attachment ID' },
+            url: { type: 'string', description: '이미지 URL' },
+          },
+        },
         isMainExposed: {
           type: 'boolean',
           description: '메인 노출 여부 (기본: false)',
@@ -465,7 +466,7 @@ export class AdminContentController {
     body: {
       name: string;
       source: string;
-      imageUrl: string;
+      image: { id: number; url: string };
       isMainExposed?: boolean;
       isExposed?: boolean;
     },
@@ -473,7 +474,7 @@ export class AdminContentController {
     return this.awardService.createAward(yearId, body);
   }
 
-   @ApiOperation({ summary: '수상/인증 순서 변경' })
+  @ApiOperation({ summary: '수상/인증 순서 변경' })
   @ApiBody({
     description: '수상/인증 순서 변경 정보',
     schema: {
@@ -542,8 +543,6 @@ export class AdminContentController {
     return this.awardService.toggleAwardMainExposure(id);
   }
 
- 
-
   // ===== BRANCHES =====
   @ApiOperation({ summary: '본사/지점 목록' })
   @Get('branches')
@@ -586,7 +585,7 @@ export class AdminContentController {
     return this.branchService.create(body);
   }
 
-   @ApiOperation({ summary: '본사/지점 순서 변경' })
+  @ApiOperation({ summary: '본사/지점 순서 변경' })
   @ApiBody({
     description: '본사/지점 순서 변경 정보',
     schema: {
@@ -657,8 +656,6 @@ export class AdminContentController {
     return this.branchService.toggleExposure(id);
   }
 
- 
-
   // ===== KEY CUSTOMERS =====
   @ApiOperation({ summary: '주요 고객 목록' })
   @Get('key-customers')
@@ -698,7 +695,7 @@ export class AdminContentController {
     return this.keyCustomerService.create(body);
   }
 
-     @ApiOperation({ summary: '주요 고객 순서 변경' })
+  @ApiOperation({ summary: '주요 고객 순서 변경' })
   @ApiBody({
     description: '주요 고객 순서 변경 정보',
     schema: {
@@ -766,8 +763,6 @@ export class AdminContentController {
   toggleKeyCustomerMainExposure(@Param('id', ParseIntPipe) id: number) {
     return this.keyCustomerService.toggleMainExposure(id);
   }
-
- 
 
   // ===== BUSINESS AREAS =====
 
@@ -870,7 +865,7 @@ export class AdminContentController {
     return this.businessAreaService.createItem(dto);
   }
 
-   @ApiOperation({ summary: '업무분야 순서 변경' })
+  @ApiOperation({ summary: '업무분야 순서 변경' })
   @ApiBody({
     description: '업무분야 순서 변경 정보',
     schema: {
@@ -928,8 +923,6 @@ export class AdminContentController {
   toggleBusinessAreaMainExposure(@Param('id', ParseIntPipe) id: number) {
     return this.businessAreaService.toggleMainExposure(id);
   }
-
- 
 
   // ===== TRAINING/SEMINARS =====
   @ApiOperation({
@@ -1178,7 +1171,9 @@ export class AdminContentController {
   })
   @Patch('exposure-settings/newsletter-page')
   setNewsletterPageExposure(@Body() body: { isExposed: boolean }) {
-    return this.exposureSettingsService.setNewsletterPageExposed(body.isExposed);
+    return this.exposureSettingsService.setNewsletterPageExposed(
+      body.isExposed,
+    );
   }
 
   @ApiOperation({ summary: 'History 페이지 노출 설정 (Y/N, 기본: N)' })

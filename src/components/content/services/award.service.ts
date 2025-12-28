@@ -122,7 +122,7 @@ export class AwardService {
         id: award.id,
         name: award.name,
         source: award.source,
-        imageUrl: award.imageUrl,
+        image: award.image,
         displayOrder: award.displayOrder,
         isMainExposed: award.isMainExposed,
         mainExposedLabel: award.isMainExposed ? 'Y' : 'N',
@@ -191,10 +191,10 @@ export class AwardService {
   }
 
   // === Award CRUD ===
-  async createAward(awardYearId: number, data: { 
-    name: string; 
-    source: string; 
-    imageUrl: string;
+  async createAward(awardYearId: number, data: {
+    name: string;
+    source: string;
+    image: { id: number; url: string };
     isMainExposed?: boolean;
     isExposed?: boolean;
   }) {
@@ -205,7 +205,7 @@ export class AwardService {
       awardYearId,
       name: data.name,
       source: data.source,
-      imageUrl: data.imageUrl,
+      image: data.image,
       isMainExposed: data.isMainExposed ?? false,
       isExposed: data.isExposed ?? true,
     });
@@ -243,7 +243,7 @@ export class AwardService {
       id: award.id,
       name: award.name,
       source: award.source,
-      imageUrl: award.imageUrl,
+        image: award.image,
       displayOrder: award.displayOrder,
       isMainExposed: award.isMainExposed,
       mainExposedLabel: award.isMainExposed ? 'Y' : 'N',
@@ -293,7 +293,7 @@ export class AwardService {
         id: award.id,
         name: award.name,
         source: award.source,
-        imageUrl: award.imageUrl,
+        image: award.image,
         yearName: award.awardYear?.yearName || '-',
         yearId: award.awardYearId,
         displayOrder: award.displayOrder,
@@ -406,7 +406,7 @@ export class AwardService {
             id: award.id,
             name: award.name,
             source: award.source,
-            imageUrl: award.imageUrl,
+            image: award.image,
             isMainExposed: award.isMainExposed,
             displayOrder: award.displayOrder,
             createdAt: award.createdAt,
