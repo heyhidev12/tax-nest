@@ -11,6 +11,7 @@ interface BranchListOptions {
   page?: number;
   limit?: number;
   includeHidden?: boolean;
+  isPublic?: boolean;
 }
 
 @Injectable()
@@ -19,11 +20,11 @@ export class BranchService {
     @InjectRepository(Branch)
     private readonly branchRepo: Repository<Branch>,
     private readonly geocodingService: GeocodingService,
-  ) {}
+  ) { }
 
   async create(data: Partial<Branch>) {
     const branch = this.branchRepo.create(data);
-    
+
     // Geocode address if provided
     if (data.address) {
       const coordinates = await this.geocodingService.geocodeAddress(data.address);
@@ -32,18 +33,19 @@ export class BranchService {
         branch.longitude = coordinates.longitude;
       }
     }
-    
+
     return this.branchRepo.save(branch);
   }
 
   async findAll(options: BranchListOptions = {}) {
-    const { 
+    const {
       search,
       isExposed,
       sort = 'order',
-      page = 1, 
-      limit = 50, 
-      includeHidden = false 
+      page = 1,
+      limit = 50,
+      includeHidden = false,
+      isPublic = false
     } = options;
 
     const qb = this.branchRepo.createQueryBuilder('branch');
@@ -73,23 +75,30 @@ export class BranchService {
     const [items, total] = await qb.getManyAndCount();
 
     // 응답 포맷: 전체 지점 정보 + 관리자용 메타데이터
-    const formattedItems = items.map((item, index) => ({
-      // 목록 번호 (최신순 기준 역순 번호)
-      no: total - ((page - 1) * limit + index),
-      // 엔티티의 모든 필드 포함
-      ...item,
-      // 관리자 UI 편의를 위한 추가 필드
-      exposedLabel: item.isExposed ? 'Y' : 'N',
-      createdAtFormatted: this.formatDateTime(item.createdAt),
-      updatedAtFormatted: this.formatDateTime(item.updatedAt),
-    }));
+    const formattedItems = items.map((item) => {
+      if (isPublic) {
+        const { createdAt, updatedAt, ...rest } = item;
+        return rest;
+      }
+      return {
+        ...item,
+        exposedLabel: item.isExposed ? 'Y' : 'N',
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+        updatedAtFormatted: this.formatDateTime(item.updatedAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }
 
-  async findById(id: number) {
+  async findById(id: number, isPublic = false) {
     const branch = await this.branchRepo.findOne({ where: { id } });
     if (!branch) throw new NotFoundException('본사/지점을 찾을 수 없습니다.');
+
+    if (isPublic) {
+      const { createdAt, updatedAt, ...rest } = branch;
+      return rest;
+    }
     return {
       ...branch,
       exposedLabel: branch.isExposed ? 'Y' : 'N',
@@ -101,7 +110,7 @@ export class BranchService {
   async update(id: number, data: Partial<Branch>) {
     const branch = await this.branchRepo.findOne({ where: { id } });
     if (!branch) throw new NotFoundException('본사/지점을 찾을 수 없습니다.');
-    
+
     // If address is being updated, geocode it
     if (data.address && data.address !== branch.address) {
       const coordinates = await this.geocodingService.geocodeAddress(data.address);
@@ -114,7 +123,7 @@ export class BranchService {
         (data as any).longitude = null;
       }
     }
-    
+
     Object.assign(branch, data);
     return this.branchRepo.save(branch);
   }

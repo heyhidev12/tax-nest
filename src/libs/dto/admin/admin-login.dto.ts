@@ -8,7 +8,7 @@ export class AdminLoginDto {
   @IsValidLoginId()
   loginId: string;
 
-  @ApiProperty({ example: 'admin1234!', description: '관리자 비밀번호 (8-16자, 영문/숫자/특수문자 중 2가지 이상 조합)' })
+  @ApiProperty({ example: 'admin12', description: '관리자 비밀번호 (8-16자, 영문/숫자/특수문자 중 2가지 이상 조합)' })
   @IsString()
   @MinLength(8, { message: '비밀번호는 최소 8자 이상이어야 합니다.' })
   @MaxLength(16, { message: '비밀번호는 최대 16자까지 가능합니다.' })

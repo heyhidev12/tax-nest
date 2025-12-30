@@ -2,20 +2,20 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsEmail, IsDateString, IsInt, Min, IsOptional, IsBoolean } from 'class-validator';
 
 export class ApplySeminarDto {
-  @ApiProperty({ example: '홍길동', description: '신청자 이름 (필수)' })
+  @ApiPropertyOptional({ example: '홍길동', description: '신청자 이름 (로그인 시 자동 입력)' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: '이름을 입력해주세요.' })
-  name: string;
+  name?: string;
 
-  @ApiProperty({ example: '01012345678', description: '휴대폰 번호 (필수, 숫자만)' })
+  @ApiPropertyOptional({ example: '01012345678', description: '휴대폰 번호 (로그인 시 자동 입력)' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: '휴대폰 번호를 입력해주세요.' })
-  phoneNumber: string;
+  phoneNumber?: string;
 
-  @ApiProperty({ example: 'user@example.com', description: '이메일 (필수)' })
+  @ApiPropertyOptional({ example: 'user@example.com', description: '이메일 (로그인 시 자동 입력)' })
+  @IsOptional()
   @IsEmail({}, { message: '올바른 이메일 형식이 아닙니다.' })
-  @IsNotEmpty({ message: '이메일을 입력해주세요.' })
-  email: string;
+  email?: string;
 
   @ApiProperty({ example: '2026-06-13', description: '참여 일자 (필수, YYYY-MM-DD 형식)' })
   @IsDateString({}, { message: '올바른 날짜 형식이 아닙니다. (YYYY-MM-DD)' })

@@ -37,7 +37,7 @@ export class InsightsService {
     private readonly dataSource: DataSource,
     private readonly attachmentService: AttachmentService,
     private readonly uploadService: UploadService,
-  ) {}
+  ) { }
 
   // ========== CATEGORY METHODS ==========
 
@@ -243,32 +243,40 @@ export class InsightsService {
       ? (item.pdf ? { url: item.pdf.url } : null)
       : item.pdf;
 
-    return {
+    const base = {
       id: item.id,
       title: item.title,
       thumbnail,
       pdf,
       content: item.content,
-      categoryId: item.categoryId,
       category: item.category
         ? {
-            id: item.category.id,
-            name: item.category.name,
-            type: item.category.type,
-          }
+          id: item.category.id,
+          name: item.category.name,
+          type: item.category.type,
+        }
         : undefined,
-      subcategoryId: item.subcategoryId,
       subcategory: item.subcategory
         ? {
-            id: item.subcategory.id,
-            name: item.subcategory.name,
-            sections: item.subcategory.sections || [],
-          }
+          id: item.subcategory.id,
+          name: item.subcategory.name,
+          sections: item.subcategory.sections || [],
+        }
         : undefined,
       enableComments: item.enableComments,
-      commentsLabel: item.commentsLabel,
       isExposed: item.isExposed,
       isMainExposed: item.isMainExposed,
+    };
+
+    if (isPublicApi) {
+      return base;
+    }
+
+    return {
+      ...base,
+      categoryId: item.categoryId,
+      subcategoryId: item.subcategoryId,
+      commentsLabel: item.commentsLabel,
       exposedLabel: item.exposedLabel,
       viewCount: item.viewCount || 0,
       commentCount: item.commentCount || 0,
@@ -696,35 +704,35 @@ export class InsightsService {
       },
       author: author
         ? {
-            id: author.id,
-            loginId: author.loginId,
-          }
+          id: author.id,
+          loginId: author.loginId,
+        }
         : null,
       reporter: latestReport?.reporter
         ? {
-            id: latestReport.reporter.id,
-            loginId: latestReport.reporter.loginId,
-          }
+          id: latestReport.reporter.id,
+          loginId: latestReport.reporter.loginId,
+        }
         : null,
       insight: comment.item
         ? {
-            id: comment.item.id,
-            title: comment.item.title,
-            categoryId: comment.item.categoryId,
-            category: comment.item.category
-              ? {
-                  id: comment.item.category.id,
-                  name: comment.item.category.name,
-                  type: comment.item.category.type,
-                }
-              : undefined,
-            subcategory: comment.item.subcategory
-              ? {
-                  id: comment.item.subcategory.id,
-                  name: comment.item.subcategory.name,
-                }
-              : undefined,
-          }
+          id: comment.item.id,
+          title: comment.item.title,
+          categoryId: comment.item.categoryId,
+          category: comment.item.category
+            ? {
+              id: comment.item.category.id,
+              name: comment.item.category.name,
+              type: comment.item.category.type,
+            }
+            : undefined,
+          subcategory: comment.item.subcategory
+            ? {
+              id: comment.item.subcategory.id,
+              name: comment.item.subcategory.name,
+            }
+            : undefined,
+        }
         : undefined,
     };
   }
@@ -896,21 +904,21 @@ export class InsightsService {
     const memberIds = comments
       .map((c) => c.memberId)
       .filter((id): id is number => id !== null && id !== undefined);
-    
+
     const authors = memberIds.length > 0
       ? await this.memberRepo.find({ where: { id: In(memberIds) } })
       : [];
-    
+
     const authorMap = new Map(authors.map((m) => [m.id, m]));
 
     // Fetch all reports for these comments with reporters
     const fetchedCommentIds = comments.map((c) => c.id);
     const allReports = fetchedCommentIds.length > 0
       ? await this.reportRepo.find({
-          where: { commentId: In(fetchedCommentIds) },
-          relations: ['reporter'],
-          order: { createdAt: 'DESC' },
-        })
+        where: { commentId: In(fetchedCommentIds) },
+        relations: ['reporter'],
+        order: { createdAt: 'DESC' },
+      })
       : [];
 
     // Group reports by commentId and get the latest report for each
@@ -926,7 +934,7 @@ export class InsightsService {
       const latestReport = reportMap.get(comment.id);
       const author = comment.memberId ? authorMap.get(comment.memberId) : null;
       const reporter = latestReport?.reporter || null;
-      
+
       return {
         comment: {
           id: comment.id,
@@ -934,29 +942,29 @@ export class InsightsService {
         },
         author: author
           ? {
-              id: author.id,
-              loginId: author.loginId,
-            }
+            id: author.id,
+            loginId: author.loginId,
+          }
           : null,
         reporter: reporter
           ? {
-              id: reporter.id,
-              loginId: reporter.loginId,
-            }
+            id: reporter.id,
+            loginId: reporter.loginId,
+          }
           : null,
         insight: comment.item
           ? {
-              id: comment.item.id,
-              title: comment.item.title,
-              categoryId: comment.item.categoryId,
-              category: comment.item.category
-                ? {
-                    id: comment.item.category.id,
-                    name: comment.item.category.name,
-                    type: comment.item.category.type,
-                  }
-                : undefined,
-            }
+            id: comment.item.id,
+            title: comment.item.title,
+            categoryId: comment.item.categoryId,
+            category: comment.item.category
+              ? {
+                id: comment.item.category.id,
+                name: comment.item.category.name,
+                type: comment.item.category.type,
+              }
+              : undefined,
+          }
           : undefined,
         isReported: comment.isReported,
         isHidden: comment.isHidden,

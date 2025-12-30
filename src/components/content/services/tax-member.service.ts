@@ -14,6 +14,7 @@ interface TaxMemberListOptions {
   page?: number;
   limit?: number;
   includeHidden?: boolean;
+  isPublic?: boolean;
 }
 
 @Injectable()
@@ -24,7 +25,7 @@ export class TaxMemberService {
     @InjectRepository(BusinessArea)
     private readonly businessAreaRepo: Repository<BusinessArea>,
     private readonly uploadService: UploadService,
-  ) {}
+  ) { }
 
   async create(data: Partial<TaxMember>) {
     const member = this.memberRepo.create(data);
@@ -32,15 +33,16 @@ export class TaxMemberService {
   }
 
   async findAll(options: TaxMemberListOptions = {}) {
-    const { 
-      search, 
+    const {
+      search,
       workArea,
       businessAreaId,
       isExposed,
       sort = 'order',
-      page = 1, 
-      limit = 20, 
-      includeHidden = false 
+      page = 1,
+      limit = 20,
+      includeHidden = false,
+      isPublic = false
     } = options;
 
     const qb = this.memberRepo.createQueryBuilder('member');
@@ -70,7 +72,7 @@ export class TaxMemberService {
         where: { id: businessAreaId },
         relations: ['minorCategory'],
       });
-      
+
       if (!businessArea) {
         throw new NotFoundException('업무분야를 찾을 수 없습니다.');
       }
@@ -109,62 +111,30 @@ export class TaxMemberService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 구성원 명, 구성원 메인 이미지, 소속 명, 업무 분야(1순위/2순위/3순위), 노출 여부, 등록일시
-    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
-    const formattedItems = items.map((item, index) => {
-      // 번호 계산: 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터, 순서순이면 큰 번호부터
-      let no: number;
-      if (sort === 'latest') {
-        no = total - ((page - 1) * limit + index);
-      } else if (sort === 'oldest') {
-        no = (page - 1) * limit + index + 1;
-      } else {
-        // order sort: 큰 번호부터
-        no = total - ((page - 1) * limit + index);
+    const formattedItems = items.map((item) => {
+      if (isPublic) {
+        const { createdAt, updatedAt, ...rest } = item;
+        return rest;
       }
-
-      // 업무 분야를 1순위/2순위/3순위로 표시
-      const workAreasArray = item.workAreas || [];
-      const workArea1st = workAreasArray[0] || '';
-      const workArea2nd = workAreasArray[1] || '';
-      const workArea3rd = workAreasArray[2] || '';
-
       return {
-        no,
-        id: item.id,
-        name: item.name,
-        mainPhoto: item.mainPhoto,
-        subPhoto: item.subPhoto,
-        workAreas: item.workAreas || [],
-        workArea1st,
-        workArea2nd,
-        workArea3rd,
-        affiliation: item.affiliation || '-',
-        phoneNumber: item.phoneNumber,
-        email: item.email,
-        vcard: item.vcard,
-        pdf: item.pdf,
-        oneLineIntro: item.oneLineIntro,
-        expertIntro: item.expertIntro,
-        mainCases: item.mainCases,
-        education: item.education,
-        careerAndAwards: item.careerAndAwards,
-        booksActivitiesOther: item.booksActivitiesOther,
-        displayOrder: item.displayOrder,
-        isExposed: item.isExposed,
+        ...item,
         exposedLabel: item.isExposed ? 'Y' : 'N',
-        createdAt: item.createdAt,
         createdAtFormatted: this.formatDateTime(item.createdAt),
+        updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
     });
 
     return { items: formattedItems, total, page, limit };
   }
 
-  async findById(id: number) {
+  async findById(id: number, isPublic = false) {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
-    
+
+    if (isPublic) {
+      const { createdAt, updatedAt, ...rest } = member;
+      return rest;
+    }
     return {
       ...member,
       exposedLabel: member.isExposed ? 'Y' : 'N',

@@ -25,6 +25,7 @@ import { HistoryService } from '../services/history.service';
 import { InsightsService } from '../services/insights.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
 import { ExposureSettingsService } from '../services/exposure-settings.service';
+import { MembersService } from 'src/components/members/members.service';
 
 @ApiTags('Content')
 @Controller()
@@ -40,7 +41,8 @@ export class PublicContentController {
     private readonly historyService: HistoryService,
     private readonly insightsService: InsightsService,
     private readonly exposureSettingsService: ExposureSettingsService,
-  ) {}
+    private readonly membersService: MembersService,
+  ) { }
 
   // ===== MEMBERS (구성원) =====
 
@@ -81,6 +83,7 @@ export class PublicContentController {
       isExposed: true, // Only exposed members
       sort: sort || 'order',
       includeHidden: false,
+      isPublic: true,
     });
   }
 
@@ -89,7 +92,7 @@ export class PublicContentController {
   @ApiResponse({ status: 404, description: '구성원을 찾을 수 없습니다' })
   @Get('members/:id')
   async getMemberDetail(@Param('id', ParseIntPipe) id: number) {
-    const member = await this.taxMemberService.findById(id);
+    const member = await this.taxMemberService.findById(id, true);
     // Only return if exposed
     if (!member.isExposed) {
       throw new NotFoundException('구성원을 찾을 수 없습니다.');
@@ -110,7 +113,7 @@ export class PublicContentController {
 
     return {
       isExposed,
-      data,
+      data: isExposed ? data : [],
     };
   }
 
@@ -151,6 +154,7 @@ export class PublicContentController {
 
     return {
       ...awardsData,
+      items: isExposed ? awardsData.items : [],
       isExposed,
     };
   }
@@ -184,6 +188,7 @@ export class PublicContentController {
       isExposed: true, // Only exposed training/seminars
       sort: sort || 'latest',
       includeHidden: false,
+      isPublic: true,
     });
   }
 
@@ -191,25 +196,54 @@ export class PublicContentController {
   @ApiResponse({ status: 200, description: '교육/세미나 상세 조회 성공' })
   @ApiResponse({ status: 404, description: '교육/세미나를 찾을 수 없습니다' })
   @Get('training-seminars/:id')
-  async getTrainingSeminarDetail(@Param('id', ParseIntPipe) id: number) {
-    const seminar = await this.trainingSeminarService.findById(id);
+  async getTrainingSeminarDetail(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    const seminar = await this.trainingSeminarService.findById(id, true);
     // Only return if exposed
     if (!seminar.isExposed) {
       throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
     }
-    return seminar;
+
+    // Check if user is authenticated and has confirmed application to expose Vimeo URL
+    const userEmail = req.user?.email;
+    let vimeoVideoUrl: string | null = null;
+
+    if (userEmail) {
+      // Check if user has a confirmed application for this seminar
+      const hasConfirmedApplication = seminar.applications?.some(app =>
+        app.email === userEmail &&
+        app.status === 'CONFIRMED'
+      );
+
+      if (hasConfirmedApplication && seminar.vimeoVideoUrl) {
+        vimeoVideoUrl = seminar.vimeoVideoUrl;
+      }
+    }
+
+    return {
+      ...seminar,
+      vimeoVideoUrl,
+    };
   }
 
   @ApiOperation({ summary: '교육/세미나 신청' })
   @ApiResponse({ status: 201, description: '교육/세미나 신청 성공' })
   @ApiResponse({ status: 400, description: '신청 실패 (정원 마감, 필수 정보 누락 등)' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자 (로그인 필요)' })
   @ApiResponse({ status: 404, description: '교육/세미나를 찾을 수 없습니다' })
   @ApiBody({ type: ApplySeminarDto })
+  @ApiBearerAuth('user-auth')
+  @UseGuards(JwtAuthGuard)
   @Post('training-seminars/:id/apply')
   async applyToSeminar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: ApplySeminarDto,
+    @Req() req: any,
   ) {
+    const userId = req.user.id || req.user.sub;
+
     // Validate privacy agreement
     if (!dto.privacyAgreed) {
       throw new BadRequestException('개인정보 수집 및 이용에 동의해주세요.');
@@ -221,12 +255,15 @@ export class PublicContentController {
       throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
     }
 
+    // Get user details from MembersService
+    const user = await this.membersService.findById(userId);
+
     // Create application
     const application = await this.trainingSeminarService.createApplication(id, {
-      name: dto.name,
-      phoneNumber: dto.phoneNumber,
-      email: dto.email,
-      participationDate: new Date(dto.participationDate),
+      name: user.name,
+      phoneNumber: user.phoneNumber,
+      email: user.email,
+      participationDate: dto.participationDate,
       participationTime: dto.participationTime,
       attendeeCount: dto.attendeeCount,
       requestDetails: dto.requestDetails,
@@ -253,18 +290,6 @@ export class PublicContentController {
     return this.bannerService.findAll(false); // Only active banners
   }
 
-  @ApiOperation({ summary: '메인 배너 상세 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '메인 배너 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '배너를 찾을 수 없습니다' })
-  @Get('banners/:id')
-  async getBannerDetail(@Param('id', ParseIntPipe) id: number) {
-    const banner = await this.bannerService.findById(id);
-    // Only return if active
-    if (!banner.isActive) {
-      throw new NotFoundException('배너를 찾을 수 없습니다.');
-    }
-    return banner;
-  }
 
   // ===== BRANCHES (본사/지점) =====
 
@@ -291,6 +316,7 @@ export class PublicContentController {
       isExposed: true, // Only exposed branches
       sort: sort || 'order',
       includeHidden: false,
+      isPublic: true,
     });
   }
 
@@ -299,7 +325,7 @@ export class PublicContentController {
   @ApiResponse({ status: 404, description: '본사/지점을 찾을 수 없습니다' })
   @Get('branches/:id')
   async getBranchDetail(@Param('id', ParseIntPipe) id: number) {
-    const branch = await this.branchService.findById(id);
+    const branch = await this.branchService.findById(id, true);
     // Only return if exposed
     if (!branch.isExposed) {
       throw new NotFoundException('본사/지점을 찾을 수 없습니다.');
@@ -333,21 +359,10 @@ export class PublicContentController {
       isMainExposed: isMainExposedBool,
       sort: sort || 'order',
       includeHidden: false,
+      isPublic: true,
     });
   }
 
-  @ApiOperation({ summary: '주요 고객 상세 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '주요 고객 상세 조회 성공' })
-  @ApiResponse({ status: 404, description: '주요 고객을 찾을 수 없습니다' })
-  @Get('key-customers/:id')
-  async getKeyCustomerDetail(@Param('id', ParseIntPipe) id: number) {
-    const customer = await this.keyCustomerService.findById(id);
-    // Only return if exposed
-    if (!customer.isExposed) {
-      throw new NotFoundException('주요 고객을 찾을 수 없습니다.');
-    }
-    return customer;
-  }
 
   // ===== BUSINESS AREAS (업무분야) =====
 
@@ -359,7 +374,7 @@ export class PublicContentController {
   @ApiResponse({ status: 200, description: '계층 구조 데이터 조회 성공' })
   @Get('business-areas/hierarchical')
   getBusinessAreasHierarchical() {
-    return this.businessAreaService.getHierarchicalData(false);
+    return this.businessAreaService.getHierarchicalData(true);
   }
 
   @ApiOperation({ summary: '업무분야 목록 조회' })
@@ -399,6 +414,7 @@ export class PublicContentController {
       isMainExposed: isMainExposedBool,
       sort: sort || 'order',
       includeHidden: false,
+      isPublic: true,
     });
   }
 
@@ -407,7 +423,7 @@ export class PublicContentController {
   @ApiResponse({ status: 404, description: '업무분야를 찾을 수 없습니다' })
   @Get('business-areas/:id')
   async getBusinessAreaDetail(@Param('id', ParseIntPipe) id: number) {
-    const area = await this.businessAreaService.findById(id);
+    const area = await this.businessAreaService.findById(id, true);
     // Only return if exposed
     if (!area.isExposed) {
       throw new NotFoundException('업무분야를 찾을 수 없습니다.');

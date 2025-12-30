@@ -32,7 +32,7 @@ import { SignUpDto } from 'src/libs/dto/auth/sign-up.dto';
 import { LoginDto } from 'src/libs/dto/auth/login.dto';
 import { UpdateProfileDto } from 'src/libs/dto/auth/update-profile.dto';
 import { ChangePasswordDto } from 'src/libs/dto/auth/change-password.dto';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiBearerAuth, ApiBody, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { TrainingSeminarService } from '../content/services/training-seminar.service';
 import { ConsultationsService } from '../consultations/consultations.service';
 import { ExposureSettingsService } from '../content/services/exposure-settings.service';
@@ -45,7 +45,7 @@ export class AuthController {
     private readonly trainingSeminarService: TrainingSeminarService,
     private readonly consultationsService: ConsultationsService,
     private readonly exposureSettingsService: ExposureSettingsService,
-  ) {}
+  ) { }
 
   // -------------------------------------
   // SIGN UP / LOGIN
@@ -158,7 +158,7 @@ export class AuthController {
     if (type === 'seminar') {
       // 교육/세미나 신청만 조회 (해당 사용자의 이메일로 필터링됨)
       const seminarApplications = await this.trainingSeminarService.findUserApplications(userEmail, options);
-      
+
       return {
         type: 'seminar',
         ...seminarApplications,
@@ -167,7 +167,7 @@ export class AuthController {
     } else if (type === 'consultation') {
       // 상담 신청만 조회 (해당 사용자의 이메일로 필터링됨)
       const consultations = await this.consultationsService.findUserConsultations(member.id, userEmail, options);
-      
+
       return {
         type: 'consultation',
         ...consultations,
@@ -315,14 +315,13 @@ export class AuthController {
     // Guard handles OAuth flow - this method won't be called if redirect happens
   }
 
+  @ApiExcludeEndpoint()
   @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google 로그인 콜백', description: 'Google OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
   @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
   async googleAuthCallback(@Req() req: any, @Res() res: any) {
     // After successful Google authentication
     const { accessToken, member } = req.user;
-    
+
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=google`);
@@ -335,14 +334,13 @@ export class AuthController {
     // Guard handles OAuth flow - this method won't be called if redirect happens
   }
 
+  @ApiExcludeEndpoint()
   @Get('kakao/callback')
-  @UseGuards(AuthGuard('kakao'))
-  @ApiOperation({ summary: 'Kakao 로그인 콜백', description: 'Kakao OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
   @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
   async kakaoAuthCallback(@Req() req: any, @Res() res: any) {
     // After successful Kakao authentication
     const { accessToken, member } = req.user;
-    
+
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=kakao`);
@@ -355,14 +353,13 @@ export class AuthController {
     // Guard handles OAuth flow - this method won't be called if redirect happens
   }
 
+  @ApiExcludeEndpoint()
   @Get('naver/callback')
-  @UseGuards(AuthGuard('naver'))
-  @ApiOperation({ summary: 'Naver 로그인 콜백', description: 'Naver OAuth 인증 후 콜백 엔드포인트입니다. 프론트엔드로 리다이렉트됩니다.' })
   @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
   async naverAuthCallback(@Req() req: any, @Res() res: any) {
     // After successful Naver authentication
     const { accessToken, member } = req.user;
-    
+
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=naver`);

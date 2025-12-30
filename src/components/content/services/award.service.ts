@@ -33,7 +33,7 @@ export class AwardService {
     private readonly yearRepo: Repository<AwardYear>,
     @InjectRepository(Award)
     private readonly awardRepo: Repository<Award>,
-  ) {}
+  ) { }
 
   // === Year CRUD ===
   async createYear(yearName: string, isMainExposed = false, isExposed = true) {
@@ -42,13 +42,13 @@ export class AwardService {
   }
 
   async findAllYears(options: YearListOptions = {}) {
-    const { 
+    const {
       isExposed,
       isMainExposed,
       sort = 'order',
-      page = 1, 
-      limit = 50, 
-      includeHidden = false 
+      page = 1,
+      limit = 50,
+      includeHidden = false
     } = options;
 
     const qb = this.yearRepo.createQueryBuilder('year')
@@ -80,7 +80,7 @@ export class AwardService {
     // 응답 포맷: No, 노출순서, 체크박스, 년도 명, 노출여부, 등록일시
     const formattedItems = items.map((item, index) => {
       // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest' 
+      const no = sort === 'latest'
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
 
@@ -103,7 +103,7 @@ export class AwardService {
   }
 
   async findYearById(id: number) {
-    const year = await this.yearRepo.findOne({ 
+    const year = await this.yearRepo.findOne({
       where: { id },
       relations: ['awards'],
     });
@@ -113,7 +113,7 @@ export class AwardService {
 
   async getYearDetail(id: number) {
     const year = await this.findYearById(id);
-    
+
     // 아이템 정렬 및 포맷
     const formattedAwards = (year.awards || [])
       .sort((a, b) => a.displayOrder - b.displayOrder || b.createdAt.getTime() - a.createdAt.getTime())
@@ -200,7 +200,7 @@ export class AwardService {
   }) {
     const year = await this.yearRepo.findOne({ where: { id: awardYearId } });
     if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
-    
+
     const award = this.awardRepo.create({
       awardYearId,
       name: data.name,
@@ -243,7 +243,7 @@ export class AwardService {
       id: award.id,
       name: award.name,
       source: award.source,
-        image: award.image,
+      image: award.image,
       displayOrder: award.displayOrder,
       isMainExposed: award.isMainExposed,
       mainExposedLabel: award.isMainExposed ? 'Y' : 'N',
@@ -283,13 +283,8 @@ export class AwardService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    const formattedItems = items.map((award, index) => {
-      const no = sort === 'latest'
-        ? total - ((page - 1) * limit + index)
-        : (page - 1) * limit + index + 1;
-
+    const formattedItems = items.map((award) => {
       return {
-        no,
         id: award.id,
         name: award.name,
         source: award.source,
@@ -298,8 +293,6 @@ export class AwardService {
         yearId: award.awardYearId,
         displayOrder: award.displayOrder,
         isMainExposed: award.isMainExposed,
-        createdAt: award.createdAt,
-        createdAtFormatted: this.formatDateTime(award.createdAt),
       };
     });
 
@@ -307,7 +300,7 @@ export class AwardService {
   }
 
   async findAwardById(id: number) {
-    const award = await this.awardRepo.findOne({ 
+    const award = await this.awardRepo.findOne({
       where: { id },
       relations: ['awardYear'],
     });
@@ -409,7 +402,6 @@ export class AwardService {
             image: award.image,
             isMainExposed: award.isMainExposed,
             displayOrder: award.displayOrder,
-            createdAt: award.createdAt,
           })),
       }));
 

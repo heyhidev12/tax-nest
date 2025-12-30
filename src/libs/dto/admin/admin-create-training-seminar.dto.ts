@@ -51,19 +51,9 @@ export class AdminCreateTrainingSeminarDto {
   @IsNotEmpty({ message: '본문을 입력해주세요.' })
   body: string;
 
-  @ApiPropertyOptional({ example: '2026-07-01', description: '교육 시작일 (선택, YYYY-MM-DD 또는 YYYY.MM.DD 형식) - 기존 호환성' })
-  @IsOptional()
-  @IsString()
-  startDate?: string;
-
-  @ApiPropertyOptional({ example: '2026-07-03', description: '교육 종료일 (선택, YYYY-MM-DD 또는 YYYY.MM.DD 형식) - 기존 호환성' })
-  @IsOptional()
-  @IsString()
-  endDate?: string;
-
-  @ApiProperty({ 
-    example: ['2025.12.20', '2025.12.22', '2025.12.25', '2025.12.26'], 
-    description: '교육 일자 (필수, 다중 선택 가능, YYYY.MM.DD 또는 YYYY-MM-DD 형식 배열)' 
+  @ApiProperty({
+    example: ['2025.12.20', '2025.12.22', '2025.12.25', '2025.12.26'],
+    description: '교육 일자 (필수, 다중 선택 가능, YYYY.MM.DD 또는 YYYY-MM-DD 형식 배열)'
   })
   @IsArray({ message: '교육 일자는 배열 형식이어야 합니다.' })
   @ArrayMinSize(1, { message: '최소 1개 이상의 교육 일자를 선택해주세요.' })
@@ -71,25 +61,15 @@ export class AdminCreateTrainingSeminarDto {
   @IsNotEmpty({ message: '교육 일자를 입력해주세요.' })
   educationDates: string[];
 
-  @ApiProperty({ 
-    example: ['11:00-12:00', '14:00-15:00', '17:00-18:00'], 
-    description: '교육 시간 슬롯 (필수, 다중 선택 가능, HH:mm-HH:mm 형식 배열)' 
+  @ApiProperty({
+    example: ['11:00-12:00', '14:00-15:00', '17:00-18:00'],
+    description: '교육 시간 슬롯 (필수, 다중 선택 가능, HH:mm-HH:mm 형식 배열)'
   })
   @IsArray({ message: '교육 시간 슬롯은 배열 형식이어야 합니다.' })
   @ArrayMinSize(1, { message: '최소 1개 이상의 교육 시간 슬롯을 선택해주세요.' })
   @IsString({ each: true, message: '각 교육 시간 슬롯은 문자열 형식이어야 합니다.' })
   @IsNotEmpty({ message: '교육 시간 슬롯을 입력해주세요.' })
   educationTimeSlots: string[];
-
-  @ApiPropertyOptional({ example: '09:00-18:00', description: '교육 시간 (선택, Text) - 기존 호환성' })
-  @IsOptional()
-  @IsString()
-  educationTime?: string;
-
-  @ApiPropertyOptional({ example: '14:00-16:00', description: '참여 시간 (선택, HH:mm-HH:mm 형식) - 기존 호환성' })
-  @IsOptional()
-  @IsString()
-  participationTime?: string;
 
   @ApiPropertyOptional({ example: '서울시 강남구', description: '교육 장소 (선택)' })
   @IsOptional()
@@ -117,4 +97,9 @@ export class AdminCreateTrainingSeminarDto {
   @IsOptional()
   @IsBoolean()
   isRecommended?: boolean = false;
+
+  @ApiPropertyOptional({ example: 'https://vimeo.com/123456789', description: 'Vimeo 비디오 URL (선택)' })
+  @IsOptional()
+  @IsString()
+  vimeoVideoUrl?: string;
 }

@@ -22,6 +22,7 @@ interface BusinessAreaListOptions {
   page?: number;
   limit?: number;
   includeHidden?: boolean;
+  isPublic?: boolean;
 }
 
 @Injectable()
@@ -35,7 +36,7 @@ export class BusinessAreaService {
     private readonly insightsSubcategoryRepo: Repository<InsightsSubcategory>,
     @InjectRepository(TaxMember)
     private readonly taxMemberRepo: Repository<TaxMember>,
-  ) {}
+  ) { }
 
   // ========== CATEGORY METHODS ==========
 
@@ -194,7 +195,7 @@ export class BusinessAreaService {
    */
   async getCategoriesGroupedByMajor(includeHidden = false) {
     const categories = await this.getAllCategories(includeHidden);
-    
+
     // Group by major category
     const grouped: Record<number, any> = {};
     for (const cat of categories) {
@@ -240,7 +241,7 @@ export class BusinessAreaService {
     if (!dto.sectionContents || dto.sectionContents.length === 0) {
       throw new BadRequestException('섹션별 본문을 입력해주세요.');
     }
-    
+
     if (!majorCategory.sections || majorCategory.sections.length === 0) {
       throw new BadRequestException('선택한 Major Category에 섹션이 정의되어 있지 않습니다.');
     }
@@ -283,8 +284,8 @@ export class BusinessAreaService {
   }
 
   async findAll(options: BusinessAreaListOptions = {}) {
-    const { 
-      search, 
+    const {
+      search,
       majorCategoryId,
       minorCategoryId,
       memberId,
@@ -292,11 +293,12 @@ export class BusinessAreaService {
       isExposed,
       isMainExposed,
       sort = 'order',
-      page = 1, 
-      limit = 20, 
-      includeHidden = false 
+      page = 1,
+      limit = 20,
+      includeHidden = false,
+      isPublic = false
     } = options;
-    
+
     const qb = this.areaRepo.createQueryBuilder('area')
       .leftJoinAndSelect('area.majorCategory', 'majorCategory')
       .leftJoinAndSelect('area.minorCategory', 'minorCategory');
@@ -332,7 +334,7 @@ export class BusinessAreaService {
 
       // Get workAreas array (filter out empty/null values)
       const workAreas = (member.workAreas || []).filter(Boolean);
-      
+
       if (workAreas.length === 0) {
         // If member has no workAreas, return empty result
         qb.andWhere('1 = 0'); // Always false condition
@@ -370,7 +372,7 @@ export class BusinessAreaService {
     // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
     const formattedItems = items.map((item, index) => {
       // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest' 
+      const no = sort === 'latest'
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
 
@@ -378,39 +380,49 @@ export class BusinessAreaService {
       const youtubeUrls = item.youtubeUrls || [];
       const youtubeCount = youtubeUrls.length;
 
-      return {
+      const base = {
         no,
         id: item.id,
         name: item.name,
         subDescription: item.subDescription,
         majorCategory: item.majorCategory
           ? {
-              id: item.majorCategory.id,
-              name: item.majorCategory.name,
-              sections: item.majorCategory.sections || [],
-              isExposed: item.majorCategory.isExposed,
-              displayOrder: item.majorCategory.displayOrder,
-            }
+            id: item.majorCategory.id,
+            name: item.majorCategory.name,
+            sections: item.majorCategory.sections || [],
+            isExposed: item.majorCategory.isExposed,
+            displayOrder: item.majorCategory.displayOrder,
+          }
           : null,
         minorCategory: item.minorCategory
           ? {
-              id: item.minorCategory.id,
-              name: item.minorCategory.name,
-              isExposed: item.minorCategory.isExposed,
-            }
+            id: item.minorCategory.id,
+            name: item.minorCategory.name,
+            isExposed: item.minorCategory.isExposed,
+          }
           : null,
         image: item.image,
         overview: item.overview,
         sectionContents: item.sectionContents || [],
         youtubeUrls,
-        youtubeCount,
         displayOrder: item.displayOrder,
         isMainExposed: item.isMainExposed,
-        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
         isExposed: item.isExposed,
+      };
+
+      if (isPublic) {
+        return base;
+      }
+
+      return {
+        ...base,
+        youtubeCount,
+        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
         exposedLabel: item.isExposed ? 'Y' : 'N',
         createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
         createdAtFormatted: this.formatDateTime(item.createdAt),
+        updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
     });
 
@@ -424,52 +436,60 @@ export class BusinessAreaService {
     });
   }
 
-  async findById(id: number) {
+  async findById(id: number, isPublic = false) {
     const area = await this.areaRepo.findOne({
       where: { id },
       relations: ['majorCategory', 'minorCategory'],
     });
     if (!area) throw new NotFoundException('업무분야를 찾을 수 없습니다.');
-    
-    return {
+
+    const base = {
       id: area.id,
       name: area.name,
       subDescription: area.subDescription,
       image: area.image,
       majorCategory: area.majorCategory
         ? {
-            id: area.majorCategory.id,
-            name: area.majorCategory.name,
-            sections: area.majorCategory.sections || [],
-            isExposed: area.majorCategory.isExposed,
-            displayOrder: area.majorCategory.displayOrder,
-          }
+          id: area.majorCategory.id,
+          name: area.majorCategory.name,
+          sections: area.majorCategory.sections || [],
+          isExposed: area.majorCategory.isExposed,
+          displayOrder: area.majorCategory.displayOrder,
+        }
         : null,
       minorCategory: area.minorCategory
         ? {
-            id: area.minorCategory.id,
-            name: area.minorCategory.name,
-            isExposed: area.minorCategory.isExposed,
-          }
+          id: area.minorCategory.id,
+          name: area.minorCategory.name,
+          isExposed: area.minorCategory.isExposed,
+        }
         : null,
       overview: area.overview,
       sectionContents: area.sectionContents || [],
       youtubeUrls: area.youtubeUrls || [],
-      youtubeCount: (area.youtubeUrls || []).length,
       isMainExposed: area.isMainExposed,
       isExposed: area.isExposed,
       displayOrder: area.displayOrder,
-      createdAt: area.createdAt,
-      updatedAt: area.updatedAt,
+    };
+
+    if (isPublic) {
+      return base;
+    }
+
+    return {
+      ...base,
+      youtubeCount: (area.youtubeUrls || []).length,
       mainExposedLabel: area.isMainExposed ? 'Y' : 'N',
       exposedLabel: area.isExposed ? 'Y' : 'N',
+      createdAt: area.createdAt,
+      updatedAt: area.updatedAt,
       createdAtFormatted: this.formatDateTime(area.createdAt),
       updatedAtFormatted: this.formatDateTime(area.updatedAt),
     };
   }
 
   async updateItem(id: number, dto: UpdateBusinessAreaItemDto) {
-    const item = await this.areaRepo.findOne({ 
+    const item = await this.areaRepo.findOne({
       where: { id },
       relations: ['majorCategory', 'minorCategory'],
     });
@@ -580,8 +600,8 @@ export class BusinessAreaService {
    * Get hierarchical data for public frontend (accordion-style UI)
    * Groups items by major category and then by minor category
    */
-  async getHierarchicalData(includeHidden = false) {
-    const where = includeHidden ? {} : { isExposed: true };
+  async getHierarchicalData(isPublic = true) {
+    const where = !isPublic ? {} : { isExposed: true };
     const items = await this.areaRepo.find({
       where,
       relations: ['majorCategory', 'minorCategory'],
@@ -622,7 +642,7 @@ export class BusinessAreaService {
         };
       }
 
-      grouped[majorId].minorCategories[minorId].items.push({
+      const itemBase = {
         id: item.id,
         name: item.name,
         subDescription: item.subDescription,
@@ -630,17 +650,27 @@ export class BusinessAreaService {
         overview: item.overview,
         sectionContents: item.sectionContents || [],
         youtubeUrls: item.youtubeUrls || [],
-        youtubeCount: (item.youtubeUrls || []).length,
         isMainExposed: item.isMainExposed,
         isExposed: item.isExposed,
         displayOrder: item.displayOrder,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-      });
+      };
+
+      grouped[majorId].minorCategories[minorId].items.push(
+        isPublic
+          ? itemBase
+          : {
+            ...itemBase,
+            youtubeCount: (item.youtubeUrls || []).length,
+            createdAt: item.createdAt,
+            updatedAt: item.updatedAt,
+            createdAtFormatted: this.formatDateTime(item.createdAt),
+            updatedAtFormatted: this.formatDateTime(item.updatedAt),
+          },
+      );
     }
 
     // Convert to array format
-    return Object.values(grouped).map((group) => ({
+    return Object.values(grouped).map((group: any) => ({
       majorCategory: group.majorCategory,
       minorCategories: Object.values(group.minorCategories),
     }));

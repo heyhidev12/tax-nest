@@ -10,6 +10,7 @@ interface KeyCustomerListOptions {
   page?: number;
   limit?: number;
   includeHidden?: boolean;
+  isPublic?: boolean;
 }
 
 @Injectable()
@@ -17,7 +18,7 @@ export class KeyCustomerService {
   constructor(
     @InjectRepository(KeyCustomer)
     private readonly customerRepo: Repository<KeyCustomer>,
-  ) {}
+  ) { }
 
   async create(data: Partial<KeyCustomer>) {
     const customer = this.customerRepo.create(data);
@@ -25,13 +26,14 @@ export class KeyCustomerService {
   }
 
   async findAll(options: KeyCustomerListOptions = {}) {
-    const { 
+    const {
       isExposed,
       isMainExposed,
       sort = 'order',
-      page = 1, 
-      limit = 50, 
-      includeHidden = false 
+      page = 1,
+      limit = 50,
+      includeHidden = false,
+      isPublic = false
     } = options;
 
     const qb = this.customerRepo.createQueryBuilder('customer');
@@ -60,19 +62,24 @@ export class KeyCustomerService {
     const [items, total] = await qb.getManyAndCount();
 
     // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
-      id: item.id,
-      logo: item.logo,
-      name: item.name,
-      displayOrder: item.displayOrder,
-      isMainExposed: item.isMainExposed,
-      mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
-      isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
-      createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
-    }));
+    const formattedItems = items.map((item) => {
+      if (isPublic) {
+        return {
+          id: item.id,
+          logo: item.logo,
+          displayOrder: item.displayOrder,
+          isMainExposed: item.isMainExposed,
+          isExposed: item.isExposed,
+        };
+      }
+      return {
+        ...item,
+        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
+        exposedLabel: item.isExposed ? 'Y' : 'N',
+        createdAtFormatted: this.formatDateTime(item.createdAt),
+        updatedAtFormatted: this.formatDateTime(item.updatedAt),
+      };
+    });
 
     return { items: formattedItems, total, page, limit };
   }
@@ -83,11 +90,9 @@ export class KeyCustomerService {
       order: { displayOrder: 'ASC' },
     });
 
-    return customers.map((item, index) => ({
-      no: index + 1,
+    return customers.map((item) => ({
       id: item.id,
       logo: item.logo,
-      name: item.name,
       displayOrder: item.displayOrder,
     }));
   }

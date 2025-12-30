@@ -39,7 +39,6 @@ async function bootstrap() {
       'admin-auth',
     )
     // User/Public APIs (ordered first)
-    .addTag('App', '애플리케이션')
     .addTag('Auth', '회원 인증')
     .addTag('Consultations', '상담 요청')
     .addTag('Newsletter', '뉴스레터')

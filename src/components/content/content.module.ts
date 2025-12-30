@@ -36,8 +36,11 @@ import { AttachmentService } from './services/attachment.service';
 import { PublicContentController } from './controllers/public-content.controller';
 import { AttachmentsController } from './controllers/attachments.controller';
 
+import { MembersModule } from '../members/members.module';
+
 @Module({
   imports: [
+    MembersModule,
     TypeOrmModule.forFeature([
       MainBanner,
       HistoryYear,
@@ -94,7 +97,7 @@ import { AttachmentsController } from './controllers/attachments.controller';
     AttachmentService,
   ],
 })
-export class ContentModule {}
+export class ContentModule { }
 
 
 
