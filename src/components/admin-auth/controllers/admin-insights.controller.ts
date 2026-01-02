@@ -23,7 +23,7 @@ import { CategoryResponseDto } from 'src/libs/dto/insights/category-response.dto
 import { ItemResponseDto } from 'src/libs/dto/insights/item-response.dto';
 
 @ApiTags('Admin Content')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/insights')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminInsightsController {

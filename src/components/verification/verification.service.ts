@@ -1,9 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { VerificationCode } from 'src/libs/entity/verification-code.entity';
 import { SmsProvider } from '../sms/sms.provider';
 import { EmailProvider } from '../email/email.provider';
+import { RedisService } from 'src/libs/redis/redis.service';
 
 @Injectable()
 export class VerificationService {
@@ -12,10 +13,18 @@ export class VerificationService {
     private repo: Repository<VerificationCode>,
     private smsProvider: SmsProvider,
     private emailProvider: EmailProvider,
-  ) {}
+    private redisService: RedisService,
+  ) { }
 
-  private generateCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+  private getOtpLength(): number {
+    return parseInt(process.env.OTP_LENGTH || '4', 10);
+  }
+
+  private generateCode(length: number) {
+    const min = 0;
+    const max = Math.pow(10, length) - 1;
+    const code = Math.floor(Math.random() * (max - min + 1)) + min;
+    return code.toString().padStart(length, '0');
   }
 
   async sendCode(
@@ -27,8 +36,22 @@ export class VerificationService {
       | 'SIGNUP'
       | 'CHANGE_PHONE',
   ) {
-    const code = this.generateCode();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 3);
+    // Rate limit check for sending (e.g., 1 min between sends per target and purpose)
+    const rateLimitKey = `verification:rate_limit:${purpose}:${target}`;
+    const isRateLimited = await this.redisService.get(rateLimitKey);
+    if (isRateLimited) {
+      throw new BadRequestException('잠시 후 다시 요청해주세요.');
+    }
+
+    const isSignupOrChangePhone = purpose === 'SIGNUP' || purpose === 'CHANGE_PHONE';
+    const codeLength = this.getOtpLength();
+    const expiryMinutes = isSignupOrChangePhone ? 5 : 3;
+
+    const code = this.generateCode(codeLength);
+    const expiresAt = new Date(Date.now() + 1000 * 60 * expiryMinutes);
+
+    // Invalidate previous unused codes for this target and purpose
+    await this.repo.update({ target, purpose, isUsed: false }, { isUsed: true });
 
     const verification = this.repo.create({
       type,
@@ -47,6 +70,9 @@ export class VerificationService {
       await this.emailProvider.send(target, code);
     }
 
+    // Set rate limit for sending (60 seconds)
+    await this.redisService.set(rateLimitKey, '1', 60);
+
     return { success: true };
   }
 
@@ -60,11 +86,25 @@ export class VerificationService {
       order: { createdAt: 'DESC' },
     });
 
-    if (!record) throw new BadRequestException('먼저 인증번호를 요청해주세요.');
-    if (record.expiresAt.getTime() < Date.now())
-      throw new BadRequestException('인증번호가 만료되었습니다.');
-    if (record.code !== code)
-      throw new BadRequestException('인증번호가 일치하지 않습니다.');
+    const isSignupOrChangePhone = purpose === 'SIGNUP' || purpose === 'CHANGE_PHONE';
+
+    if (!record) {
+      throw new BadRequestException(isSignupOrChangePhone ? 'Invalid or expired code' : '먼저 인증번호를 요청해주세요.');
+    }
+
+    if (record.expiresAt.getTime() < Date.now()) {
+      throw new BadRequestException(isSignupOrChangePhone ? 'Invalid or expired code' : '인증번호가 만료되었습니다.');
+    }
+
+    if (record.attempts >= 5) {
+      throw new BadRequestException(isSignupOrChangePhone ? 'Too many attempts. Please request a new code.' : '인증 시도 횟수를 초과했습니다. 다시 인증번호를 요청해주세요.');
+    }
+
+    if (record.code !== code) {
+      record.attempts += 1;
+      await this.repo.save(record);
+      throw new BadRequestException(isSignupOrChangePhone ? 'Invalid or expired code' : '인증번호가 일치하지 않습니다.');
+    }
 
     record.isUsed = true;
     await this.repo.save(record);

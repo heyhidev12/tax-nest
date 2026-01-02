@@ -31,6 +31,9 @@ export class BranchService {
       if (coordinates) {
         branch.latitude = coordinates.latitude;
         branch.longitude = coordinates.longitude;
+      } else {
+        branch.latitude = null as any;
+        branch.longitude = null as any;
       }
     }
 
@@ -119,8 +122,8 @@ export class BranchService {
         data.longitude = coordinates.longitude;
       } else {
         // If geocoding fails, set to null
-        (data as any).latitude = null;
-        (data as any).longitude = null;
+        data.latitude = null as any;
+        data.longitude = null as any;
       }
     }
 

@@ -19,7 +19,7 @@ import { AttachmentService } from 'src/components/content/services/attachment.se
 import { fileUploadConfig } from 'src/libs/upload/config/attachment-upload.config';
 
 @ApiTags('Admin Attachments')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/attachments')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminAttachmentsController {

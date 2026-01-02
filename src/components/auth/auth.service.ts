@@ -26,7 +26,7 @@ export class AuthService {
     private readonly newsletterService: NewsletterService,
     @InjectRepository(Member)
     private readonly memberRepo: Repository<Member>,
-  ) {}
+  ) { }
 
   // -------------------------------------
   // SIGN UP
@@ -113,7 +113,16 @@ export class AuthService {
       expiresIn: dto.autoLogin ? '30d' : '1d',
     });
 
-    return { accessToken: token, member };
+    const safeMember = {
+      id: member.id,
+      loginId: member.loginId,
+      name: member.name,
+      email: member.email,
+      memberType: member.memberType,
+      status: member.status,
+      isApproved: member.isApproved,
+    };
+    return { accessToken: token, member: safeMember };
   }
 
   // -------------------------------------
@@ -129,6 +138,17 @@ export class AuthService {
     return await this.membersService.updateProfile(id, dto);
   }
 
+  async sendPhoneVerification(dto, isAuthenticated: boolean) {
+    const purpose = isAuthenticated ? 'CHANGE_PHONE' : 'SIGNUP';
+    return await this.verification.sendCode('PHONE', dto.phone, purpose);
+  }
+
+  async verifyPhoneCode(dto, isAuthenticated: boolean) {
+    const purpose = isAuthenticated ? 'CHANGE_PHONE' : 'SIGNUP';
+    await this.verification.verifyCode(dto.phone, purpose, dto.code);
+    return { verified: true };
+  }
+
   async changePassword(id: number, dto) {
     if (dto.newPassword !== dto.newPasswordConfirm)
       throw new BadRequestException('비밀번호가 일치하지 않습니다.');
@@ -142,6 +162,35 @@ export class AuthService {
     await this.membersService.updateProfile(id, member);
 
     return { success: true };
+  }
+
+  async verifyPassword(id: number, dto) {
+    const rateLimitKey = `rate_limit:verify-password:${id}`;
+    const attempts = await this.redisService.get(rateLimitKey);
+
+    if (attempts && parseInt(attempts, 10) >= 5) {
+      throw new BadRequestException('비밀번호 확인 시도가 너무 많습니다. 5분 후에 다시 시도해주세요.');
+    }
+
+    const member = await this.membersService.findById(id);
+
+    // SNS 로그인 사용자는 비밀번호가 없음
+    if (!member.passwordHash) {
+      throw new BadRequestException('SNS 로그인으로 가입한 계정입니다.');
+    }
+
+    const match = await bcrypt.compare(dto.password, member.passwordHash);
+    if (!match) {
+      // 실패 시 시도 횟수 증가 (5분간 유지)
+      const currentAttempts = attempts ? parseInt(attempts, 10) + 1 : 1;
+      await this.redisService.set(rateLimitKey, currentAttempts.toString(), 300);
+      throw new UnauthorizedException('Invalid password');
+    }
+
+    // 성공 시 시도 횟수 초기화
+    await this.redisService.del(rateLimitKey);
+
+    return { verified: true };
   }
 
   // -------------------------------------
@@ -224,7 +273,7 @@ export class AuthService {
     if (!user) throw new NotFoundException('정보가 일치하지 않습니다.');
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    
+
     // Store reset token in Redis with 10 minutes expiration
     await this.redisService.setPasswordResetToken(user.id, resetToken, 600);
 
@@ -241,7 +290,7 @@ export class AuthService {
     if (!user) throw new NotFoundException('정보가 일치하지 않습니다.');
 
     const resetToken = crypto.randomBytes(32).toString('hex');
-    
+
     // Store reset token in Redis with 10 minutes expiration
     await this.redisService.setPasswordResetToken(user.id, resetToken, 600);
 
@@ -254,14 +303,14 @@ export class AuthService {
 
     // Validate reset token from Redis
     const userId = await this.redisService.getPasswordResetToken(dto.token);
-    
+
     if (!userId) {
       throw new BadRequestException('유효하지 않거나 만료된 토큰입니다.');
     }
 
     // Find user and update password
     const user = await this.memberRepo.findOne({ where: { id: userId } });
-    
+
     if (!user) {
       throw new NotFoundException('사용자를 찾을 수 없습니다.');
     }

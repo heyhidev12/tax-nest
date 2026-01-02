@@ -14,7 +14,7 @@ import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { InsightsService } from 'src/components/content/services/insights.service';
 
 @ApiTags('Admin Comments')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/comments')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminCommentsController {

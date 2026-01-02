@@ -20,7 +20,7 @@ import { MemberStatus } from 'src/libs/enums/members.enum';
 import { AdminUpdateMemberDto } from 'src/libs/dto/admin/admin-update-member.dto';
 
 @ApiTags('Admin Members')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/members')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminMembersController {

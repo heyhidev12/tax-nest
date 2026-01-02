@@ -46,7 +46,7 @@ import { ApplicationStatus } from 'src/libs/entity/training-seminar.entity';
 import { UpdateHistoryYearOrderDto } from 'src/libs/dto/history/update-year-order.dto';
 
 @ApiTags('Admin Content')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/content')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminContentController {

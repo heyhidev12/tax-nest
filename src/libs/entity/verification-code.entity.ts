@@ -27,6 +27,9 @@ export class VerificationCode {
   @Column()
   isUsed: boolean = false;
 
+  @Column({ default: 0 })
+  attempts: number;
+
   @Column()
   expiresAt: Date;
 

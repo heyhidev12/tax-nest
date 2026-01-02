@@ -19,7 +19,7 @@ import { videoUploadConfig } from 'src/libs/upload/config/video-upload.config';
 // DTOs removed - no longer needed for simple uploads
 
 @ApiTags('Admin Uploads')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/uploads')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminUploadsController {

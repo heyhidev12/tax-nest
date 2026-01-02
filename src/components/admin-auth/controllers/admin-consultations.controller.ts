@@ -17,7 +17,7 @@ import { AdminAnswerDto } from 'src/libs/dto/admin/admin-answer.dto';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 
 @ApiTags('Admin Consultations')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/consultations')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminConsultationsController {

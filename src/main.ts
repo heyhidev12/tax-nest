@@ -10,6 +10,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AdminAuthService } from './components/admin-auth/admin-auth.service';
 import * as dotenv from 'dotenv';
+import cookieParser from 'cookie-parser';
 dotenv.config();
 
 async function bootstrap() {
@@ -22,8 +23,14 @@ async function bootstrap() {
     transformOptions: { enableImplicitConversion: true },
   }));
 
+  // Enable cookie parser
+  app.use(cookieParser());
+
   // Enable CORS
-  app.enableCors();
+  app.enableCors({
+    origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : true,
+    credentials: true,
+  });
 
   // Swagger setup
   const config = new DocumentBuilder()
@@ -34,10 +41,7 @@ async function bootstrap() {
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'user-auth',
     )
-    .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      'admin-auth',
-    )
+    .addCookieAuth('access_token', { type: 'apiKey', in: 'cookie' }, 'admin-auth')
     // User/Public APIs (ordered first)
     .addTag('Auth', '회원 인증')
     .addTag('Consultations', '상담 요청')
@@ -54,7 +58,6 @@ async function bootstrap() {
     .addTag('Admin Newsletter', '관리자 - 뉴스레터')
     .addTag('Admin Content', '관리자 - 콘텐츠 관리')
     .addTag('Admin Comments', '관리자 - 댓글 관리')
-    .addTag('Admin Attachments', '관리자 - 첨부파일 관리')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

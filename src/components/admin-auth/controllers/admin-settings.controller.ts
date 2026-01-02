@@ -20,7 +20,7 @@ import { AdminRole } from 'src/libs/enums/admin.enum';
 import { RolesGuard } from '../roles.guard';
 
 @ApiTags('Admin Settings')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/settings')
 @UseGuards(AdminJwtAuthGuard, RolesGuard)
 export class AdminSettingsController {

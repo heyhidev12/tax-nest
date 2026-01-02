@@ -15,7 +15,7 @@ import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 
 @ApiTags('Admin Newsletter')
-@ApiBearerAuth('admin-auth')
+
 @Controller('admin/newsletter')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminNewsletterController {

@@ -32,6 +32,9 @@ import { SignUpDto } from 'src/libs/dto/auth/sign-up.dto';
 import { LoginDto } from 'src/libs/dto/auth/login.dto';
 import { UpdateProfileDto } from 'src/libs/dto/auth/update-profile.dto';
 import { ChangePasswordDto } from 'src/libs/dto/auth/change-password.dto';
+import { VerifyPasswordDto } from 'src/libs/dto/auth/verify-password.dto';
+import { SendPhoneVerificationDto, VerifyPhoneCodeDto } from 'src/libs/dto/auth/phone-verification.dto';
+import { OptionalJwtAuthGuard } from './optional-jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiBearerAuth, ApiBody, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { TrainingSeminarService } from '../content/services/training-seminar.service';
 import { ConsultationsService } from '../consultations/consultations.service';
@@ -104,6 +107,36 @@ export class AuthController {
   @Patch('change-password')
   changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(req.user.sub, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('user-auth')
+  @ApiOperation({ summary: '비밀번호 확인 (인증 필요)', description: '프로필 수정 전 현재 비밀번호를 확인합니다.' })
+  @ApiResponse({ status: 200, description: '비밀번호 확인 성공' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자 또는 비밀번호가 올바르지 않습니다.' })
+  @ApiBody({ type: VerifyPasswordDto })
+  @Post('verify-password')
+  verifyPassword(@Req() req: any, @Body() dto: VerifyPasswordDto) {
+    return this.authService.verifyPassword(req.user.sub, dto);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: '휴대폰 인증번호 발송', description: '회원가입 또는 휴대폰 번호 변경을 위한 인증번호를 발송합니다.' })
+  @ApiResponse({ status: 200, description: '인증번호 발송 성공' })
+  @ApiBody({ type: SendPhoneVerificationDto })
+  @Post('phone/send')
+  sendPhoneVerification(@Req() req: any, @Body() dto: SendPhoneVerificationDto) {
+    return this.authService.sendPhoneVerification(dto, !!req.user);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: '휴대폰 인증번호 확인', description: '발송된 휴대폰 인증번호를 확인합니다.' })
+  @ApiResponse({ status: 200, description: '인증 성공' })
+  @ApiResponse({ status: 400, description: '인증번호가 올바르지 않거나 만료되었습니다.' })
+  @ApiBody({ type: VerifyPhoneCodeDto })
+  @Post('phone/verify')
+  verifyPhoneCode(@Req() req: any, @Body() dto: VerifyPhoneCodeDto) {
+    return this.authService.verifyPhoneCode(dto, !!req.user);
   }
 
 
@@ -310,21 +343,21 @@ export class AuthController {
 
   @Get('google')
   @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google 로그인 시작', description: 'Google OAuth 인증을 시작합니다. 브라우저에서 이 엔드포인트로 리다이렉트하세요.' })
+  @ApiOperation({ summary: 'Google 로그인 시작' })
   async googleAuth() {
-    // Guard handles OAuth flow - this method won't be called if redirect happens
+    return;
   }
 
   @ApiExcludeEndpoint()
   @Get('google/callback')
-  @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
-  async googleAuthCallback(@Req() req: any, @Res() res: any) {
-    // After successful Google authentication
-    const { accessToken, member } = req.user;
+  @UseGuards(AuthGuard('google'))
+  async googleAuthCallback(@Req() req, @Res() res) {
 
-    // Redirect to frontend with token
+    const { accessToken, member } = req.user;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=google`);
+    return res.redirect(
+      `${frontendUrl}/auth/callback?token=${accessToken}&provider=google`
+    );
   }
 
   @Get('kakao')
@@ -336,11 +369,11 @@ export class AuthController {
 
   @ApiExcludeEndpoint()
   @Get('kakao/callback')
+  @UseGuards(AuthGuard('kakao'))
   @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
   async kakaoAuthCallback(@Req() req: any, @Res() res: any) {
     // After successful Kakao authentication
     const { accessToken, member } = req.user;
-
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=kakao`);
@@ -355,11 +388,11 @@ export class AuthController {
 
   @ApiExcludeEndpoint()
   @Get('naver/callback')
+  @UseGuards(AuthGuard('naver'))
   @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
   async naverAuthCallback(@Req() req: any, @Res() res: any) {
     // After successful Naver authentication
     const { accessToken, member } = req.user;
-
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=naver`);

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -16,7 +16,7 @@ export class AdminAuthService {
     @InjectRepository(AdminUser)
     private readonly adminRepo: Repository<AdminUser>,
     private readonly jwtService: JwtService,
-  ) {}
+  ) { }
 
   async validateAdmin(loginId: string, password: string): Promise<AdminUser> {
     const admin = await this.adminRepo.findOne({ where: { loginId, isActive: true } });
@@ -34,28 +34,57 @@ export class AdminAuthService {
 
   async login(dto: AdminLoginDto) {
     const admin = await this.validateAdmin(dto.loginId, dto.password);
+    return this.generateAuthTokens(admin);
+  }
 
+  async generateAuthTokens(admin: AdminUser) {
     const payload = {
       sub: admin.id,
-      loginId: admin.loginId,
       role: admin.role,
       type: 'admin',
     };
 
-    // 자동 로그인 여부에 따라 토큰 만료시간 조정
-    const expiresIn = dto.autoLogin ? '30d' : '1d';
-    const token = await this.jwtService.signAsync(payload, { expiresIn });
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.ADMIN_JWT_SECRET || 'admin-dev-secret',
+      expiresIn: '30m',
+    });
+
+    const refreshToken = await this.jwtService.signAsync(payload, {
+      secret: process.env.ADMIN_REFRESH_SECRET || 'admin-refresh-dev-secret',
+      expiresIn: '30d',
+    });
 
     return {
-      accessToken: token,
+      accessToken,
+      refreshToken,
       admin: {
-        id: admin.id,
         loginId: admin.loginId,
         name: admin.name,
         role: admin.role,
         permissions: admin.permissions || {},
       },
     };
+  }
+
+  async refreshTokens(refreshToken: string) {
+    try {
+      const payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: process.env.ADMIN_REFRESH_SECRET || 'admin-refresh-dev-secret',
+      });
+
+      if (payload.type !== 'admin') {
+        throw new UnauthorizedException('관리자 토큰이 아닙니다.');
+      }
+
+      const admin = await this.findById(payload.sub);
+      if (!admin || !admin.isActive) {
+        throw new UnauthorizedException('유효하지 않은 관리자입니다.');
+      }
+
+      return this.generateAuthTokens(admin);
+    } catch (e) {
+      throw new UnauthorizedException('유효하지 않거나 만료된 리프레시 토큰입니다.');
+    }
   }
 
   async findById(id: number) {
@@ -70,7 +99,6 @@ export class AdminAuthService {
   async getMyProfile(adminId: number) {
     const admin = await this.findById(adminId);
     return {
-      id: admin.id,
       loginId: admin.loginId,
       name: admin.name,
       role: admin.role,
@@ -172,12 +200,12 @@ export class AdminAuthService {
 
   async delete(id: number, currentAdminId: number) {
     const admin = await this.findById(id);
-    
+
     // Prevent SUPER_ADMIN from deleting their own account
     if (admin.id === currentAdminId) {
       throw new BadRequestException('자신의 계정은 삭제할 수 없습니다.');
     }
-    
+
     await this.adminRepo.remove(admin);
     return { success: true, message: '관리자가 삭제되었습니다.' };
   }
@@ -191,12 +219,12 @@ export class AdminAuthService {
 
   async toggleActive(id: number, currentAdminId: number) {
     const admin = await this.findById(id);
-    
+
     // Prevent deactivating the currently logged-in SUPER_ADMIN
     if (admin.id === currentAdminId && admin.role === AdminRole.SUPER_ADMIN) {
       throw new BadRequestException('현재 로그인한 최고관리자 계정은 비활성화할 수 없습니다.');
     }
-    
+
     admin.isActive = !admin.isActive;
     await this.adminRepo.save(admin);
     return { success: true, isActive: admin.isActive };
