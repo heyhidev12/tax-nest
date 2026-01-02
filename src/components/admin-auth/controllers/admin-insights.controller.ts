@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody, ApiParam } from '@nestjs/swagger';
@@ -194,8 +195,9 @@ export class AdminInsightsController extends AdminBaseController {
   @ApiResponse({ status: 400, description: '입력값 검증 실패' })
   @ApiResponse({ status: 404, description: '카테고리 또는 서브카테고리를 찾을 수 없습니다.' })
   @Post('items')
-  createItem(@Body() dto: CreateItemDto) {
-    return this.insightsService.createItem(dto);
+  createItem(@Body() dto: CreateItemDto, @Req() req: any) {
+    const adminId = req.user?.id;
+    return this.insightsService.createItem(dto, adminId);
   }
 
   @ApiOperation({

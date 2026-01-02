@@ -12,6 +12,7 @@ import {
 import { InsightsCategory } from './insights-category.entity';
 import { InsightsSubcategory } from './insights-subcategory.entity';
 import { Member } from './member.entity';
+import { AdminUser } from './admin-user.entity';
 
 @Entity('insights_items')
 export class InsightsItem {
@@ -51,6 +52,13 @@ export class InsightsItem {
   })
   @JoinColumn({ name: 'subcategoryId', referencedColumnName: 'id' })
   subcategory: InsightsSubcategory;
+
+  @Column({ nullable: true })
+  adminId: number;
+
+  @ManyToOne(() => AdminUser, { nullable: true })
+  @JoinColumn({ name: 'adminId' })
+  admin: AdminUser;
 
   @Column({ default: false })
   enableComments: boolean;

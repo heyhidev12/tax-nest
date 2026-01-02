@@ -269,7 +269,11 @@ export class InsightsService {
     };
 
     if (isPublicApi) {
-      return base;
+      return {
+        ...base,
+        authorName: item.admin ? item.admin.name : 'Admin',
+        createdAt: item.createdAt,
+      };
     }
 
     return {
@@ -282,11 +286,12 @@ export class InsightsService {
       commentCount: item.commentCount || 0,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
+      authorName: item.admin?.name,
     };
   }
 
 
-  async createItem(dto: CreateItemDto) {
+  async createItem(dto: CreateItemDto, adminId?: number) {
     // Validate category exists and is exposed
     const category = await this.categoryRepo.findOne({ where: { id: dto.categoryId, isActive: true } });
     if (!category) {
@@ -317,6 +322,7 @@ export class InsightsService {
       isExposed: dto.isExposed ?? true,
       isMainExposed: dto.isMainExposed ?? false,
       exposedLabel: dto.exposedLabel || 'Y',
+      adminId: adminId,
     });
 
     const savedItem = await this.itemRepo.save(item);
@@ -327,7 +333,7 @@ export class InsightsService {
     // Reload with relations for frontend-friendly response
     const itemWithRelations = await this.itemRepo.findOne({
       where: { id: savedItem.id },
-      relations: ['category', 'subcategory'],
+      relations: ['category', 'subcategory', 'admin'],
     });
 
     return await this.formatItemWithAttachments(itemWithRelations!);
@@ -396,7 +402,7 @@ export class InsightsService {
     // Reload with relations for frontend-friendly response
     const updatedItem = await this.itemRepo.findOne({
       where: { id: item.id },
-      relations: ['category', 'subcategory'],
+      relations: ['category', 'subcategory', 'admin'],
     });
 
     return await this.formatItemWithAttachments(updatedItem!);
@@ -435,7 +441,7 @@ export class InsightsService {
 
     const items = await this.itemRepo.find({
       where,
-      relations: ['category', 'subcategory'],
+      relations: ['category', 'subcategory', 'admin'],
       order: { createdAt: 'DESC' },
     });
 
@@ -451,7 +457,7 @@ export class InsightsService {
 
     const item = await this.itemRepo.findOne({
       where,
-      relations: ['category', 'subcategory'],
+      relations: ['category', 'subcategory', 'admin'],
     });
 
     if (!item) {
@@ -466,7 +472,7 @@ export class InsightsService {
     const where = includeHidden ? {} : { isExposed: true };
     const items = await this.itemRepo.find({
       where,
-      relations: ['category', 'subcategory'],
+      relations: ['category', 'subcategory', 'admin'],
       order: { createdAt: 'DESC' },
     });
 
@@ -494,6 +500,7 @@ export class InsightsService {
       .createQueryBuilder('item')
       .leftJoinAndSelect('item.category', 'category')
       .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .leftJoinAndSelect('item.admin', 'admin')
       .where('item.isExposed = :isExposed', { isExposed: true });
 
     if (options.categoryId) {
@@ -531,7 +538,7 @@ export class InsightsService {
   async getPublicInsightById(id: number) {
     const item = await this.itemRepo.findOne({
       where: { id, isExposed: true },
-      relations: ['category', 'subcategory'],
+      relations: ['category', 'subcategory', 'admin'],
     });
 
     if (!item) {
