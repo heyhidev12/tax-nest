@@ -218,6 +218,49 @@ export class BusinessAreaService {
     return Object.values(grouped);
   }
 
+  async getFlattenedCategories(memberId?: number) {
+    if (memberId) {
+      const member = await this.taxMemberRepo.findOne({ where: { id: memberId } });
+      if (!member) throw new NotFoundException('구성원을 찾을 수 없습니다.');
+
+      const workAreas = member.workAreas || [];
+      const ids = workAreas.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id));
+
+      if (ids.length === 0) return [];
+
+      const categories = await this.categoryRepo.find({
+        where: { id: In(ids), isExposed: true },
+        relations: ['majorCategory'],
+      });
+
+      // Sort according to workAreas order
+      return ids
+        .map((id) => categories.find((c) => c.id === id))
+        .filter(Boolean)
+        .map((cat) => ({
+          id: cat!.id,
+          name: cat!.name,
+          isExposed: cat!.isExposed,
+          majorCategoryId: cat!.majorCategoryId,
+          majorCategoryName: cat!.majorCategory?.name || '',
+        }));
+    }
+
+    const categories = await this.categoryRepo.find({
+      where: { isExposed: true },
+      relations: ['majorCategory'],
+      order: { createdAt: 'ASC' },
+    });
+
+    return categories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      isExposed: cat.isExposed,
+      majorCategoryId: cat.majorCategoryId,
+      majorCategoryName: cat.majorCategory?.name || '',
+    }));
+  }
+
   // ========== ITEM METHODS ==========
 
   async createItem(dto: CreateBusinessAreaItemDto) {

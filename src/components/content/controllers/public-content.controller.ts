@@ -377,6 +377,15 @@ export class PublicContentController {
     return this.businessAreaService.getHierarchicalData(true);
   }
 
+  @ApiOperation({ summary: '업무분야 카테고리 목록 조회 (Flattened)' })
+  @ApiResponse({ status: 200, description: '카테고리 목록 조회 성공' })
+  @ApiQuery({ name: 'memberId', required: false, type: Number, description: '구성원 ID 필터링 (업무분야 우선순위 순 정렬)' })
+  @Get('business-areas/categories')
+  getBusinessAreasCategories(@Query('memberId') memberId?: string) {
+    const memberIdNum = memberId ? parseInt(memberId, 10) : undefined;
+    return this.businessAreaService.getFlattenedCategories(memberIdNum);
+  }
+
   @ApiOperation({ summary: '업무분야 목록 조회' })
   @ApiQuery({ name: 'search', required: false, type: String, description: '업무분야명으로 검색' })
   @ApiQuery({ name: 'majorCategoryId', required: false, type: Number, description: 'Major Category ID 필터링' })
