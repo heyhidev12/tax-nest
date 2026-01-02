@@ -449,12 +449,14 @@ export class PublicContentController {
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20, description: '페이지당 항목 수 (기본: 20)' })
   @ApiQuery({ name: 'categoryId', required: false, type: Number, description: '카테고리 ID 필터링' })
   @ApiQuery({ name: 'subcategoryId', required: false, type: Number, description: '서브카테고리 ID 필터링' })
+  @ApiQuery({ name: 'dataRoom', required: false, enum: ['A', 'B', 'C'], description: '데이터룸 유형 필터링 (A, B, C)' })
   @Get('insights')
   async getInsights(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
+    @Query('dataRoom') dataRoom?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
@@ -466,6 +468,7 @@ export class PublicContentController {
       limit: limitNum,
       categoryId: categoryIdNum,
       subcategoryId: subcategoryIdNum,
+      dataRoom,
     });
   }
 

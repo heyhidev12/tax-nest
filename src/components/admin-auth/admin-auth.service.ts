@@ -99,10 +99,11 @@ export class AdminAuthService {
   async getMyProfile(adminId: number) {
     const admin = await this.findById(adminId);
     return {
-      loginId: admin.loginId,
-      name: admin.name,
-      role: admin.role,
-      createdAt: admin.createdAt,
+        loginId: admin.loginId,
+        name: admin.name,
+        role: admin.role,
+        permissions: admin.permissions || {},
+        createdAt: admin.createdAt,
     };
   }
 

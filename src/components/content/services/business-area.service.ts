@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import { BusinessArea } from 'src/libs/entity/business-area.entity';
 import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
@@ -36,6 +36,7 @@ export class BusinessAreaService {
     private readonly insightsSubcategoryRepo: Repository<InsightsSubcategory>,
     @InjectRepository(TaxMember)
     private readonly taxMemberRepo: Repository<TaxMember>,
+    private readonly dataSource: DataSource,
   ) { }
 
   // ========== CATEGORY METHODS ==========
@@ -305,6 +306,18 @@ export class BusinessAreaService {
       );
     }
 
+    const allItems = await this.areaRepo.find({ order: { displayOrder: 'ASC' } });
+    const currentCount = allItems.length;
+    const targetOrder = dto.displayOrder ?? currentCount + 1;
+
+    // Range Validation
+    if (targetOrder < 1 || targetOrder > currentCount + 1 || !Number.isInteger(targetOrder)) {
+      throw new BadRequestException({
+        code: 'DISPLAY_ORDER_OUT_OF_RANGE',
+        message: `displayOrder must be a unique value between 1 and ${currentCount + 1}, and values must be continuous.`,
+      });
+    }
+
     const item = this.areaRepo.create({
       name: dto.name,
       subDescription: dto.subDescription,
@@ -316,12 +329,25 @@ export class BusinessAreaService {
       youtubeUrls: dto.youtubeUrls ?? [],
       isMainExposed: dto.isMainExposed ?? false,
       isExposed: dto.isExposed ?? true,
-      displayOrder: dto.displayOrder ?? 0,
+      displayOrder: targetOrder,
     });
 
-    const saved = await this.areaRepo.save(item);
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(BusinessArea);
+      const saved = await repo.save(item);
+
+      // Rebuild the list with the new item at target position
+      const newList = [...allItems];
+      newList.splice(targetOrder - 1, 0, saved);
+
+      for (let i = 0; i < newList.length; i++) {
+        const order = i + 1;
+        await repo.update(newList[i].id, { displayOrder: order });
+      }
+    });
+
     return this.areaRepo.findOne({
-      where: { id: saved.id },
+      where: { id: item.id },
       relations: ['majorCategory', 'minorCategory'],
     });
   }
@@ -417,20 +443,13 @@ export class BusinessAreaService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 노출순서, 업무분야명, 업무분야(대분류), 업무분야(중분류), Youtube, 메인노출여부, 노출여부, 등록일시
-    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    // 응답 포맷: 노출순서, 업무분야명, 업무분야(대분류), 업무분야(중분류), Youtube, 메인노출여부, 노출여부, 등록일시
     const formattedItems = items.map((item, index) => {
-      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest'
-        ? total - ((page - 1) * limit + index)
-        : (page - 1) * limit + index + 1;
-
       // YouTube URLs 배열 처리
       const youtubeUrls = item.youtubeUrls || [];
       const youtubeCount = youtubeUrls.length;
 
       const base = {
-        no,
         id: item.id,
         name: item.name,
         subDescription: item.subDescription,
@@ -599,7 +618,35 @@ export class BusinessAreaService {
     if (dto.youtubeUrls !== undefined) item.youtubeUrls = dto.youtubeUrls;
     if (dto.isMainExposed !== undefined) item.isMainExposed = dto.isMainExposed;
     if (dto.isExposed !== undefined) item.isExposed = dto.isExposed;
-    if (dto.displayOrder !== undefined) item.displayOrder = dto.displayOrder;
+
+    // Handle DisplayOrder Reordering (Drag & Drop Style)
+    if (dto.displayOrder !== undefined && dto.displayOrder !== item.displayOrder) {
+      const allItems = await this.areaRepo.find({ order: { displayOrder: 'ASC' } });
+      const currentCount = allItems.length;
+      const targetOrder = dto.displayOrder;
+
+      // Range Validation
+      if (targetOrder < 1 || targetOrder > currentCount || !Number.isInteger(targetOrder)) {
+        throw new BadRequestException({
+          code: 'DISPLAY_ORDER_OUT_OF_RANGE',
+          message: `displayOrder must be a unique value between 1 and ${currentCount}, and values must be continuous.`,
+        });
+      }
+
+      // Remove the current item and insert at target position
+      const otherItems = allItems.filter((i) => i.id !== id);
+      otherItems.splice(targetOrder - 1, 0, item);
+
+      await this.dataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(BusinessArea);
+        for (let i = 0; i < otherItems.length; i++) {
+          const order = i + 1;
+          await repo.update(otherItems[i].id, { displayOrder: order });
+        }
+      });
+
+      item.displayOrder = targetOrder;
+    }
 
     await this.areaRepo.save(item);
     return this.areaRepo.findOne({
@@ -612,6 +659,7 @@ export class BusinessAreaService {
     const area = await this.areaRepo.findOne({ where: { id } });
     if (!area) throw new NotFoundException('업무분야를 찾을 수 없습니다.');
     await this.areaRepo.remove(area);
+    await this.reorderAndNormalize();
     return { success: true, message: '삭제가 완료되었습니다.' };
   }
 
@@ -619,6 +667,7 @@ export class BusinessAreaService {
     const areas = await this.areaRepo.find({ where: { id: In(ids) } });
     if (!areas.length) return { success: true, deleted: 0 };
     await this.areaRepo.remove(areas);
+    await this.reorderAndNormalize();
     return { success: true, deleted: areas.length, message: '삭제가 완료되었습니다.' };
   }
 
@@ -639,10 +688,68 @@ export class BusinessAreaService {
   }
 
   async updateOrder(items: { id: number; displayOrder: number }[]) {
+    const allAreas = await this.areaRepo.find({ order: { displayOrder: 'ASC' } });
+    if (!allAreas.length) return { success: true };
+
+    // 1. Validate range and basic constraints first
     for (const item of items) {
-      await this.areaRepo.update(item.id, { displayOrder: item.displayOrder });
+      if (item.displayOrder < 1 || item.displayOrder > allAreas.length || !Number.isInteger(item.displayOrder)) {
+        throw new BadRequestException({
+          code: 'DISPLAY_ORDER_OUT_OF_RANGE',
+          message: `displayOrder must be a value between 1 and ${allAreas.length}.`,
+        });
+      }
     }
+
+    // 2. Validate uniqueness and continuity within the input (if full set is provided)
+    if (items.length === allAreas.length) {
+      const orders = items.map(i => i.displayOrder).sort((a, b) => a - b);
+
+      // Check for duplicates
+      for (let i = 0; i < orders.length - 1; i++) {
+        if (orders[i] === orders[i + 1]) {
+          throw new BadRequestException({
+            code: 'DISPLAY_ORDER_DUPLICATED',
+            message: 'Duplicate displayOrder detected.',
+          });
+        }
+      }
+
+      // Check for continuity
+      for (let i = 0; i < orders.length; i++) {
+        if (orders[i] !== i + 1) {
+          throw new BadRequestException({
+            code: 'DISPLAY_ORDER_NOT_CONTINUOUS',
+            message: 'displayOrder sequence is not continuous.',
+          });
+        }
+      }
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(BusinessArea);
+      for (const item of items) {
+        await repo.update(item.id, { displayOrder: item.displayOrder });
+      }
+    });
+
+    await this.reorderAndNormalize();
     return { success: true };
+  }
+
+  private async reorderAndNormalize() {
+    const areas = await this.areaRepo.find({
+      order: { displayOrder: 'ASC', updatedAt: 'DESC' },
+    });
+
+    for (let i = 0; i < areas.length; i++) {
+      const targetOrder = i + 1;
+      if (areas[i].displayOrder !== targetOrder) {
+        await this.areaRepo.update(areas[i].id, {
+          displayOrder: targetOrder,
+        });
+      }
+    }
   }
 
   /**

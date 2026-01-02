@@ -484,6 +484,7 @@ export class InsightsService {
     limit?: number;
     categoryId?: number;
     subcategoryId?: number;
+    dataRoom?: string;
   }) {
     const page = options.page || 1;
     const limit = options.limit || 20;
@@ -501,6 +502,10 @@ export class InsightsService {
 
     if (options.subcategoryId) {
       qb.andWhere('item.subcategoryId = :subcategoryId', { subcategoryId: options.subcategoryId });
+    }
+
+    if (options.dataRoom) {
+      qb.andWhere('category.type = :dataRoom', { dataRoom: options.dataRoom });
     }
 
     const [items, total] = await qb
