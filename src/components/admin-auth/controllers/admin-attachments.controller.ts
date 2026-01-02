@@ -14,16 +14,16 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { AttachmentService } from 'src/components/content/services/attachment.service';
 import { fileUploadConfig } from 'src/libs/upload/config/attachment-upload.config';
 
 @ApiTags('Admin Attachments')
-
 @Controller('admin/attachments')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminAttachmentsController {
-  constructor(private readonly attachmentService: AttachmentService) {}
+export class AdminAttachmentsController extends AdminBaseController {
+  constructor(private readonly attachmentService: AttachmentService) {
+    super();
+  }
 
   @Post('upload')
   @HttpCode(HttpStatus.OK)

@@ -20,7 +20,6 @@ import {
   ApiQuery,
   ApiBody,
 } from '@nestjs/swagger';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
 import { MainBannerService } from 'src/components/content/services/main-banner.service';
 import { HistoryService } from 'src/components/content/services/history.service';
 import { AwardService } from 'src/components/content/services/award.service';
@@ -45,11 +44,11 @@ import { AdminUpdateTrainingSeminarDto } from 'src/libs/dto/admin/admin-update-t
 import { ApplicationStatus } from 'src/libs/entity/training-seminar.entity';
 import { UpdateHistoryYearOrderDto } from 'src/libs/dto/history/update-year-order.dto';
 
-@ApiTags('Admin Content')
+import { AdminBaseController } from './admin-base.controller';
 
+@ApiTags('Admin Content')
 @Controller('admin/content')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminContentController {
+export class AdminContentController extends AdminBaseController {
   constructor(
     private readonly bannerService: MainBannerService,
     private readonly historyService: HistoryService,
@@ -60,7 +59,9 @@ export class AdminContentController {
     private readonly trainingSeminarService: TrainingSeminarService,
     private readonly taxMemberService: TaxMemberService,
     private readonly exposureSettingsService: ExposureSettingsService,
-  ) {}
+  ) {
+    super();
+  }
 
   // ===== MAIN BANNER =====
   @ApiOperation({ summary: '메인 배너 목록' })

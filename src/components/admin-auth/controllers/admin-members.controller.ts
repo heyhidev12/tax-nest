@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { MembersService } from 'src/components/members/members.service';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { AdminMemberQueryDto } from 'src/libs/dto/admin/admin-member-query.dto';
 import { AdminCreateMemberDto } from 'src/libs/dto/admin/admin-create-member.dto';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
@@ -20,11 +20,11 @@ import { MemberStatus } from 'src/libs/enums/members.enum';
 import { AdminUpdateMemberDto } from 'src/libs/dto/admin/admin-update-member.dto';
 
 @ApiTags('Admin Members')
-
 @Controller('admin/members')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminMembersController {
-  constructor(private readonly membersService: MembersService) {}
+export class AdminMembersController extends AdminBaseController {
+  constructor(private readonly membersService: MembersService) {
+    super();
+  }
 
   @ApiOperation({ summary: '회원 목록 조회' })
   @ApiResponse({ status: 200, description: '목록 조회 성공 (검색: 이름/전화번호, 필터: 회원유형/상태/승인여부, 정렬: 최신순/오래된순)' })

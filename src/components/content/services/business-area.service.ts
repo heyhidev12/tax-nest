@@ -339,8 +339,14 @@ export class BusinessAreaService {
         // If member has no workAreas, return empty result
         qb.andWhere('1 = 0'); // Always false condition
       } else {
-        // Filter business areas where minorCategory.name is in the member's workAreas
-        qb.andWhere('minorCategory.name IN (:...workAreas)', { workAreas });
+        // Filter business areas where minorCategory.id is in the member's workAreas (stored as IDs)
+        // Note: member.workAreas stores IDs as strings, so we convert them to numbers for the IN clause
+        const workAreaIds = workAreas.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+        if (workAreaIds.length === 0) {
+          qb.andWhere('1 = 0');
+        } else {
+          qb.andWhere('minorCategory.id IN (:...workAreaIds)', { workAreaIds });
+        }
       }
     }
 

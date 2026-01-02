@@ -11,20 +11,20 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { NewsletterService } from 'src/components/newsletter/newsletter.service';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 
 @ApiTags('Admin Newsletter')
-
 @Controller('admin/newsletter')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminNewsletterController {
-  constructor(private readonly newsletterService: NewsletterService) {}
+export class AdminNewsletterController extends AdminBaseController {
+  constructor(private readonly newsletterService: NewsletterService) {
+    super();
+  }
 
   @ApiOperation({ summary: '뉴스레터 구독자 목록 (검색: 이메일) - Easy Mail에서 가져오기' })
-  @ApiResponse({ 
-    status: 200, 
-    description: '목록 조회 성공. 검색 결과가 없을 경우 message 필드에 "검색 결과 없음" 반환' 
+  @ApiResponse({
+    status: 200,
+    description: '목록 조회 성공. 검색 결과가 없을 경우 message 필드에 "검색 결과 없음" 반환'
   })
   @ApiQuery({ name: 'search', required: false, description: '이메일 검색' })
   @ApiQuery({ name: 'isSubscribed', required: false, description: '수신 여부 필터 (true/false)' })

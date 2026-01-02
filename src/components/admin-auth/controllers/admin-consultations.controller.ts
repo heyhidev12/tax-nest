@@ -11,17 +11,17 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ConsultationsService } from 'src/components/consultations/consultations.service';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { AdminConsultationQueryDto } from 'src/libs/dto/admin/admin-consultation-query.dto';
 import { AdminAnswerDto } from 'src/libs/dto/admin/admin-answer.dto';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 
 @ApiTags('Admin Consultations')
-
 @Controller('admin/consultations')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminConsultationsController {
-  constructor(private readonly consultationsService: ConsultationsService) {}
+export class AdminConsultationsController extends AdminBaseController {
+  constructor(private readonly consultationsService: ConsultationsService) {
+    super();
+  }
 
   @ApiOperation({ summary: '상담 분야 목록 조회 (드롭다운용)' })
   @ApiResponse({ status: 200, description: '상담 분야 목록' })

@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { AttachmentService } from 'src/components/content/services/attachment.service';
 import { fileUploadConfig } from 'src/libs/upload/config/attachment-upload.config';
 import { imageUploadConfig } from 'src/libs/upload/config/image-upload.config';
@@ -19,11 +19,11 @@ import { videoUploadConfig } from 'src/libs/upload/config/video-upload.config';
 // DTOs removed - no longer needed for simple uploads
 
 @ApiTags('Admin Uploads')
-
 @Controller('admin/uploads')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminUploadsController {
-  constructor(private readonly attachmentService: AttachmentService) {}
+export class AdminUploadsController extends AdminBaseController {
+  constructor(private readonly attachmentService: AttachmentService) {
+    super();
+  }
 
   @Post('image')
   @HttpCode(HttpStatus.OK)

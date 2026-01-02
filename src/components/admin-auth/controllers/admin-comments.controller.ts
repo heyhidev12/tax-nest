@@ -10,17 +10,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { InsightsService } from 'src/components/content/services/insights.service';
 
 @ApiTags('Admin Comments')
-
 @Controller('admin/comments')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminCommentsController {
+export class AdminCommentsController extends AdminBaseController {
   constructor(
     private readonly insightsService: InsightsService,
-  ) {}
+  ) {
+    super();
+  }
 
   @ApiOperation({ summary: '신고된 댓글 목록 조회 (Insights 댓글만)' })
   @ApiResponse({ status: 200, description: '신고된 댓글 목록 조회 성공' })

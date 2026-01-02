@@ -41,7 +41,10 @@ async function bootstrap() {
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'user-auth',
     )
-    .addCookieAuth('access_token', { type: 'apiKey', in: 'cookie' }, 'admin-auth')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'admin-auth',
+    )
     // User/Public APIs (ordered first)
     .addTag('Auth', '회원 인증')
     .addTag('Consultations', '상담 요청')

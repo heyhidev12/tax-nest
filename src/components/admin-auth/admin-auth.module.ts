@@ -20,6 +20,7 @@ import { AdminInsightsController } from './controllers/admin-insights.controller
 import { AdminAttachmentsController } from './controllers/admin-attachments.controller';
 import { AdminUploadsController } from './controllers/admin-uploads.controller';
 import { RolesGuard } from './roles.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { RolesGuard } from './roles.guard';
     NewsletterModule,
     ContentModule,
   ],
-  providers: [AdminAuthService, AdminJwtStrategy, RolesGuard],
+  providers: [AdminAuthService, AdminJwtStrategy, RolesGuard, JwtAuthGuard],
   controllers: [
     AdminAuthController,
     AdminConsultationsController,
@@ -49,4 +50,4 @@ import { RolesGuard } from './roles.guard';
   ],
   exports: [TypeOrmModule, AdminAuthService, AdminJwtStrategy, RolesGuard],
 })
-export class AdminAuthModule {}
+export class AdminAuthModule { }

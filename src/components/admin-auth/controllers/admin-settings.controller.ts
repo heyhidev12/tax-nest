@@ -13,22 +13,23 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { AdminAuthService } from '../admin-auth.service';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { CreateAdminDto } from 'src/libs/dto/admin/create-admin.dto';
 import { Roles } from '../decorators/roles.decorator';
 import { AdminRole } from 'src/libs/enums/admin.enum';
 import { RolesGuard } from '../roles.guard';
 
 @ApiTags('Admin Settings')
-
 @Controller('admin/settings')
-@UseGuards(AdminJwtAuthGuard, RolesGuard)
-export class AdminSettingsController {
-  constructor(private readonly adminAuthService: AdminAuthService) {}
+@UseGuards(RolesGuard)
+export class AdminSettingsController extends AdminBaseController {
+  constructor(private readonly adminAuthService: AdminAuthService) {
+    super();
+  }
 
   // ===== SUPER_ADMIN ONLY ENDPOINTS =====
   // These endpoints manage admin accounts and should remain restricted to SUPER_ADMIN only
-  
+
   @ApiOperation({ summary: '관리자 목록 조회 (SUPER_ADMIN only)' })
   @ApiResponse({ status: 200, description: '목록 조회 성공' })
   @ApiResponse({ status: 403, description: '권한 없음 - SUPER_ADMIN만 접근 가능' })
@@ -82,10 +83,10 @@ export class AdminSettingsController {
       type: 'object',
       required: ['permissions'],
       properties: {
-        permissions: { 
-          type: 'object', 
+        permissions: {
+          type: 'object',
           additionalProperties: { type: 'boolean' },
-          description: '권한 객체 (필수, 예: { "content": true, "members": false })' 
+          description: '권한 객체 (필수, 예: { "content": true, "members": false })'
         },
       },
     },

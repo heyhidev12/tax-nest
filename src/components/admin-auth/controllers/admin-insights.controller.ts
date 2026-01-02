@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody, ApiParam } from '@nestjs/swagger';
-import { AdminJwtAuthGuard } from '../admin-jwt.guard';
+import { AdminBaseController } from './admin-base.controller';
 import { InsightsService } from 'src/components/content/services/insights.service';
 import { CreateCategoryDto } from 'src/libs/dto/insights/create-category.dto';
 import { UpdateCategoryDto } from 'src/libs/dto/insights/update-category.dto';
@@ -23,11 +23,11 @@ import { CategoryResponseDto } from 'src/libs/dto/insights/category-response.dto
 import { ItemResponseDto } from 'src/libs/dto/insights/item-response.dto';
 
 @ApiTags('Admin Content')
-
 @Controller('admin/insights')
-@UseGuards(AdminJwtAuthGuard)
-export class AdminInsightsController {
-  constructor(private readonly insightsService: InsightsService) {}
+export class AdminInsightsController extends AdminBaseController {
+  constructor(private readonly insightsService: InsightsService) {
+    super();
+  }
 
   // ========== CATEGORY ENDPOINTS ==========
 
@@ -104,9 +104,9 @@ export class AdminInsightsController {
     return this.insightsService.getSubcategoryById(id, true);
   }
 
-  @ApiOperation({ 
-    summary: '서브카테고리 생성', 
-    description: '전역 서브카테고리를 생성합니다. 섹션 배열(발생원인, 리스크, 체크포인트, 함께 실행방안, 케이스)을 포함해야 합니다.' 
+  @ApiOperation({
+    summary: '서브카테고리 생성',
+    description: '전역 서브카테고리를 생성합니다. 섹션 배열(발생원인, 리스크, 체크포인트, 함께 실행방안, 케이스)을 포함해야 합니다.'
   })
   @ApiResponse({ status: 201, description: '서브카테고리 생성 성공' })
   @ApiResponse({ status: 400, description: '입력값 검증 실패' })

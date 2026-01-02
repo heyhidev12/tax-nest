@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
 import { BusinessArea } from 'src/libs/entity/business-area.entity';
+import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
 import { UploadService } from 'src/libs/upload/upload.service';
 
 interface TaxMemberListOptions {
@@ -24,12 +25,15 @@ export class TaxMemberService {
     private readonly memberRepo: Repository<TaxMember>,
     @InjectRepository(BusinessArea)
     private readonly businessAreaRepo: Repository<BusinessArea>,
+    @InjectRepository(BusinessAreaCategory)
+    private readonly categoryRepo: Repository<BusinessAreaCategory>,
     private readonly uploadService: UploadService,
   ) { }
 
   async create(data: Partial<TaxMember>) {
     const member = this.memberRepo.create(data);
-    return this.memberRepo.save(member);
+    const saved = await this.memberRepo.save(member);
+    return this.findById(saved.id);
   }
 
   async findAll(options: TaxMemberListOptions = {}) {
@@ -77,15 +81,14 @@ export class TaxMemberService {
         throw new NotFoundException('업무분야를 찾을 수 없습니다.');
       }
 
-      const minorCategoryName = businessArea.minorCategory?.name;
-      if (!minorCategoryName) {
+      const minorCategoryId = businessArea.minorCategoryId;
+      if (!minorCategoryId) {
         throw new NotFoundException('업무분야의 카테고리 정보를 찾을 수 없습니다.');
       }
 
-      // Filter members where workAreas array contains the minorCategory.name
-      // Using JSON_CONTAINS for MySQL/MariaDB compatibility
-      conditions.push('JSON_CONTAINS(member.workAreas, :minorCategoryName)');
-      params.minorCategoryName = JSON.stringify(minorCategoryName);
+      // Filter members where workAreas array contains the minorCategoryId as string
+      conditions.push('JSON_CONTAINS(member.workAreas, :minorCategoryId)');
+      params.minorCategoryId = JSON.stringify(String(minorCategoryId));
     }
 
     if (workArea) {
@@ -111,18 +114,27 @@ export class TaxMemberService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    const formattedItems = items.map((item) => {
+    // Get all categories for mapping
+    const allCategories = await this.categoryRepo.find();
+
+    const formattedItems = await Promise.all(items.map(async (item) => {
+      const workAreasFormatted = this.mapWorkAreas(item.workAreas, allCategories);
+
       if (isPublic) {
         const { createdAt, updatedAt, ...rest } = item;
-        return rest;
+        return {
+          ...rest,
+          workAreas: workAreasFormatted,
+        };
       }
       return {
         ...item,
+        workAreas: workAreasFormatted,
         exposedLabel: item.isExposed ? 'Y' : 'N',
         createdAtFormatted: this.formatDateTime(item.createdAt),
         updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
-    });
+    }));
 
     return { items: formattedItems, total, page, limit };
   }
@@ -131,23 +143,59 @@ export class TaxMemberService {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
 
+    const allCategories = await this.categoryRepo.find();
+    const workAreasFormatted = this.mapWorkAreas(member.workAreas, allCategories);
+
     if (isPublic) {
       const { createdAt, updatedAt, ...rest } = member;
-      return rest;
+      return {
+        ...rest,
+        workAreas: workAreasFormatted,
+      };
     }
     return {
       ...member,
+      workAreas: workAreasFormatted,
       exposedLabel: member.isExposed ? 'Y' : 'N',
       createdAtFormatted: this.formatDateTime(member.createdAt),
       updatedAtFormatted: this.formatDateTime(member.updatedAt),
     };
   }
 
+  private mapWorkAreas(workAreas: string[], allCategories: BusinessAreaCategory[]) {
+    if (!workAreas || !Array.isArray(workAreas)) return [];
+
+    return workAreas.map(val => {
+      // Try to find by ID (val could be ID string)
+      const idNum = parseInt(val, 10);
+      const catById = !isNaN(idNum) ? allCategories.find(c => c.id === idNum) : null;
+
+      if (catById) {
+        return { id: catById.id, value: catById.name };
+      }
+
+      // If not found by ID, try to find by Name (backward compatibility if names are stored)
+      const catByName = allCategories.find(c => c.name === val);
+      if (catByName) {
+        return { id: catByName.id, value: catByName.name };
+      }
+
+      // Fallback: If it's a number string but no category found
+      if (!isNaN(idNum)) {
+        return { id: idNum, value: '' };
+      }
+
+      // Last fallback
+      return { id: 0, value: val || '' };
+    });
+  }
+
   async update(id: number, data: Partial<TaxMember>) {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
     Object.assign(member, data);
-    return this.memberRepo.save(member);
+    await this.memberRepo.save(member);
+    return this.findById(id);
   }
 
   async delete(id: number) {

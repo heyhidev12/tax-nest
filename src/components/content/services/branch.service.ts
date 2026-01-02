@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, DataSource } from 'typeorm';
 import { Branch } from 'src/libs/entity/branch.entity';
 import { GeocodingService } from './geocoding.service';
 
@@ -20,10 +20,26 @@ export class BranchService {
     @InjectRepository(Branch)
     private readonly branchRepo: Repository<Branch>,
     private readonly geocodingService: GeocodingService,
+    private readonly dataSource: DataSource,
   ) { }
 
   async create(data: Partial<Branch>) {
-    const branch = this.branchRepo.create(data);
+    const allBranches = await this.branchRepo.find({ order: { displayOrder: 'ASC' } });
+    const currentCount = allBranches.length;
+    const targetOrder = data.displayOrder ?? currentCount + 1;
+
+    // Range Validation
+    if (targetOrder < 1 || targetOrder > currentCount + 1 || !Number.isInteger(targetOrder)) {
+      throw new BadRequestException({
+        code: 'DISPLAY_ORDER_OUT_OF_RANGE',
+        message: `표시 순서는 1부터 ${currentCount + 1} 사이의 유일한 값이어야 하며, 값은 누락 없이 연속되어야 합니다.`,
+      });
+    }
+
+    const branch = this.branchRepo.create({
+      ...data,
+      displayOrder: targetOrder,
+    });
 
     // Geocode address if provided
     if (data.address) {
@@ -37,7 +53,21 @@ export class BranchService {
       }
     }
 
-    return this.branchRepo.save(branch);
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Branch);
+      const saved = await repo.save(branch);
+
+      // Rebuild the list with the new item at target position
+      const newList = [...allBranches];
+      newList.splice(targetOrder - 1, 0, saved);
+
+      for (let i = 0; i < newList.length; i++) {
+        const order = i + 1;
+        await repo.update(newList[i].id, { displayOrder: order });
+      }
+    });
+
+    return (await this.branchRepo.findOne({ where: { name: branch.name }, order: { createdAt: 'DESC' } }))!;
   }
 
   async findAll(options: BranchListOptions = {}) {
@@ -114,27 +144,65 @@ export class BranchService {
     const branch = await this.branchRepo.findOne({ where: { id } });
     if (!branch) throw new NotFoundException('본사/지점을 찾을 수 없습니다.');
 
-    // If address is being updated, geocode it
-    if (data.address && data.address !== branch.address) {
-      const coordinates = await this.geocodingService.geocodeAddress(data.address);
+    // 1. Handle DisplayOrder Reordering (Drag & Drop Style)
+    if (data.displayOrder !== undefined && data.displayOrder !== branch.displayOrder) {
+      const allBranches = await this.branchRepo.find({ order: { displayOrder: 'ASC' } });
+      const currentCount = allBranches.length;
+      const targetOrder = data.displayOrder;
+
+      // Range Validation
+      if (targetOrder < 1 || targetOrder > currentCount || !Number.isInteger(targetOrder)) {
+        throw new BadRequestException({
+          code: 'DISPLAY_ORDER_OUT_OF_RANGE',
+          message: `표시 순서는 1부터 ${currentCount} 사이의 유일한 값이어야 하며, 값은 누락 없이 연속되어야 합니다.`,
+        });
+      }
+
+      // Remove the current branch and insert at target position
+      const otherBranches = allBranches.filter((b) => b.id !== id);
+      otherBranches.splice(targetOrder - 1, 0, branch);
+
+      await this.dataSource.transaction(async (manager) => {
+        const repo = manager.getRepository(Branch);
+        for (let i = 0; i < otherBranches.length; i++) {
+          const order = i + 1;
+          await repo.update(otherBranches[i].id, { displayOrder: order });
+        }
+      });
+
+      // Update local branch object to reflect the new state
+      branch.displayOrder = targetOrder;
+    }
+
+    // 2. Handle Other Field Updates
+    const updatedData = { ...data };
+    delete updatedData.displayOrder;
+
+    if (updatedData.address && updatedData.address !== branch.address) {
+      const coordinates = await this.geocodingService.geocodeAddress(updatedData.address);
       if (coordinates) {
-        data.latitude = coordinates.latitude;
-        data.longitude = coordinates.longitude;
+        updatedData.latitude = coordinates.latitude;
+        updatedData.longitude = coordinates.longitude;
       } else {
-        // If geocoding fails, set to null
-        data.latitude = null as any;
-        data.longitude = null as any;
+        updatedData.latitude = null as any;
+        updatedData.longitude = null as any;
       }
     }
 
-    Object.assign(branch, data);
-    return this.branchRepo.save(branch);
+    if (Object.keys(updatedData).length > 0) {
+      Object.assign(branch, updatedData);
+      await this.branchRepo.save(branch);
+    }
+
+    await this.reorderAndNormalize();
+    return this.findById(id);
   }
 
   async delete(id: number) {
     const branch = await this.branchRepo.findOne({ where: { id } });
     if (!branch) throw new NotFoundException('본사/지점을 찾을 수 없습니다.');
     await this.branchRepo.remove(branch);
+    await this.reorderAndNormalize();
     return { success: true, message: '삭제가 완료되었습니다.' };
   }
 
@@ -142,6 +210,7 @@ export class BranchService {
     const branches = await this.branchRepo.find({ where: { id: In(ids) } });
     if (!branches.length) return { success: true, deleted: 0 };
     await this.branchRepo.remove(branches);
+    await this.reorderAndNormalize();
     return { success: true, deleted: branches.length, message: '삭제가 완료되었습니다.' };
   }
 
@@ -154,10 +223,69 @@ export class BranchService {
   }
 
   async updateOrder(items: { id: number; displayOrder: number }[]) {
+    const allBranches = await this.branchRepo.find({ order: { displayOrder: 'ASC' } });
+    if (!allBranches.length) return { success: true };
+
+    // 1. Validate range and basic constraints first
     for (const item of items) {
-      await this.branchRepo.update(item.id, { displayOrder: item.displayOrder });
+      if (item.displayOrder < 1 || item.displayOrder > allBranches.length || !Number.isInteger(item.displayOrder)) {
+        throw new BadRequestException({
+          code: 'DISPLAY_ORDER_OUT_OF_RANGE',
+          message: `표시 순서는 1부터 ${allBranches.length} 사이의 값이어야 합니다.`,
+        });
+      }
     }
+
+    // 2. Validate uniqueness and continuity within the input
+    // This assumes updateOrder is used for bulk reordering of the entire list.
+    if (items.length === allBranches.length) {
+      const orders = items.map(i => i.displayOrder).sort((a, b) => a - b);
+
+      // Check for duplicates
+      for (let i = 0; i < orders.length - 1; i++) {
+        if (orders[i] === orders[i + 1]) {
+          throw new BadRequestException({
+            code: 'DISPLAY_ORDER_DUPLICATED',
+            message: '중복된 표시 순서가 있습니다.',
+          });
+        }
+      }
+
+      // Check for continuity
+      for (let i = 0; i < orders.length; i++) {
+        if (orders[i] !== i + 1) {
+          throw new BadRequestException({
+            code: 'DISPLAY_ORDER_NOT_CONTINUOUS',
+            message: '표시 순서가 연속적이지 않습니다.',
+          });
+        }
+      }
+    }
+
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(Branch);
+      for (const item of items) {
+        await repo.update(item.id, { displayOrder: item.displayOrder });
+      }
+    });
+
+    await this.reorderAndNormalize();
     return { success: true };
+  }
+
+  private async reorderAndNormalize() {
+    const branches = await this.branchRepo.find({
+      order: { displayOrder: 'ASC', createdAt: 'DESC' },
+    });
+
+    for (let i = 0; i < branches.length; i++) {
+      const targetOrder = i + 1;
+      if (branches[i].displayOrder !== targetOrder) {
+        await this.branchRepo.update(branches[i].id, {
+          displayOrder: targetOrder,
+        });
+      }
+    }
   }
 
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
