@@ -99,11 +99,11 @@ export class AdminAuthService {
   async getMyProfile(adminId: number) {
     const admin = await this.findById(adminId);
     return {
-        loginId: admin.loginId,
-        name: admin.name,
-        role: admin.role,
-        permissions: admin.permissions || {},
-        createdAt: admin.createdAt,
+      loginId: admin.loginId,
+      name: admin.name,
+      role: admin.role,
+      permissions: admin.permissions || {},
+      createdAt: admin.createdAt,
     };
   }
 
@@ -153,7 +153,7 @@ export class AdminAuthService {
   async create(dto: CreateAdminDto) {
     const existing = await this.adminRepo.findOne({ where: { loginId: dto.loginId } });
     if (existing) {
-      throw new BadRequestException('이미 사용 중인 ID입니다.');
+      throw new BadRequestException('이미 사용 중인 아이디입니다.');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);

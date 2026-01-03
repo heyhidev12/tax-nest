@@ -20,7 +20,7 @@ export class HistoryService {
     @InjectRepository(HistoryItem)
     private readonly itemRepo: Repository<HistoryItem>,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   // === Year CRUD ===
   async createYear(year: number, isExposed = true) {
@@ -29,12 +29,12 @@ export class HistoryService {
   }
 
   async findAllYears(options: YearListOptions = {}) {
-    const { 
+    const {
       isExposed,
       sort = 'order',
-      page = 1, 
-      limit = 50, 
-      includeHidden = false 
+      page = 1,
+      limit = 50,
+      includeHidden = false
     } = options;
 
     const qb = this.yearRepo.createQueryBuilder('year')
@@ -66,22 +66,20 @@ export class HistoryService {
       year: item.year,
       displayOrder: item.displayOrder,
       isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
       itemCount: item.items?.length || 0,
       createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
     }));
 
     return { items: formattedItems, total, page, limit };
   }
 
   async findYearById(id: number) {
-    const year = await this.yearRepo.findOne({ 
+    const year = await this.yearRepo.findOne({
       where: { id },
       relations: ['items'],
     });
     if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
-    
+
     // 아이템 정렬 및 포맷
     const formattedItems = (year.items || [])
       .sort((a, b) => a.displayOrder - b.displayOrder || b.createdAt.getTime() - a.createdAt.getTime())
@@ -91,21 +89,17 @@ export class HistoryService {
         month: item.month,
         content: item.content,
         isExposed: item.isExposed,
-        exposedLabel: item.isExposed ? 'Y' : 'N',
         displayOrder: item.displayOrder,
         createdAt: item.createdAt,
-        createdAtFormatted: this.formatDateTime(item.createdAt),
       }));
 
     return {
       id: year.id,
       year: year.year,
       isExposed: year.isExposed,
-      exposedLabel: year.isExposed ? 'Y' : 'N',
       displayOrder: year.displayOrder,
       items: formattedItems,
       createdAt: year.createdAt,
-      createdAtFormatted: this.formatDateTime(year.createdAt),
     };
   }
 
@@ -135,17 +129,17 @@ export class HistoryService {
     if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
     year.isExposed = !year.isExposed;
     await this.yearRepo.save(year);
-    return { success: true, isExposed: year.isExposed, exposedLabel: year.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: year.isExposed };
   }
 
   async updateYearOrder(items: HistoryYearOrderItemDto[]) {
     return await this.dataSource.transaction(async (manager) => {
       const yearRepo = manager.getRepository(HistoryYear);
-      
+
       for (const item of items) {
         await yearRepo.update(item.id, { displayOrder: item.displayOrder });
       }
-      
+
       return { success: true };
     });
   }
@@ -154,7 +148,7 @@ export class HistoryService {
   async createItem(historyYearId: number, data: { month?: number; content: string; isExposed?: boolean }) {
     const year = await this.yearRepo.findOne({ where: { id: historyYearId } });
     if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
-    
+
     const item = this.itemRepo.create({
       historyYearId: year.id,
       month: data.month,
@@ -182,10 +176,8 @@ export class HistoryService {
       month: item.month,
       content: item.content,
       isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
       displayOrder: item.displayOrder,
       createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
     }));
   }
 
@@ -215,7 +207,7 @@ export class HistoryService {
     if (!item) throw new NotFoundException('항목을 찾을 수 없습니다.');
     item.isExposed = !item.isExposed;
     await this.itemRepo.save(item);
-    return { success: true, isExposed: item.isExposed, exposedLabel: item.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: item.isExposed };
   }
 
   async updateItemOrder(items: { id: number; displayOrder: number }[]) {

@@ -63,6 +63,14 @@ export class AuthController {
     return this.authService.signUp(dto);
   }
 
+  @ApiOperation({ summary: '아이디 중복 확인', description: '회원가입 전 아이디 중복 여부를 확인합니다.' })
+  @ApiResponse({ status: 200, description: '확인 성공', schema: { example: { exists: true } } })
+  @ApiQuery({ name: 'loginId', required: true, description: '확인할 로그인 ID' })
+  @Get('check-id')
+  checkId(@Query('loginId') loginId: string) {
+    return this.authService.checkLoginIdExists(loginId);
+  }
+
   @ApiOperation({ summary: '로그인' })
   @ApiResponse({ status: 200, description: '로그인 성공' })
   @ApiResponse({ status: 401, description: 'ID 또는 비밀번호가 올바르지 않습니다.' })

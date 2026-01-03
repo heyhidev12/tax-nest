@@ -180,13 +180,10 @@ export class TrainingSeminarService {
         id: item.id,
         name: item.name,
         type: item.type,
-        typeLabel: this.getTypeLabel(item.type),
         recruitmentType: item.recruitmentType,
-        recruitmentTypeLabel: this.getRecruitmentTypeLabel(item.recruitmentType),
         recruitmentEndDate: item.recruitmentEndDate,
         image: item.image,
         targetMemberType: item.targetMemberType,
-        targetMemberTypeLabel: this.getTargetMemberTypeLabel(item.targetMemberType),
         educationDates: item.educationDates || [],
         educationTimeSlots: item.educationTimeSlots || [],
         location: item.location,
@@ -194,20 +191,23 @@ export class TrainingSeminarService {
         quota: item.quota,
         applicationCount: item.applications?.length || 0,
         isExposed: item.isExposed,
-        exposedLabel: item.isExposed ? 'Y' : 'N',
         isRecommended: item.isRecommended,
       };
 
       if (isPublic) {
-        return base;
+        return {
+          ...base,
+          typeLabel: this.getTypeLabel(item.type),
+          recruitmentTypeLabel: this.getRecruitmentTypeLabel(item.recruitmentType),
+          targetMemberTypeLabel: this.getTargetMemberTypeLabel(item.targetMemberType),
+          exposedLabel: item.isExposed ? 'Y' : 'N',
+        };
       }
 
       return {
         ...base,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
-        createdAtFormatted: this.formatDateTime(item.createdAt),
-        updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
     });
 
@@ -245,23 +245,21 @@ export class TrainingSeminarService {
 
     const base = {
       ...seminar,
-      typeLabel: this.getTypeLabel(seminar.type),
-      recruitmentTypeLabel: this.getRecruitmentTypeLabel(seminar.recruitmentType),
-      targetMemberTypeLabel: this.getTargetMemberTypeLabel(seminar.targetMemberType),
-      exposedLabel: seminar.isExposed ? 'Y' : 'N',
       applicationCount: seminar.applications?.length || 0,
     };
 
     if (isPublic) {
       const { createdAt, updatedAt, ...rest } = base;
-      return rest;
+      return {
+        ...rest,
+        typeLabel: this.getTypeLabel(seminar.type),
+        recruitmentTypeLabel: this.getRecruitmentTypeLabel(seminar.recruitmentType),
+        targetMemberTypeLabel: this.getTargetMemberTypeLabel(seminar.targetMemberType),
+        exposedLabel: seminar.isExposed ? 'Y' : 'N',
+      };
     }
 
-    return {
-      ...base,
-      createdAtFormatted: this.formatDateTime(seminar.createdAt),
-      updatedAtFormatted: this.formatDateTime(seminar.updatedAt),
-    };
+    return base;
   }
 
   async update(id: number, data: Partial<TrainingSeminar>) {
@@ -549,18 +547,17 @@ export class TrainingSeminarService {
         participationTime: item.participationTime, // HH:mm 형식
         attendeeCount: item.attendeeCount,
         status: item.status,
-        statusLabel: this.getApplicationStatusLabel(item.status),
         appliedAt: item.appliedAt,
       };
 
       if (isPublic) {
-        return base;
+        return {
+          ...base,
+          statusLabel: this.getApplicationStatusLabel(item.status),
+        };
       }
 
-      return {
-        ...base,
-        appliedAtFormatted: this.formatDateTime(item.appliedAt),
-      };
+      return base;
     });
 
     return { items: formattedItems, total, page, limit };
@@ -650,13 +647,9 @@ export class TrainingSeminarService {
         seminarId: item.trainingSeminarId,
         name: seminar?.name || '-',
         type: seminar?.type || '',
-        typeLabel: this.getTypeLabel(seminar?.type || TrainingSeminarType.SEMINAR),
         image: seminar?.image || null,
         location: seminar?.location || '-',
-        deadlineLabel,
-        deadlineDays,
         status: item.status,
-        statusLabel,
         participationDate: item.participationDate,
         participationTime: item.participationTime,
         attendeeCount: item.attendeeCount,
@@ -664,13 +657,16 @@ export class TrainingSeminarService {
       };
 
       if (isPublic) {
-        return base;
+        return {
+          ...base,
+          typeLabel: this.getTypeLabel(seminar?.type || TrainingSeminarType.SEMINAR),
+          deadlineLabel,
+          deadlineDays,
+          statusLabel,
+        };
       }
 
-      return {
-        ...base,
-        appliedAtFormatted: this.formatDateTime(item.appliedAt),
-      };
+      return base;
     });
 
     return { items: formattedItems, total, page, limit };
@@ -721,18 +717,17 @@ export class TrainingSeminarService {
         participationTime: item.participationTime, // HH:mm 형식
         attendeeCount: item.attendeeCount,
         status: item.status,
-        statusLabel: this.getApplicationStatusLabel(item.status),
         appliedAt: item.appliedAt,
       };
 
       if (isPublic) {
-        return base;
+        return {
+          ...base,
+          statusLabel: this.getApplicationStatusLabel(item.status),
+        };
       }
 
-      return {
-        ...base,
-        appliedAtFormatted: this.formatDateTime(item.appliedAt),
-      };
+      return base;
     });
 
     return { items: formattedItems, total, page, limit };
@@ -748,17 +743,16 @@ export class TrainingSeminarService {
     const base = {
       ...app,
       trainingSeminarName: app.trainingSeminar?.name,
-      statusLabel: this.getApplicationStatusLabel(app.status),
     };
 
     if (isPublic) {
-      return base;
+      return {
+        ...base,
+        statusLabel: this.getApplicationStatusLabel(app.status),
+      };
     }
 
-    return {
-      ...base,
-      appliedAtFormatted: this.formatDateTime(app.appliedAt),
-    };
+    return base;
   }
 
   async updateApplicationStatus(id: number, status: ApplicationStatus) {
@@ -766,7 +760,7 @@ export class TrainingSeminarService {
     if (!app) throw new NotFoundException('신청을 찾을 수 없습니다.');
     app.status = status;
     await this.appRepo.save(app);
-    return { success: true, status, statusLabel: this.getApplicationStatusLabel(status) };
+    return { success: true, status };
   }
 
   async deleteApplication(id: number) {

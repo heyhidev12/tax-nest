@@ -34,7 +34,7 @@ export class ConsultationsService {
   constructor(
     @InjectRepository(Consultation)
     private readonly consultationRepo: Repository<Consultation>,
-  ) {}
+  ) { }
 
   /**
    * 상담 신청 생성
@@ -166,7 +166,7 @@ export class ConsultationsService {
     // 응답 포맷: No, 이름, 상담분야, 담당 세무사, 휴대폰 번호, 상담 내용 전체, 답변, 회원유형, 신청일시
     // 번호는 정렬 순서에 따라 순차적으로 부여 (최신순: 큰 번호부터, 오래된순: 작은 번호부터)
     const formattedItems = items.map((c, index) => {
-      const no = sort === 'latest' 
+      const no = sort === 'latest'
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
 
@@ -180,12 +180,8 @@ export class ConsultationsService {
         content: c.content,
         answer: c.answer,
         memberFlag: c.memberFlag,
-        memberFlagLabel: c.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
         status: c.status,
-        statusLabel: c.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
         createdAt: c.createdAt,
-        // Date format: yyyy.MM.dd HH:mm:ss
-        createdAtFormatted: this.formatDateTime(c.createdAt),
       };
     });
 
@@ -204,12 +200,9 @@ export class ConsultationsService {
     // passwordHash 제외하고 상세 정보 반환
     const { passwordHash, ...rest } = c;
     const isMember = c.memberFlag === MemberFlag.MEMBER;
-    
+
     return {
       ...rest,
-      memberFlagLabel: isMember ? '회원' : '비회원',
-      statusLabel: c.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
-      createdAtFormatted: this.formatDateTime(c.createdAt),
       // 회원인 경우에만 답변 입력 가능 (비회원은 비활성화)
       canEditAnswer: isMember,
     };
@@ -224,18 +217,15 @@ export class ConsultationsService {
     if (!entity) {
       throw new NotFoundException('상담 요청을 찾을 수 없습니다.');
     }
-    
+
     entity.answer = answer;
     entity.status = status;
     const saved = await this.consultationRepo.save(entity);
-    
+
     // passwordHash 제외하고 반환
     const { passwordHash, ...result } = saved;
     return {
       ...result,
-      memberFlagLabel: entity.memberFlag === MemberFlag.MEMBER ? '회원' : '비회원',
-      statusLabel: saved.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
-      createdAtFormatted: this.formatDateTime(saved.createdAt),
     };
   }
 
@@ -294,7 +284,7 @@ export class ConsultationsService {
 
     // 응답 포맷 (UI에 맞게) - 전체 content/answer 제공, 별도의 미리보기 필드는 사용하지 않음
     const formattedItems = items.map((item, index) => {
-      const no = sort === 'latest' 
+      const no = sort === 'latest'
         ? total - ((page - 1) * limit + index)
         : (page - 1) * limit + index + 1;
 

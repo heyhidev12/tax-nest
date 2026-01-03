@@ -19,7 +19,7 @@ export class CategoryService {
     private readonly majorRepo: Repository<MajorCategory>,
     @InjectRepository(MinorCategory)
     private readonly minorRepo: Repository<MinorCategory>,
-  ) {}
+  ) { }
 
   // === Major Category ===
   async createMajor(name: string, isExposed = true) {
@@ -71,10 +71,8 @@ export class CategoryService {
       name: item.name,
       displayOrder: item.displayOrder,
       isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
       minorCategoryCount: item.minorCategories?.length || 0,
       createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
     }));
 
     return { items: formattedItems, total, page, limit };
@@ -123,7 +121,7 @@ export class CategoryService {
     if (!category) throw new NotFoundException('대분류를 찾을 수 없습니다.');
     category.isExposed = !category.isExposed;
     await this.majorRepo.save(category);
-    return { success: true, isExposed: category.isExposed, exposedLabel: category.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: category.isExposed };
   }
 
   async updateMajorOrder(items: { id: number; displayOrder: number }[]) {
@@ -187,9 +185,7 @@ export class CategoryService {
       name: item.name,
       displayOrder: item.displayOrder,
       isExposed: item.isExposed,
-      exposedLabel: item.isExposed ? 'Y' : 'N',
       createdAt: item.createdAt,
-      createdAtFormatted: this.formatDateTime(item.createdAt),
     }));
 
     return { items: formattedItems, total, page, limit };
@@ -230,7 +226,7 @@ export class CategoryService {
     if (!category) throw new NotFoundException('중분류를 찾을 수 없습니다.');
     category.isExposed = !category.isExposed;
     await this.minorRepo.save(category);
-    return { success: true, isExposed: category.isExposed, exposedLabel: category.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: category.isExposed };
   }
 
   async updateMinorOrder(items: { id: number; displayOrder: number }[]) {

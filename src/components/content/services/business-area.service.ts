@@ -485,12 +485,8 @@ export class BusinessAreaService {
       return {
         ...base,
         youtubeCount,
-        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
-        exposedLabel: item.isExposed ? 'Y' : 'N',
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
-        createdAtFormatted: this.formatDateTime(item.createdAt),
-        updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
     });
 
@@ -547,12 +543,8 @@ export class BusinessAreaService {
     return {
       ...base,
       youtubeCount: (area.youtubeUrls || []).length,
-      mainExposedLabel: area.isMainExposed ? 'Y' : 'N',
-      exposedLabel: area.isExposed ? 'Y' : 'N',
       createdAt: area.createdAt,
       updatedAt: area.updatedAt,
-      createdAtFormatted: this.formatDateTime(area.createdAt),
-      updatedAtFormatted: this.formatDateTime(area.updatedAt),
     };
   }
 

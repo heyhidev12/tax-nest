@@ -105,10 +105,6 @@ export class KeyCustomerService {
       }
       return {
         ...item,
-        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
-        exposedLabel: item.isExposed ? 'Y' : 'N',
-        createdAtFormatted: this.formatDateTime(item.createdAt),
-        updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
     });
 
@@ -133,10 +129,6 @@ export class KeyCustomerService {
     if (!customer) throw new NotFoundException('주요고객을 찾을 수 없습니다.');
     return {
       ...customer,
-      mainExposedLabel: customer.isMainExposed ? 'Y' : 'N',
-      exposedLabel: customer.isExposed ? 'Y' : 'N',
-      createdAtFormatted: this.formatDateTime(customer.createdAt),
-      updatedAtFormatted: this.formatDateTime(customer.updatedAt),
     };
   }
 
@@ -208,7 +200,7 @@ export class KeyCustomerService {
     if (!customer) throw new NotFoundException('주요고객을 찾을 수 없습니다.');
     customer.isExposed = !customer.isExposed;
     await this.customerRepo.save(customer);
-    return { success: true, isExposed: customer.isExposed, exposedLabel: customer.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: customer.isExposed };
   }
 
   async toggleMainExposure(id: number) {
@@ -216,7 +208,7 @@ export class KeyCustomerService {
     if (!customer) throw new NotFoundException('주요고객을 찾을 수 없습니다.');
     customer.isMainExposed = !customer.isMainExposed;
     await this.customerRepo.save(customer);
-    return { success: true, isMainExposed: customer.isMainExposed, mainExposedLabel: customer.isMainExposed ? 'Y' : 'N' };
+    return { success: true, isMainExposed: customer.isMainExposed };
   }
 
   async updateOrder(items: { id: number; displayOrder: number }[]) {

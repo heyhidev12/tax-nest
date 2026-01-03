@@ -31,7 +31,7 @@ export class NewsletterService {
     private readonly memberRepo: Repository<Member>,
     @Inject(MAIL_PROVIDER_TOKEN)
     private readonly mailProvider: MailProvider,
-  ) {}
+  ) { }
 
   // POST /newsletter/subscribe - 뉴스레터 구독 (이름 + 이메일)
   async subscribe(name: string | undefined, email: string) {
@@ -127,11 +127,8 @@ export class NewsletterService {
         name: subscriber.name || '-',
         email: subscriber.email,
         isSubscribed: subscriber.isSubscribed,
-        subscriptionLabel: subscriber.isSubscribed ? 'Y' : 'N',
         subscribedAt,
-        subscribedAtFormatted: this.formatDateTime(subscribedAt),
         unsubscribedAt,
-        unsubscribedAtFormatted: unsubscribedAt ? this.formatDateTime(unsubscribedAt) : null,
         isMailSynced: subscriber.isMailSynced,
       };
     });
@@ -166,11 +163,8 @@ export class NewsletterService {
       name: subscriber.name || '-',
       email: subscriber.email,
       isSubscribed: subscriber.isSubscribed,
-      subscriptionLabel: subscriber.isSubscribed ? 'Y' : 'N',
       subscribedAt,
-      subscribedAtFormatted: this.formatDateTime(subscribedAt),
       unsubscribedAt,
-      unsubscribedAtFormatted: unsubscribedAt ? this.formatDateTime(unsubscribedAt) : null,
       isMailSynced: subscriber.isMailSynced,
     };
   }
@@ -208,7 +202,6 @@ export class NewsletterService {
     return {
       success: true,
       isSubscribed: subscriber.isSubscribed,
-      subscriptionLabel: subscriber.isSubscribed ? 'Y' : 'N',
     };
   }
 
@@ -271,9 +264,9 @@ export class NewsletterService {
       return { success: true, deleted: 0, message: '삭제된 항목이 없습니다.' };
     }
 
-    return { 
-      success: true, 
-      deleted: deletedCount, 
+    return {
+      success: true,
+      deleted: deletedCount,
       message: `삭제가 완료되었습니다. (${deletedCount}/${ids.length})`,
       errors: errors.length > 0 ? errors : undefined,
     };
@@ -285,7 +278,7 @@ export class NewsletterService {
     if (!member) {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
-    
+
     // DB(Member + NewsletterSubscriber)를 기준으로 상태 조회
     const subscriber = await this.subscriberRepo.findOne({ where: { email: member.email } });
     const isSubscribed = subscriber?.isSubscribed ?? member.newsletterSubscribed;
@@ -303,7 +296,7 @@ export class NewsletterService {
     if (!member) {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
-    
+
     try {
       await this.mailProvider.unsubscribe(member.email);
     } catch (error: any) {
@@ -324,7 +317,7 @@ export class NewsletterService {
     // Member 엔티티도 업데이트 (DB 기준)
     member.newsletterSubscribed = false;
     await this.memberRepo.save(member);
-    
+
     return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
   }
 

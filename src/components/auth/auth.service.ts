@@ -79,6 +79,11 @@ export class AuthService {
     };
   }
 
+  async checkLoginIdExists(loginId: string) {
+    const existing = await this.membersService.findByLoginId(loginId);
+    return { exists: !!existing };
+  }
+
   // -------------------------------------
   // LOGIN
   // -------------------------------------

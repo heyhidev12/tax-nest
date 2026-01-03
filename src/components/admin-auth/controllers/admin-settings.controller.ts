@@ -46,7 +46,7 @@ export class AdminSettingsController extends AdminBaseController {
 
   @ApiOperation({ summary: '관리자 추가 (SUPER_ADMIN only)' })
   @ApiResponse({ status: 201, description: '관리자 추가 성공' })
-  @ApiResponse({ status: 400, description: '이미 사용 중인 ID' })
+  @ApiResponse({ status: 400, description: '이미 사용 중인 아이디입니다.' })
   @ApiResponse({ status: 403, description: '권한 없음 - SUPER_ADMIN만 접근 가능' })
   @Post('admins')
   @Roles(AdminRole.SUPER_ADMIN)

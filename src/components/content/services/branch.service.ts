@@ -115,9 +115,6 @@ export class BranchService {
       }
       return {
         ...item,
-        exposedLabel: item.isExposed ? 'Y' : 'N',
-        createdAtFormatted: this.formatDateTime(item.createdAt),
-        updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
     });
 
@@ -134,9 +131,6 @@ export class BranchService {
     }
     return {
       ...branch,
-      exposedLabel: branch.isExposed ? 'Y' : 'N',
-      createdAtFormatted: this.formatDateTime(branch.createdAt),
-      updatedAtFormatted: this.formatDateTime(branch.updatedAt),
     };
   }
 
@@ -219,7 +213,7 @@ export class BranchService {
     if (!branch) throw new NotFoundException('본사/지점을 찾을 수 없습니다.');
     branch.isExposed = !branch.isExposed;
     await this.branchRepo.save(branch);
-    return { success: true, isExposed: branch.isExposed, exposedLabel: branch.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: branch.isExposed };
   }
 
   async updateOrder(items: { id: number; displayOrder: number }[]) {

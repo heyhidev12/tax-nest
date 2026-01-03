@@ -280,8 +280,6 @@ export class InsightsService {
       ...base,
       categoryId: item.categoryId,
       subcategoryId: item.subcategoryId,
-      commentsLabel: item.commentsLabel,
-      exposedLabel: item.exposedLabel,
       viewCount: item.viewCount || 0,
       commentCount: item.commentCount || 0,
       createdAt: item.createdAt,
@@ -711,7 +709,6 @@ export class InsightsService {
         memberId: comment.memberId,
         isReported: comment.isReported,
         isHidden: comment.isHidden,
-        isHiddenLabel: comment.isHidden ? 'Y' : 'N',
         createdAt: comment.createdAt,
       },
       author: author
@@ -764,7 +761,6 @@ export class InsightsService {
     return {
       success: true,
       isHidden: comment.isHidden,
-      isHiddenLabel: comment.isHidden ? 'Y' : 'N',
     };
   }
 

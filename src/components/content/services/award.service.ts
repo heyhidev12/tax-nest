@@ -90,12 +90,9 @@ export class AwardService {
         yearName: item.yearName,
         displayOrder: item.displayOrder,
         isMainExposed: item.isMainExposed,
-        mainExposedLabel: item.isMainExposed ? 'Y' : 'N',
         isExposed: item.isExposed,
-        exposedLabel: item.isExposed ? 'Y' : 'N',
         awardCount: item.awards?.length || 0,
         createdAt: item.createdAt,
-        createdAtFormatted: this.formatDateTime(item.createdAt),
       };
     });
 
@@ -125,11 +122,8 @@ export class AwardService {
         image: award.image,
         displayOrder: award.displayOrder,
         isMainExposed: award.isMainExposed,
-        mainExposedLabel: award.isMainExposed ? 'Y' : 'N',
         isExposed: award.isExposed,
-        exposedLabel: award.isExposed ? 'Y' : 'N',
         createdAt: award.createdAt,
-        createdAtFormatted: this.formatDateTime(award.createdAt),
       }));
 
     return {
@@ -137,12 +131,9 @@ export class AwardService {
       yearName: year.yearName,
       displayOrder: year.displayOrder,
       isMainExposed: year.isMainExposed,
-      mainExposedLabel: year.isMainExposed ? 'Y' : 'N',
       isExposed: year.isExposed,
-      exposedLabel: year.isExposed ? 'Y' : 'N',
       awards: formattedAwards,
       createdAt: year.createdAt,
-      createdAtFormatted: this.formatDateTime(year.createdAt),
     };
   }
 
@@ -172,7 +163,7 @@ export class AwardService {
     if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
     year.isExposed = !year.isExposed;
     await this.yearRepo.save(year);
-    return { success: true, isExposed: year.isExposed, exposedLabel: year.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: year.isExposed };
   }
 
   async toggleYearMainExposure(id: number) {
@@ -180,7 +171,7 @@ export class AwardService {
     if (!year) throw new NotFoundException('연도를 찾을 수 없습니다.');
     year.isMainExposed = !year.isMainExposed;
     await this.yearRepo.save(year);
-    return { success: true, isMainExposed: year.isMainExposed, mainExposedLabel: year.isMainExposed ? 'Y' : 'N' };
+    return { success: true, isMainExposed: year.isMainExposed };
   }
 
   async updateYearOrder(items: { id: number; displayOrder: number }[]) {
@@ -246,11 +237,8 @@ export class AwardService {
       image: award.image,
       displayOrder: award.displayOrder,
       isMainExposed: award.isMainExposed,
-      mainExposedLabel: award.isMainExposed ? 'Y' : 'N',
       isExposed: award.isExposed,
-      exposedLabel: award.isExposed ? 'Y' : 'N',
       createdAt: award.createdAt,
-      createdAtFormatted: this.formatDateTime(award.createdAt),
     }));
   }
 
@@ -307,9 +295,6 @@ export class AwardService {
     if (!award) throw new NotFoundException('수상/인증을 찾을 수 없습니다.');
     return {
       ...award,
-      mainExposedLabel: award.isMainExposed ? 'Y' : 'N',
-      exposedLabel: award.isExposed ? 'Y' : 'N',
-      createdAtFormatted: this.formatDateTime(award.createdAt),
     };
   }
 
@@ -339,7 +324,7 @@ export class AwardService {
     if (!award) throw new NotFoundException('수상/인증을 찾을 수 없습니다.');
     award.isExposed = !award.isExposed;
     await this.awardRepo.save(award);
-    return { success: true, isExposed: award.isExposed, exposedLabel: award.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: award.isExposed };
   }
 
   async toggleAwardMainExposure(id: number) {
@@ -347,7 +332,7 @@ export class AwardService {
     if (!award) throw new NotFoundException('수상/인증을 찾을 수 없습니다.');
     award.isMainExposed = !award.isMainExposed;
     await this.awardRepo.save(award);
-    return { success: true, isMainExposed: award.isMainExposed, mainExposedLabel: award.isMainExposed ? 'Y' : 'N' };
+    return { success: true, isMainExposed: award.isMainExposed };
   }
 
   async updateAwardOrder(items: { id: number; displayOrder: number }[]) {

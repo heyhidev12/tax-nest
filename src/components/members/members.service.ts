@@ -35,7 +35,7 @@ export class MembersService {
     private readonly memberRepo: Repository<Member>,
     @InjectRepository(Consultation)
     private readonly consultationRepo: Repository<Consultation>,
-  ) {}
+  ) { }
 
   findByLoginId(loginId: string) {
     return this.memberRepo.findOne({ where: { loginId } });
@@ -127,20 +127,15 @@ export class MembersService {
         no,
         id: m.id,
         memberType: m.memberType,
-        memberTypeLabel: this.getMemberTypeLabel(m.memberType),
         loginId: m.loginId,
         name: m.name,
         email: m.email,
         phoneNumber: m.phoneNumber,
         newsletterSubscribed: m.newsletterSubscribed,
-        newsletterLabel: m.newsletterSubscribed ? 'Y' : 'N',
         isApproved: m.isApproved,
-        approvalLabel: m.isApproved ? '승인' : '미승인',
         status: m.status,
-        statusLabel: m.status === MemberStatus.ACTIVE ? '이용중' : '회원탈퇴',
         affiliation: m.affiliation,
         createdAt: m.createdAt,
-        createdAtFormatted: this.formatDateTime(m.createdAt),
       };
     });
 
@@ -173,9 +168,7 @@ export class MembersService {
       phoneNumber: m.phoneNumber,
       affiliation: m.affiliation,
       isApproved: m.isApproved,
-      approvalLabel: m.isApproved ? '승인' : '미승인',
       createdAt: m.createdAt,
-      createdAtFormatted: this.formatDateTime(m.createdAt),
     }));
 
     return { items: formattedItems, total, page, limit };
@@ -212,13 +205,7 @@ export class MembersService {
 
     return {
       ...rest,
-      memberTypeLabel: this.getMemberTypeLabel(member.memberType),
-      statusLabel: member.status === MemberStatus.ACTIVE ? '이용중' : '탈퇴',
-      approvalLabel: member.isApproved ? '승인' : '미승인',
-      newsletterLabel: member.newsletterSubscribed ? 'Y' : 'N',
       consultationCount,
-      createdAtFormatted: this.formatDateTime(member.createdAt),
-      updatedAtFormatted: this.formatDateTime(member.updatedAt),
     };
   }
 

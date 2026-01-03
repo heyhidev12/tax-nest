@@ -158,9 +158,6 @@ export class TaxMemberService {
       return {
         ...item,
         workAreas: workAreasFormatted,
-        exposedLabel: item.isExposed ? 'Y' : 'N',
-        createdAtFormatted: this.formatDateTime(item.createdAt),
-        updatedAtFormatted: this.formatDateTime(item.updatedAt),
       };
     }));
 
@@ -184,9 +181,6 @@ export class TaxMemberService {
     return {
       ...member,
       workAreas: workAreasFormatted,
-      exposedLabel: member.isExposed ? 'Y' : 'N',
-      createdAtFormatted: this.formatDateTime(member.createdAt),
-      updatedAtFormatted: this.formatDateTime(member.updatedAt),
     };
   }
 
@@ -299,7 +293,7 @@ export class TaxMemberService {
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
     member.isExposed = !member.isExposed;
     await this.memberRepo.save(member);
-    return { success: true, isExposed: member.isExposed, exposedLabel: member.isExposed ? 'Y' : 'N' };
+    return { success: true, isExposed: member.isExposed };
   }
 
   async updateOrder(items: { id: number; displayOrder: number }[]) {
