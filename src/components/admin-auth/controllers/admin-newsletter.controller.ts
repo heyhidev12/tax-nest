@@ -21,7 +21,7 @@ export class AdminNewsletterController extends AdminBaseController {
     super();
   }
 
-  @ApiOperation({ summary: '뉴스레터 구독자 목록 (검색: 이메일) - Easy Mail에서 가져오기' })
+  @ApiOperation({ summary: '뉴스레터 구독자 목록 (검색: 이메일)' })
   @ApiResponse({
     status: 200,
     description: '목록 조회 성공. 검색 결과가 없을 경우 message 필드에 "검색 결과 없음" 반환'
@@ -53,7 +53,6 @@ export class AdminNewsletterController extends AdminBaseController {
   @ApiResponse({ status: 200, description: '상세 조회 성공' })
   @Get(':id')
   getOne(@Param('id') id: string) {
-    // Easy Mail IDs can be strings or numbers
     const parsedId = isNaN(Number(id)) ? id : Number(id);
     return this.newsletterService.findById(parsedId);
   }
@@ -62,7 +61,6 @@ export class AdminNewsletterController extends AdminBaseController {
   @ApiResponse({ status: 200, description: '토글 성공' })
   @Patch(':id/toggle')
   toggleSubscription(@Param('id') id: string) {
-    // Easy Mail IDs can be strings or numbers
     const parsedId = isNaN(Number(id)) ? id : Number(id);
     return this.newsletterService.toggleSubscription(parsedId);
   }
@@ -78,7 +76,6 @@ export class AdminNewsletterController extends AdminBaseController {
   @ApiResponse({ status: 200, description: '삭제 성공' })
   @Delete(':id')
   delete(@Param('id') id: string) {
-    // Easy Mail IDs can be strings or numbers
     const parsedId = isNaN(Number(id)) ? id : Number(id);
     return this.newsletterService.delete(parsedId);
   }

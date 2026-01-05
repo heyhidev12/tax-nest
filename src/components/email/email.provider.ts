@@ -44,7 +44,7 @@ export class EmailProvider {
           <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0;">
             <h1 style="color: #007bff; font-size: 32px; margin: 0;">${code}</h1>
           </div>
-          <p>인증번호는 3분간 유효합니다.</p>
+          <p>인증번호는 5분간 유효합니다.</p>
           <p style="color: #666; font-size: 12px; margin-top: 30px;">
             본 메일은 발신 전용입니다.
           </p>

@@ -1,47 +1,50 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
+import { SESClient, SendEmailCommand } from '@aws-sdk/client-ses';
 import { MailProvider } from './mail-provider.interface';
 
 @Injectable()
 export class SesMailProvider implements MailProvider {
   private readonly logger = new Logger(SesMailProvider.name);
-  private readonly transporter: nodemailer.Transporter;
+  private readonly sesClient: SESClient;
   private readonly fromAddress: string;
 
   constructor(private readonly configService: ConfigService) {
-    const host = this.configService.get<string>('SES_SMTP_HOST');
-    const port = Number(this.configService.get<string>('SES_SMTP_PORT') || 587);
-    const user = this.configService.get<string>('SES_SMTP_USER');
-    const pass = this.configService.get<string>('SES_SMTP_PASSWORD');
+    const region = this.configService.get<string>('AWS_REGION');
+    const accessKeyId = this.configService.get<string>('SES_ACCESS_KEY');
+    const secretAccessKey = this.configService.get<string>('SES_SECRET_ACCESS_KEY');
+
+
     this.fromAddress =
-      this.configService.get<string>('SES_SENDER_EMAIL') ||
-      this.configService.get<string>('EMAIL_SENDER') ||
+      this.configService.get<string>('EMAIL_FROM') ||
       '';
+    this.logger.verbose("NEWSLETTER FROM:", this.fromAddress);
 
-    this.transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: user && pass ? { user, pass } : undefined,
-    });
-
-    if (!host || !user || !pass || !this.fromAddress) {
+    if (!region || !accessKeyId || !secretAccessKey) {
       this.logger.warn(
-        'SES SMTP configuration is incomplete. SES provider will not be able to send emails until configured.',
+        'AWS SES configuration is incomplete (Region/AccessKey/SecretKey). Email sending will fail.',
       );
     }
+
+    this.sesClient = new SESClient({
+      region,
+      credentials: {
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
+      },
+    });
   }
 
   async subscribe(email: string): Promise<void> {
-    // SES does not manage mailing lists by itself; DB is the source of truth.
-    // No-op here; subscription state is handled in the application/database layer.
-    this.logger.log(`SES subscribe noop for ${email} (DB is source of truth).`);
+    // SES integration handles sending only.
+    // Subscriber management is done purely in the local database.
+    this.logger.debug(`[SES] subscribe called for ${email} (no-op)`);
   }
 
   async unsubscribe(email: string): Promise<void> {
-    // Same reasoning as subscribe(): DB is the source of truth.
-    this.logger.log(`SES unsubscribe noop for ${email} (DB is source of truth).`);
+    // SES integration handles sending only.
+    // Subscriber management is done purely in the local database.
+    this.logger.debug(`[SES] unsubscribe called for ${email} (no-op)`);
   }
 
   async sendNewsletter(payload: {
@@ -54,13 +57,27 @@ export class SesMailProvider implements MailProvider {
       return;
     }
 
+    const command = new SendEmailCommand({
+      Source: this.fromAddress,
+      Destination: {
+        ToAddresses: [payload.email],
+      },
+      Message: {
+        Subject: {
+          Data: payload.subject,
+          Charset: 'UTF-8',
+        },
+        Body: {
+          Html: {
+            Data: payload.html,
+            Charset: 'UTF-8',
+          },
+        },
+      },
+    });
+
     try {
-      await this.transporter.sendMail({
-        from: this.fromAddress,
-        to: payload.email,
-        subject: payload.subject,
-        html: payload.html,
-      });
+      await this.sesClient.send(command);
     } catch (error: any) {
       this.logger.error(
         `SES sendNewsletter failed for ${payload.email}: ${error?.message || error}`,

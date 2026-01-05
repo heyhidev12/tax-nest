@@ -5,11 +5,10 @@ import { NewsletterSubscriber } from 'src/libs/entity/newsletter-subscriber.enti
 import { Member } from 'src/libs/entity/member.entity';
 import { NewsletterService } from './newsletter.service';
 import { NewsletterController } from './newsletter.controller';
-import { EasyMailService } from './services/easy-mail.service';
 import { ContentModule } from '../content/content.module';
 import { MAIL_PROVIDER_TOKEN } from './services/mail-provider.interface';
-import { EasyMailProvider } from './services/easy-mail.provider';
 import { SesMailProvider } from './services/ses-mail.provider';
+import { NewsletterPageController } from './newsletter-page.controller';
 
 @Module({
   imports: [
@@ -19,24 +18,18 @@ import { SesMailProvider } from './services/ses-mail.provider';
   ],
   providers: [
     NewsletterService,
-    EasyMailService,
     {
       provide: MAIL_PROVIDER_TOKEN,
-      useFactory: (configService: ConfigService, easyMailService: EasyMailService) => {
-        const provider = (configService.get<string>('MAIL_PROVIDER') || 'easy-mail').toLowerCase();
-        if (provider === 'ses') {
-          return new SesMailProvider(configService);
-        }
-        // default: Easy Mail
-        return new EasyMailProvider(easyMailService);
+      useFactory: (configService: ConfigService) => {
+        return new SesMailProvider(configService);
       },
-      inject: [ConfigService, EasyMailService],
+      inject: [ConfigService],
     },
   ],
-  controllers: [NewsletterController],
+  controllers: [NewsletterController, NewsletterPageController],
   exports: [NewsletterService],
 })
-export class NewsletterModule {}
+export class NewsletterModule { }
 
 
 

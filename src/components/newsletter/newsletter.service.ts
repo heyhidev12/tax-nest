@@ -50,29 +50,18 @@ export class NewsletterService {
     } else {
       const subscriber = this.subscriberRepo.create({
         email,
+        name,
         isSubscribed: true,
         isMailSynced: true,
         unsubscribedAt: null,
       });
-      if (name) {
-        subscriber.name = name;
-      }
       await this.subscriberRepo.save(subscriber);
     }
 
-    try {
-      // 외부 메일 제공자에 구독 반영
-      await this.mailProvider.subscribe(email, name);
-      return { success: true, message: '뉴스레터 구독이 완료되었습니다.' };
-    } catch (error: any) {
-      this.logger.error(`메일 제공자 구독 반영 실패 (${email}): ${error?.message || error}`);
-      // DB는 이미 구독 상태로 반영되어 있으므로, 동기화 플래그를 끄고 성공으로 응답
-      await this.subscriberRepo.update({ email }, { isMailSynced: false });
-      return { success: true, message: '뉴스레터 구독이 완료되었습니다. (메일 발송 설정은 나중에 동기화될 수 있습니다.)' };
-    }
+    return { success: true, message: '뉴스레터 구독이 완료되었습니다.' };
   }
 
-  // 구독 취소 - Easy Mail API 사용
+  // 구독 취소 - DB에서만 처리
   async unsubscribe(email: string) {
     const existing = await this.subscriberRepo.findOne({ where: { email } });
     if (existing) {
@@ -82,17 +71,7 @@ export class NewsletterService {
       await this.subscriberRepo.save(existing);
     }
 
-    try {
-      await this.mailProvider.unsubscribe(email);
-      return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
-    } catch (error: any) {
-      this.logger.error(`메일 제공자 구독 취소 반영 실패 (${email}): ${error?.message || error}`);
-      if (existing) {
-        await this.subscriberRepo.update({ email }, { isMailSynced: false });
-      }
-      // 외부 API 실패 시에도 DB를 기준으로 성공 처리
-      return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
-    }
+    return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
   }
 
   // GET /admin/newsletter - 관리자용 구독자 목록 (DB 기준)
@@ -169,7 +148,7 @@ export class NewsletterService {
     };
   }
 
-  // 구독 상태 토글 (DB + 외부 제공자 동기화)
+  // 구독 상태 토글 (DB 처리)
   async toggleSubscription(id: number | string) {
     const numericId = typeof id === 'string' ? Number(id) : id;
     const subscriber = await this.subscriberRepo.findOne({
@@ -185,27 +164,13 @@ export class NewsletterService {
     subscriber.isMailSynced = true;
     await this.subscriberRepo.save(subscriber);
 
-    try {
-      if (newSubscribedStatus) {
-        await this.mailProvider.subscribe(subscriber.email, subscriber.name || undefined);
-      } else {
-        await this.mailProvider.unsubscribe(subscriber.email);
-      }
-    } catch (error: any) {
-      this.logger.error(
-        `메일 제공자 토글 반영 실패 (${subscriber.email} -> ${newSubscribedStatus}): ${error?.message || error}`,
-      );
-      subscriber.isMailSynced = false;
-      await this.subscriberRepo.save(subscriber);
-    }
-
     return {
       success: true,
       isSubscribed: subscriber.isSubscribed,
     };
   }
 
-  // 구독자 삭제 (DB 기준, 외부 제공자는 best-effort)
+  // 구독자 삭제 (DB 삭제)
   async delete(id: number | string) {
     const numericId = typeof id === 'string' ? Number(id) : id;
     const subscriber = await this.subscriberRepo.findOne({
@@ -215,21 +180,11 @@ export class NewsletterService {
       throw new NotFoundException('구독자를 찾을 수 없습니다.');
     }
 
-    // 외부 제공자에서 먼저 구독 취소 시도 (삭제 대신 구독 취소)
-    try {
-      await this.mailProvider.unsubscribe(subscriber.email);
-    } catch (error: any) {
-      this.logger.error(
-        `메일 제공자에서 구독자 제거 실패 (${subscriber.email}): ${error?.message || error}`,
-      );
-      // 삭제는 DB를 기준으로 진행하되, 로그만 남김
-    }
-
     await this.subscriberRepo.remove(subscriber);
     return { success: true, message: '삭제가 완료되었습니다.' };
   }
 
-  // 구독자 다중 삭제 (DB 기준, 외부 제공자는 best-effort)
+  // 구독자 다중 삭제 (DB 삭제)
   async deleteMany(ids: (number | string)[]) {
     let deletedCount = 0;
     const errors: string[] = [];
@@ -243,14 +198,6 @@ export class NewsletterService {
         if (!subscriber) {
           errors.push(`ID ${id}: 구독자를 찾을 수 없습니다.`);
           continue;
-        }
-
-        try {
-          await this.mailProvider.unsubscribe(subscriber.email);
-        } catch (error: any) {
-          this.logger.error(
-            `메일 제공자에서 구독자 제거 실패 (${subscriber.email}): ${error?.message || error}`,
-          );
         }
 
         await this.subscriberRepo.remove(subscriber);
@@ -272,7 +219,7 @@ export class NewsletterService {
     };
   }
 
-  // GET /newsletter/me - 회원의 뉴스레터 구독 정보 조회 (Easy Mail에서 확인)
+  // GET /newsletter/me - 회원의 뉴스레터 구독 정보 조회
   async getMemberSubscription(memberId: number) {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) {
@@ -290,19 +237,11 @@ export class NewsletterService {
     };
   }
 
-  // POST /newsletter/me/unsubscribe - 회원의 뉴스레터 구독 취소 (Easy Mail API 사용)
+  // POST /newsletter/me/unsubscribe - 회원의 뉴스레터 구독 취소 (DB 처리)
   async unsubscribeMember(memberId: number) {
     const member = await this.memberRepo.findOne({ where: { id: memberId } });
     if (!member) {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
-    }
-
-    try {
-      await this.mailProvider.unsubscribe(member.email);
-    } catch (error: any) {
-      this.logger.error(
-        `메일 제공자에서 회원 구독 취소 실패 (${member.email}): ${error?.message || error}`,
-      );
     }
 
     // NewsletterSubscriber 엔티티 업데이트
@@ -314,7 +253,7 @@ export class NewsletterService {
       await this.subscriberRepo.save(subscriber);
     }
 
-    // Member 엔티티도 업데이트 (DB 기준)
+    // Member 엔티티도 업데이트
     member.newsletterSubscribed = false;
     await this.memberRepo.save(member);
 

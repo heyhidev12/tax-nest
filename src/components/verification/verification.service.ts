@@ -43,12 +43,12 @@ export class VerificationService {
       throw new BadRequestException('잠시 후 다시 요청해주세요.');
     }
 
-    const isSignupOrChangePhone = purpose === 'SIGNUP' || purpose === 'CHANGE_PHONE';
+    // const isSignupOrChangePhone = purpose === 'SIGNUP' || purpose === 'CHANGE_PHONE';
     const codeLength = this.getOtpLength();
-    const expiryMinutes = isSignupOrChangePhone ? 5 : 3;
+    // const expiryMinutes = 5;
 
     const code = this.generateCode(codeLength);
-    const expiresAt = new Date(Date.now() + 1000 * 60 * expiryMinutes);
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 5);
 
     // Invalidate previous unused codes for this target and purpose
     await this.repo.update({ target, purpose, isUsed: false }, { isUsed: true });
