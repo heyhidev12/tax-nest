@@ -837,7 +837,7 @@ export class AdminContentController extends AdminBaseController {
   // ===== BUSINESS AREAS - ITEMS =====
   @ApiOperation({
     summary:
-      '업무분야 아이템 목록 (검색: 업무분야명, 필터: 대분류/중분류/노출여부/메인노출)',
+      '업무분야 아이템 목록 (검색: 업무분야명, 필터: 대분류/중분류/노출여부)',
   })
   @Get('business-areas')
   listBusinessAreas(@Query() query: any) {

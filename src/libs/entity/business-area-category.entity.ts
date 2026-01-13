@@ -38,8 +38,16 @@ export class BusinessAreaCategory {
   @Column({ length: 100 })
   name: string;
 
+  // 대표 이미지 (필수) - {id, url} object
+  @Column({ type: 'json', nullable: true })
+  image: { id: number; url: string };
+
   @Column({ default: true })
   isExposed: boolean;
+
+  // 메인 노출 여부
+  @Column({ default: false })
+  isMainExposed: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

@@ -17,7 +17,6 @@ interface BusinessAreaListOptions {
   memberId?: number; // Filter by member ID (matches minorCategory.name with member workAreas)
   minorCategoryName?: string; // Filter by minor category name directly
   isExposed?: boolean;
-  isMainExposed?: boolean;
   sort?: 'latest' | 'oldest' | 'order';
   page?: number;
   limit?: number;
@@ -39,6 +38,30 @@ export class BusinessAreaService {
     private readonly dataSource: DataSource,
   ) { }
 
+  // ========== HELPER METHODS ==========
+
+  /**
+   * Format category response to include image and isMainExposed
+   */
+  private formatCategoryResponse(cat: BusinessAreaCategory) {
+    return {
+      id: cat.id,
+      majorCategory: {
+        id: cat.majorCategory.id,
+        name: cat.majorCategory.name,
+        sections: cat.majorCategory.sections || [],
+        isExposed: cat.majorCategory.isExposed,
+        displayOrder: cat.majorCategory.displayOrder,
+      },
+      name: cat.name,
+      image: cat.image,
+      isExposed: cat.isExposed,
+      isMainExposed: cat.isMainExposed,
+      createdAt: cat.createdAt,
+      updatedAt: cat.updatedAt,
+    };
+  }
+
   // ========== CATEGORY METHODS ==========
 
   async createCategory(dto: CreateBusinessAreaCategoryDto) {
@@ -53,10 +76,21 @@ export class BusinessAreaService {
     const category = this.categoryRepo.create({
       majorCategoryId: dto.majorCategoryId,
       name: dto.name,
+      image: dto.image,
       isExposed: dto.isExposed ?? true,
+      isMainExposed: dto.isMainExposed ?? false,
     });
 
-    return this.categoryRepo.save(category);
+    const saved = await this.categoryRepo.save(category);
+    
+    // Reload with relations to ensure majorCategory is available
+    const created = await this.categoryRepo.findOne({
+      where: { id: saved.id },
+      relations: ['majorCategory'],
+    });
+    
+    // Return with proper format including image and isMainExposed
+    return this.formatCategoryResponse(created!);
   }
 
   async getAllCategories(includeHidden = false) {
@@ -67,20 +101,7 @@ export class BusinessAreaService {
       order: { createdAt: 'ASC' },
     });
 
-    return categories.map((cat) => ({
-      id: cat.id,
-      majorCategory: {
-        id: cat.majorCategory.id,
-        name: cat.majorCategory.name,
-        sections: cat.majorCategory.sections || [],
-        isExposed: cat.majorCategory.isExposed,
-        displayOrder: cat.majorCategory.displayOrder,
-      },
-      name: cat.name,
-      isExposed: cat.isExposed,
-      createdAt: cat.createdAt,
-      updatedAt: cat.updatedAt,
-    }));
+    return categories.map((cat) => this.formatCategoryResponse(cat));
   }
 
   async getCategoriesByMajorCategory(majorCategoryId: number, includeHidden = false) {
@@ -103,20 +124,7 @@ export class BusinessAreaService {
       order: { createdAt: 'ASC' },
     });
 
-    return categories.map((cat) => ({
-      id: cat.id,
-      majorCategory: {
-        id: cat.majorCategory.id,
-        name: cat.majorCategory.name,
-        sections: cat.majorCategory.sections || [],
-        isExposed: cat.majorCategory.isExposed,
-        displayOrder: cat.majorCategory.displayOrder,
-      },
-      name: cat.name,
-      isExposed: cat.isExposed,
-      createdAt: cat.createdAt,
-      updatedAt: cat.updatedAt,
-    }));
+    return categories.map((cat) => this.formatCategoryResponse(cat));
   }
 
   async getCategoryById(id: number, includeHidden = false) {
@@ -134,32 +142,30 @@ export class BusinessAreaService {
       throw new NotFoundException('Category를 찾을 수 없습니다.');
     }
 
-    return {
-      id: category.id,
-      majorCategory: {
-        id: category.majorCategory.id,
-        name: category.majorCategory.name,
-        sections: category.majorCategory.sections || [],
-        isExposed: category.majorCategory.isExposed,
-        displayOrder: category.majorCategory.displayOrder,
-      },
-      name: category.name,
-      isExposed: category.isExposed,
-      createdAt: category.createdAt,
-      updatedAt: category.updatedAt,
-    };
+    return this.formatCategoryResponse(category);
   }
 
   async updateCategory(id: number, dto: UpdateBusinessAreaCategoryDto) {
-    const category = await this.categoryRepo.findOne({ where: { id } });
+    const category = await this.categoryRepo.findOne({ 
+      where: { id },
+      relations: ['majorCategory'],
+    });
     if (!category) {
       throw new NotFoundException('Category를 찾을 수 없습니다.');
     }
 
     if (dto.name) category.name = dto.name;
+    if (dto.image !== undefined) category.image = dto.image;
     if (dto.isExposed !== undefined) category.isExposed = dto.isExposed;
+    if (dto.isMainExposed !== undefined) category.isMainExposed = dto.isMainExposed;
 
-    return this.categoryRepo.save(category);
+    const saved = await this.categoryRepo.save(category);
+    // Reload with relations to ensure majorCategory is available
+    const updated = await this.categoryRepo.findOne({
+      where: { id: saved.id },
+      relations: ['majorCategory'],
+    });
+    return this.formatCategoryResponse(updated!);
   }
 
   async deleteCategory(id: number) {
@@ -210,7 +216,9 @@ export class BusinessAreaService {
       grouped[majorId].categories.push({
         id: cat.id,
         name: cat.name,
+        image: cat.image,
         isExposed: cat.isExposed,
+        isMainExposed: cat.isMainExposed,
         createdAt: cat.createdAt,
         updatedAt: cat.updatedAt,
       });
@@ -241,7 +249,9 @@ export class BusinessAreaService {
         .map((cat) => ({
           id: cat!.id,
           name: cat!.name,
+          image: cat!.image,
           isExposed: cat!.isExposed,
+          isMainExposed: cat!.isMainExposed,
           majorCategoryId: cat!.majorCategoryId,
           majorCategoryName: cat!.majorCategory?.name || '',
         }));
@@ -256,7 +266,9 @@ export class BusinessAreaService {
     return categories.map((cat) => ({
       id: cat.id,
       name: cat.name,
+      image: cat.image,
       isExposed: cat.isExposed,
+      isMainExposed: cat.isMainExposed,
       majorCategoryId: cat.majorCategoryId,
       majorCategoryName: cat.majorCategory?.name || '',
     }));
@@ -327,7 +339,6 @@ export class BusinessAreaService {
       overview: dto.overview,
       sectionContents: dto.sectionContents,
       youtubeUrls: dto.youtubeUrls ?? [],
-      isMainExposed: dto.isMainExposed ?? false,
       isExposed: dto.isExposed ?? true,
       displayOrder: targetOrder,
     });
@@ -360,7 +371,6 @@ export class BusinessAreaService {
       memberId,
       minorCategoryName,
       isExposed,
-      isMainExposed,
       sort = 'order',
       page = 1,
       limit = 20,
@@ -377,11 +387,6 @@ export class BusinessAreaService {
       qb.andWhere('area.isExposed = :isExposed', { isExposed: true });
     } else if (isExposed !== undefined) {
       qb.andWhere('area.isExposed = :isExposed', { isExposed });
-    }
-
-    // 메인 노출 필터
-    if (isMainExposed !== undefined) {
-      qb.andWhere('area.isMainExposed = :isMainExposed', { isMainExposed });
     }
 
     // 대분류 필터
@@ -474,7 +479,6 @@ export class BusinessAreaService {
         sectionContents: item.sectionContents || [],
         youtubeUrls,
         displayOrder: item.displayOrder,
-        isMainExposed: item.isMainExposed,
         isExposed: item.isExposed,
       };
 
@@ -531,7 +535,6 @@ export class BusinessAreaService {
       overview: area.overview,
       sectionContents: area.sectionContents || [],
       youtubeUrls: area.youtubeUrls || [],
-      isMainExposed: area.isMainExposed,
       isExposed: area.isExposed,
       displayOrder: area.displayOrder,
     };
@@ -608,7 +611,6 @@ export class BusinessAreaService {
     if (dto.body !== undefined) item.body = dto.body;
     if (dto.sectionContents !== undefined) item.sectionContents = dto.sectionContents;
     if (dto.youtubeUrls !== undefined) item.youtubeUrls = dto.youtubeUrls;
-    if (dto.isMainExposed !== undefined) item.isMainExposed = dto.isMainExposed;
     if (dto.isExposed !== undefined) item.isExposed = dto.isExposed;
 
     // Handle DisplayOrder Reordering (Drag & Drop Style)
@@ -785,7 +787,9 @@ export class BusinessAreaService {
         grouped[majorId].minorCategories[minorId] = {
           id: item.minorCategory.id,
           name: item.minorCategory.name,
+          image: item.minorCategory.image,
           isExposed: item.minorCategory.isExposed,
+          isMainExposed: item.minorCategory.isMainExposed,
           items: [],
         };
       }
@@ -798,7 +802,6 @@ export class BusinessAreaService {
         overview: item.overview,
         sectionContents: item.sectionContents || [],
         youtubeUrls: item.youtubeUrls || [],
-        isMainExposed: item.isMainExposed,
         isExposed: item.isExposed,
         displayOrder: item.displayOrder,
       };

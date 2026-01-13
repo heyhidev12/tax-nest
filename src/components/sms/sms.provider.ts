@@ -1,10 +1,29 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
 import { makeSignature } from 'src/libs/utils/naver-sens.util';
+import { AlimTalkProvider } from './alimtalk.provider';
 
 @Injectable()
 export class SmsProvider {
+  private readonly logger = new Logger(SmsProvider.name);
+
+  constructor(private readonly alimTalkProvider: AlimTalkProvider) {}
+
   async send(phoneNumber: string, code: string): Promise<void> {
+    // Primary: Try NHN AlimTalk first
+    const alimTalkSuccess = await this.alimTalkProvider.send(phoneNumber, code);
+    
+    if (alimTalkSuccess) {
+      this.logger.log(`OTP delivered via AlimTalk to ${phoneNumber}`);
+      return;
+    }
+
+    // Fallback: Use Naver Cloud SMS
+    this.logger.log(`AlimTalk failed, falling back to SMS for ${phoneNumber}`);
+    await this.sendViaSms(phoneNumber, code);
+  }
+
+  private async sendViaSms(phoneNumber: string, code: string): Promise<void> {
     const serviceId = process.env.NAVER_SMS_SERVICE_ID;
     const accessKey = process.env.NAVER_ACCESS_KEY;
     const secretKey = process.env.NAVER_SECRET_KEY;
@@ -12,8 +31,13 @@ export class SmsProvider {
     const timestamp = Date.now().toString();
 
     if (!serviceId || !accessKey || !secretKey || !sender) {
-      console.warn('SMS configuration missing. Skipping SMS send.');
-      console.log(`[DEV] Verification code for ${phoneNumber}: ${code}`);
+      this.logger.warn('SMS configuration missing. Skipping SMS send.');
+      // In development, log the code instead of failing
+      if (process.env.NODE_ENV !== 'production') {
+        this.logger.log(`[DEV] Verification code for ${phoneNumber}: ${code}`);
+      } else {
+        throw new Error('SMS configuration is missing and AlimTalk failed');
+      }
       return;
     }
 
@@ -42,12 +66,14 @@ export class SmsProvider {
           'x-ncp-iam-access-key': accessKey,
           'x-ncp-apigw-signature-v2': signature,
         },
+        timeout: 10000, // 10 second timeout
       });
+      this.logger.log(`OTP delivered via SMS to ${phoneNumber}`);
     } catch (error) {
-      console.error('SMS sending failed:', error);
+      this.logger.error(`SMS sending failed for ${phoneNumber}:`, error);
       // In development, log the code instead of failing
       if (process.env.NODE_ENV !== 'production') {
-        console.log(`[DEV] Verification code for ${phoneNumber}: ${code}`);
+        this.logger.log(`[DEV] Verification code for ${phoneNumber}: ${code}`);
       } else {
         throw error;
       }

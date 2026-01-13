@@ -562,6 +562,105 @@ export class InsightsService {
     return { success: true, message: '조회수가 증가되었습니다.', viewCount: item.viewCount };
   }
 
+  /**
+   * Get hierarchical data for public frontend (accordion-style UI)
+   * Groups items by category and then by subcategory
+   */
+  async getHierarchicalData(isPublic = true) {
+    const qb = this.itemRepo
+      .createQueryBuilder('item')
+      .leftJoinAndSelect('item.category', 'category')
+      .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .leftJoinAndSelect('item.admin', 'admin');
+
+    if (isPublic) {
+      qb.where('item.isExposed = :isExposed', { isExposed: true })
+        .andWhere('category.isActive = :isActive', { isActive: true })
+        .andWhere('subcategory.isExposed = :subcategoryExposed', { subcategoryExposed: true });
+    }
+
+    qb.orderBy('item.categoryId', 'ASC')
+      .addOrderBy('item.subcategoryId', 'ASC')
+      .addOrderBy('item.createdAt', 'DESC');
+
+    const items = await qb.getMany();
+
+    // Group by category, then by subcategory
+    const grouped: Record<number, any> = {};
+
+    for (const item of items) {
+      const categoryId = item.categoryId;
+      const subcategoryId = item.subcategoryId;
+
+      if (!grouped[categoryId]) {
+        grouped[categoryId] = {
+          category: {
+            id: item.category.id,
+            name: item.category.name,
+            type: item.category.type,
+            isActive: item.category.isActive,
+          },
+          subcategories: {},
+        };
+      }
+
+      if (!grouped[categoryId].subcategories[subcategoryId]) {
+        grouped[categoryId].subcategories[subcategoryId] = {
+          id: item.subcategory.id,
+          name: item.subcategory.name,
+          sections: item.subcategory.sections || [],
+          isExposed: item.subcategory.isExposed,
+          displayOrder: item.subcategory.displayOrder,
+          items: [],
+        };
+      }
+
+      const itemBase = {
+        id: item.id,
+        title: item.title,
+        thumbnail: isPublic ? (item.thumbnail ? { url: item.thumbnail.url } : null) : item.thumbnail,
+        pdf: isPublic ? (item.pdf ? { url: item.pdf.url } : null) : item.pdf,
+        content: item.content,
+        enableComments: item.enableComments,
+        isExposed: item.isExposed,
+        isMainExposed: item.isMainExposed,
+        authorName: item.admin ? item.admin.name : 'Admin',
+        createdAt: item.createdAt,
+      };
+
+      grouped[categoryId].subcategories[subcategoryId].items.push(
+        isPublic
+          ? itemBase
+          : {
+            ...itemBase,
+            viewCount: item.viewCount || 0,
+            commentCount: item.commentCount || 0,
+            updatedAt: item.updatedAt,
+            createdAtFormatted: this.formatDateTime(item.createdAt),
+            updatedAtFormatted: this.formatDateTime(item.updatedAt),
+          },
+      );
+    }
+
+    // Convert to array format
+    return Object.values(grouped).map((group: any) => ({
+      category: group.category,
+      subcategories: Object.values(group.subcategories),
+    }));
+  }
+
+  // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
+  private formatDateTime(date: Date): string {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
+  }
+
   // ========== COMMENT METHODS ==========
 
   /**

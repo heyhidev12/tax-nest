@@ -13,14 +13,16 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.client = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
+      host: process.env.REDIS_HOST,
       port: Number(process.env.REDIS_PORT) || 6379,
-      password: process.env.REDIS_PASSWORD,
-      db: Number(process.env.REDIS_DB) || 0,
-      retryStrategy: () => null, // avoid infinite retry
-      connectTimeout: 5000, // 5 seconds
-      lazyConnect: true, // Don't connect immediately
+      password: process.env.REDIS_PASSWORD || undefined,
+      db: 0, // Serverless Redis faqat DB 0 ni ishlatadi
+      retryStrategy: () => null,
+      connectTimeout: 5000,
+      lazyConnect: true,
+      tls: process.env.REDIS_TLS === 'true' ? {} : undefined
     });
+
   }
 
   async onModuleInit() {

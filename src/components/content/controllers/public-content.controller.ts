@@ -392,7 +392,6 @@ export class PublicContentController {
   @ApiQuery({ name: 'minorCategoryId', required: false, type: Number, description: 'Minor Category ID 필터링' })
   @ApiQuery({ name: 'memberId', required: false, type: Number, description: '구성원 ID로 필터링 (해당 구성원의 workAreas와 일치하는 minorCategory.name을 가진 업무분야만 반환)' })
   @ApiQuery({ name: 'minorCategoryName', required: false, type: String, description: 'Minor Category 이름으로 직접 필터링' })
-  @ApiQuery({ name: 'isMainExposed', required: false, type: Boolean, description: '메인 노출 여부로 필터링' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
   @Get('business-areas')
   async getBusinessAreas(
@@ -403,12 +402,10 @@ export class PublicContentController {
     @Query('minorCategoryId') minorCategoryId?: string,
     @Query('memberId') memberId?: string,
     @Query('minorCategoryName') minorCategoryName?: string,
-    @Query('isMainExposed') isMainExposed?: string,
     @Query('sort') sort?: 'latest' | 'oldest' | 'order',
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
-    const isMainExposedBool = isMainExposed === 'true' ? true : isMainExposed === 'false' ? false : undefined;
     const memberIdNum = memberId ? parseInt(memberId, 10) : undefined;
 
     return this.businessAreaService.findAll({
@@ -420,7 +417,6 @@ export class PublicContentController {
       memberId: memberIdNum,
       minorCategoryName,
       isExposed: true, // Only exposed business areas
-      isMainExposed: isMainExposedBool,
       sort: sort || 'order',
       includeHidden: false,
       isPublic: true,
@@ -442,6 +438,13 @@ export class PublicContentController {
 
 
   // ===== INSIGHTS (인사이트) =====
+
+  @ApiOperation({ summary: '인사이트 계층 구조 데이터 조회 (Accordion UI용)', description: 'Category별로 그룹화된 계층 구조 데이터 반환' })
+  @ApiResponse({ status: 200, description: '계층 구조 데이터 조회 성공' })
+  @Get('insights/hierarchical')
+  getInsightsHierarchical() {
+    return this.insightsService.getHierarchicalData(true);
+  }
 
   @ApiOperation({ summary: '인사이트 목록 조회 (공개, 페이지네이션 및 필터 지원)' })
   @ApiResponse({ status: 200, description: '인사이트 목록 조회 성공' })

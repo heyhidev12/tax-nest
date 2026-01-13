@@ -1,5 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, IsBoolean, ValidateNested, IsObject } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class ImageDto {
+  @ApiProperty({ example: 1, description: 'Image ID' })
+  @IsNotEmpty({ message: '이미지 ID를 입력해주세요.' })
+  @IsNumber()
+  id: number;
+
+  @ApiProperty({ example: 'https://example.com/image.jpg', description: 'Image URL' })
+  @IsNotEmpty({ message: '이미지 URL을 입력해주세요.' })
+  @IsString()
+  url: string;
+}
 
 export class CreateBusinessAreaCategoryDto {
   @ApiProperty({ 
@@ -16,8 +29,25 @@ export class CreateBusinessAreaCategoryDto {
   @MaxLength(100)
   name: string;
 
+  @ApiProperty({ 
+    example: { id: 1, url: 'https://example.com/image.jpg' }, 
+    description: 'Category image (필수)',
+    type: () => ImageDto
+  })
+  @IsNotEmpty({ message: '이미지를 입력해주세요.' })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => ImageDto)
+  image: { id: number; url: string };
+
   @ApiProperty({ example: true, description: '노출 여부', default: true, required: false })
   @IsOptional()
+  @IsBoolean()
   isExposed?: boolean;
+
+  @ApiProperty({ example: false, description: '메인 노출 여부', default: false, required: false })
+  @IsOptional()
+  @IsBoolean()
+  isMainExposed?: boolean;
 }
 

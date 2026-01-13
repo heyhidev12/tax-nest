@@ -122,11 +122,6 @@ export class CreateBusinessAreaItemDto {
   @IsUrl({}, { each: true, message: '올바른 YouTube URL 형식이 아닙니다.' })
   youtubeUrls?: string[];
 
-  @ApiPropertyOptional({ example: true, description: '메인 노출 여부', default: false })
-  @IsOptional()
-  @IsBoolean()
-  isMainExposed?: boolean;
-
   @ApiPropertyOptional({ example: true, description: '노출 여부', default: true })
   @IsOptional()
   @IsBoolean()

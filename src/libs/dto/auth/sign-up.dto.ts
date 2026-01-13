@@ -32,7 +32,7 @@ export class SignUpDto {
 
   @ApiProperty({ example: '01012345678', description: '전화번호 (숫자만)' })
   @IsString()
-  @Matches(/^01[0-9]{8,9}$/, { message: '올바른 휴대폰 번호 형식이 아닙니다.' })
+  @Matches(/^0[0-9]{9,10}$/, { message: '올바른 휴대폰 번호 형식이 아닙니다.' })
   phoneNumber: string;
 
   @ApiProperty({ example: 'GENERAL', enum: MemberType, description: '회원 유형 (GENERAL: 일반회원, OTHER: 법인대표/직원, INSURANCE: 보험사 직원)' })

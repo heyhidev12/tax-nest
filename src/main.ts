@@ -67,7 +67,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   // Start server first (non-blocking)
-  const port = process.env.PORT ?? 3000;
+  const port = process.env.PORT ?? 3002;
   const host = '0.0.0.0';
 
   await app.listen(port, host);
