@@ -1,0 +1,53 @@
+name: Deploy to Production Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Repo ni olish
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Node setup
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # 3. Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # 4. Build (production env)
+      - name: Build project
+        run: npm run build
+
+      # 5. SSH key setup
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      # 6. Upload dist to server
+      - name: Upload dist to server
+        run: |
+          rsync -avz --delete dist/ \
+          ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }}:/home/ubuntu/projects/tax-nest/dist/
+
+      # 7. Restart PM2
+      - name: Restart PM2
+        run: |
+          ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} "
+            cd /home/ubuntu/projects/tax-nest &&
+            pm2 reload ecosystem.config.js --env production &&
+            pm2 save
+          "
+
