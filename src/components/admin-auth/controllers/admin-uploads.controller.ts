@@ -66,7 +66,7 @@ export class AdminUploadsController extends AdminBaseController {
   })
   async uploadImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     const result = await this.attachmentService.uploadImageSimple(file);
@@ -115,7 +115,7 @@ export class AdminUploadsController extends AdminBaseController {
   })
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     const result = await this.attachmentService.uploadFileSimple(file);
@@ -164,7 +164,7 @@ export class AdminUploadsController extends AdminBaseController {
   })
   async uploadVideo(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     const result = await this.attachmentService.uploadVideoSimple(file);

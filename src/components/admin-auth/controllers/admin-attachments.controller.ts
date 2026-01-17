@@ -66,7 +66,7 @@ export class AdminAttachmentsController extends AdminBaseController {
   })
   async uploadFile(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     const result = await this.attachmentService.uploadFileSimple(file);

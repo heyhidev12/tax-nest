@@ -24,7 +24,7 @@ export class AttachmentService {
     type: string;
   }> {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     // Upload to S3
@@ -59,7 +59,7 @@ export class AttachmentService {
     type: string;
   }> {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     // Upload to S3
@@ -94,7 +94,7 @@ export class AttachmentService {
     type: string;
   }> {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     // Upload to S3
@@ -129,7 +129,7 @@ export class AttachmentService {
   async deleteAttachment(id: number): Promise<void> {
     const attachment = await this.attachmentRepo.findOne({ where: { id } });
     if (!attachment) {
-      throw new NotFoundException('Attachment not found');
+      throw new NotFoundException('첨부파일을 찾을 수 없습니다.');
     }
 
     // Get S3 key from DB
@@ -148,7 +148,7 @@ export class AttachmentService {
   async getAttachmentById(id: number): Promise<Attachment> {
     const attachment = await this.attachmentRepo.findOne({ where: { id } });
     if (!attachment) {
-      throw new NotFoundException('Attachment not found');
+      throw new NotFoundException('첨부파일을 찾을 수 없습니다.');
     }
     return attachment;
   }

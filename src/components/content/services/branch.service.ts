@@ -41,16 +41,14 @@ export class BranchService {
       displayOrder: targetOrder,
     });
 
-    // Geocode address if provided
-    if (data.address) {
+    // Geocode address if provided - validation: must succeed if address is provided
+    if (data.address && data.address.trim() !== '') {
       const coordinates = await this.geocodingService.geocodeAddress(data.address);
-      if (coordinates) {
-        branch.latitude = coordinates.latitude;
-        branch.longitude = coordinates.longitude;
-      } else {
-        branch.latitude = null as any;
-        branch.longitude = null as any;
+      if (!coordinates) {
+        throw new BadRequestException('올바른 주소를 입력해주세요.');
       }
+      branch.latitude = coordinates.latitude;
+      branch.longitude = coordinates.longitude;
     }
 
     await this.dataSource.transaction(async (manager) => {
@@ -172,15 +170,14 @@ export class BranchService {
     const updatedData = { ...data };
     delete updatedData.displayOrder;
 
-    if (updatedData.address && updatedData.address !== branch.address) {
+    // Geocode address if provided - validation: must succeed if address is provided
+    if (updatedData.address && updatedData.address.trim() !== '') {
       const coordinates = await this.geocodingService.geocodeAddress(updatedData.address);
-      if (coordinates) {
-        updatedData.latitude = coordinates.latitude;
-        updatedData.longitude = coordinates.longitude;
-      } else {
-        updatedData.latitude = null as any;
-        updatedData.longitude = null as any;
+      if (!coordinates) {
+        throw new BadRequestException('올바른 주소를 입력해주세요.');
       }
+      updatedData.latitude = coordinates.latitude;
+      updatedData.longitude = coordinates.longitude;
     }
 
     if (Object.keys(updatedData).length > 0) {

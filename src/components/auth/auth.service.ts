@@ -150,7 +150,22 @@ export class AuthService {
 
   async verifyPhoneCode(dto, isAuthenticated: boolean) {
     const purpose = isAuthenticated ? 'CHANGE_PHONE' : 'SIGNUP';
+    
+    // Verify the code first
     await this.verification.verifyCode(dto.phone, purpose, dto.code);
+    
+    // For signup flow, check if phone number is already registered
+    if (purpose === 'SIGNUP') {
+      const existingPhone = await this.membersService.findByPhoneNumber(dto.phone);
+      if (existingPhone) {
+        throw new BadRequestException({
+          statusCode: 400,
+          errorCode: 'PHONE_ALREADY_REGISTERED',
+          message: '이미 등록된 휴대폰 번호입니다',
+        });
+      }
+    }
+    
     return { verified: true };
   }
 
@@ -196,6 +211,43 @@ export class AuthService {
     await this.redisService.del(rateLimitKey);
 
     return { verified: true };
+  }
+
+  async withdrawAccount(id: number, dto: { password: string }) {
+    const member = await this.membersService.findById(id);
+
+    // Check if already withdrawn
+    if (member.status === MemberStatus.WITHDRAWN) {
+      throw new BadRequestException('이미 탈퇴한 회원입니다.');
+    }
+
+    // SNS 로그인 사용자는 비밀번호가 없음 - allow withdrawal without password verification
+    if (!member.passwordHash) {
+      // For SNS users, proceed with withdrawal without password verification
+      member.status = MemberStatus.WITHDRAWN;
+      await this.membersService.updateProfile(id, member);
+      return { success: true };
+    }
+
+    // Verify password for regular users
+    const match = await bcrypt.compare(dto.password, member.passwordHash);
+    if (!match) {
+      throw new BadRequestException({
+        statusCode: 400,
+        errorCode: 'INVALID_PASSWORD',
+        message: '비밀번호가 일치하지 않습니다.',
+      });
+    }
+
+    // Process withdrawal (soft delete)
+    member.status = MemberStatus.WITHDRAWN;
+    await this.membersService.updateProfile(id, member);
+
+    // Note: JWT tokens are stateless, so we can't invalidate them server-side
+    // However, the JWT strategy now checks member status during validation
+    // The token will effectively be invalidated because withdrawn members can't use it
+
+    return { success: true };
   }
 
   // -------------------------------------

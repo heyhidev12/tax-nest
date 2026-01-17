@@ -66,12 +66,12 @@ export class UploadService {
   async uploadImage(file: Express.Multer.File): Promise<{ url: string; key: string }> {
     // Validate AWS configuration
     if (!this.s3 || !this.region || !this.bucketName) {
-      throw new BadRequestException('AWS S3 is not properly configured. Please check your environment variables.');
+      throw new BadRequestException('AWS S3가 올바르게 설정되지 않았습니다. 환경 변수를 확인해주세요.');
     }
 
     // Validate file exists
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     // Validate file type
@@ -114,18 +114,18 @@ export class UploadService {
   async uploadVideo(file: Express.Multer.File): Promise<{ url: string; key: string }> {
     // Validate AWS configuration
     if (!this.s3 || !this.region || !this.bucketName) {
-      throw new BadRequestException('AWS S3 is not properly configured. Please check your environment variables.');
+      throw new BadRequestException('AWS S3가 올바르게 설정되지 않았습니다. 환경 변수를 확인해주세요.');
     }
 
     // Validate file exists
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     // Validate file type
     if (!this.ALLOWED_VIDEO_TYPES.includes(file.mimetype)) {
       throw new BadRequestException(
-        `Invalid video type: ${file.mimetype}. Allowed types: ${this.ALLOWED_VIDEO_TYPES.join(', ')}`,
+        `유효하지 않은 비디오 형식입니다: ${file.mimetype}. 허용된 형식: ${this.ALLOWED_VIDEO_TYPES.join(', ')}`,
       );
     }
 
@@ -162,12 +162,12 @@ export class UploadService {
   async uploadFile(file: Express.Multer.File): Promise<{ url: string; key: string }> {
     // Validate AWS configuration
     if (!this.s3 || !this.region || !this.bucketName) {
-      throw new BadRequestException('AWS S3 is not properly configured. Please check your environment variables.');
+      throw new BadRequestException('AWS S3가 올바르게 설정되지 않았습니다. 환경 변수를 확인해주세요.');
     }
 
     // Validate file exists
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
     // // Validate file type
@@ -232,7 +232,7 @@ export class UploadService {
    */
   async deleteFile(key: string): Promise<void> {
     if (!this.s3 || !this.bucketName) {
-      throw new BadRequestException('AWS S3 is not properly configured.');
+      throw new BadRequestException('AWS S3가 올바르게 설정되지 않았습니다.');
     }
     try {
       await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucketName, Key: key }));
@@ -260,7 +260,7 @@ export class UploadService {
    */
   async downloadFile(key: string): Promise<{ body: any; contentType: string; contentLength: number }> {
     if (!this.s3 || !this.bucketName) {
-      throw new BadRequestException('AWS S3 is not properly configured.');
+      throw new BadRequestException('AWS S3가 올바르게 설정되지 않았습니다.');
     }
 
     const command = new GetObjectCommand({

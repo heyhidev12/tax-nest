@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { InsightsSubcategory } from './insights-subcategory.entity';
 import { InsightsItem } from './insights-item.entity';
+import { TargetMemberType } from './training-seminar.entity';
 
 export enum CategoryType {
   A = 'A',
@@ -25,6 +26,9 @@ export class InsightsCategory {
 
   @Column({ type: 'enum', enum: CategoryType })
   type: CategoryType;
+
+  @Column({ type: 'enum', enum: TargetMemberType, default: TargetMemberType.ALL })
+  targetMemberType: TargetMemberType;
 
   @Column({ default: true })
   isActive: boolean;

@@ -226,14 +226,10 @@ export class NewsletterService {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
 
-    // DB(Member + NewsletterSubscriber)를 기준으로 상태 조회
-    const subscriber = await this.subscriberRepo.findOne({ where: { email: member.email } });
-    const isSubscribed = subscriber?.isSubscribed ?? member.newsletterSubscribed;
-
+    // Single source of truth: member.newsletterSubscribed
     return {
       email: member.email,
-      isSubscribed,
-      subscriptionLabel: isSubscribed ? 'Y' : 'N',
+      isSubscribed: member.newsletterSubscribed,
     };
   }
 
@@ -244,16 +240,7 @@ export class NewsletterService {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
 
-    // NewsletterSubscriber 엔티티 업데이트
-    const subscriber = await this.subscriberRepo.findOne({ where: { email: member.email } });
-    if (subscriber) {
-      subscriber.isSubscribed = false;
-      subscriber.unsubscribedAt = new Date();
-      subscriber.isMailSynced = true;
-      await this.subscriberRepo.save(subscriber);
-    }
-
-    // Member 엔티티도 업데이트
+    // Single source of truth: Update only member.newsletterSubscribed
     member.newsletterSubscribed = false;
     await this.memberRepo.save(member);
 

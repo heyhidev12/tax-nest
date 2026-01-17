@@ -535,12 +535,14 @@ export class PublicContentController {
     }
 
     const memberId = req.user?.sub; // JWT payload에서 member ID 가져오기
-    const memberEmail = req.user?.email;
-
+    
+    // Fetch member to get the actual name (not email or loginId)
+    const member = await this.membersService.findById(memberId);
+    
     return this.insightsService.createComment(id, {
       body: body.body.trim(),
       memberId,
-      authorName: memberEmail || '회원',
+      authorName: member.name,
     });
   }
 

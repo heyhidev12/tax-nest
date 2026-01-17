@@ -749,11 +749,29 @@ export class BusinessAreaService {
   /**
    * Get hierarchical data for public frontend (accordion-style UI)
    * Groups items by major category and then by minor category
+   * Returns ALL exposed minorCategories, even if they have no items
    */
   async getHierarchicalData(isPublic = true) {
-    const where = !isPublic ? {} : { isExposed: true };
+    // Step 1: Get all exposed minorCategories with their majorCategories
+    // This ensures all exposed minorCategories are included, regardless of items
+    const minorCategoriesWhere = isPublic ? { isExposed: true } : {};
+    const minorCategories = await this.categoryRepo.find({
+      where: minorCategoriesWhere,
+      relations: ['majorCategory'],
+      order: {
+        majorCategoryId: 'ASC',
+        createdAt: 'ASC',
+      },
+    });
+
+    // Step 2: Get all items (filtered by isExposed if public)
+    // Items are optional - they're just data for frontend labels
+    const itemsWhere: any = {};
+    if (isPublic) {
+      itemsWhere.isExposed = true;
+    }
     const items = await this.areaRepo.find({
-      where,
+      where: itemsWhere,
       relations: ['majorCategory', 'minorCategory'],
       order: {
         majorCategoryId: 'ASC',
@@ -763,61 +781,77 @@ export class BusinessAreaService {
       },
     });
 
-    // Group by major category, then by minor category
+    // Step 3: Group items by minorCategoryId for quick lookup
+    const itemsByMinorCategory: Record<number, BusinessArea[]> = {};
+    for (const item of items) {
+      if (!itemsByMinorCategory[item.minorCategoryId]) {
+        itemsByMinorCategory[item.minorCategoryId] = [];
+      }
+      itemsByMinorCategory[item.minorCategoryId].push(item);
+    }
+
+    // Step 4: Build hierarchical structure starting from minorCategories
+    // This ensures ALL exposed minorCategories are included, even with no items
     const grouped: Record<number, any> = {};
 
-    for (const item of items) {
-      const majorId = item.majorCategoryId;
-      const minorId = item.minorCategoryId;
+    for (const minorCategory of minorCategories) {
+      const majorId = minorCategory.majorCategoryId;
+      const minorId = minorCategory.id;
 
+      // Initialize major category group if not exists
       if (!grouped[majorId]) {
         grouped[majorId] = {
           majorCategory: {
-            id: item.majorCategory.id,
-            name: item.majorCategory.name,
-            sections: item.majorCategory.sections || [],
-            isExposed: item.majorCategory.isExposed,
-            displayOrder: item.majorCategory.displayOrder,
+            id: minorCategory.majorCategory.id,
+            name: minorCategory.majorCategory.name,
+            sections: minorCategory.majorCategory.sections || [],
+            isExposed: minorCategory.majorCategory.isExposed,
+            displayOrder: minorCategory.majorCategory.displayOrder,
           },
           minorCategories: {},
         };
       }
 
+      // Add minor category (even if it has no items)
       if (!grouped[majorId].minorCategories[minorId]) {
         grouped[majorId].minorCategories[minorId] = {
-          id: item.minorCategory.id,
-          name: item.minorCategory.name,
-          image: item.minorCategory.image,
-          isExposed: item.minorCategory.isExposed,
-          isMainExposed: item.minorCategory.isMainExposed,
+          id: minorCategory.id,
+          name: minorCategory.name,
+          image: minorCategory.image,
+          isExposed: minorCategory.isExposed,
+          isMainExposed: minorCategory.isMainExposed,
           items: [],
         };
       }
 
-      const itemBase = {
-        id: item.id,
-        name: item.name,
-        subDescription: item.subDescription,
-        image: item.image,
-        overview: item.overview,
-        sectionContents: item.sectionContents || [],
-        youtubeUrls: item.youtubeUrls || [],
-        isExposed: item.isExposed,
-        displayOrder: item.displayOrder,
-      };
+      // Add items for this minor category (if any exist)
+      const categoryItems = itemsByMinorCategory[minorId] || [];
+      for (const item of categoryItems) {
+        const itemBase = {
+          id: item.id,
+          name: item.name,
+          subDescription: item.subDescription,
+          image: item.image,
+          overview: item.overview,
+          sectionContents: item.sectionContents || [],
+          youtubeUrls: item.youtubeUrls || [],
+          isExposed: item.isExposed,
+          displayOrder: item.displayOrder,
+        };
 
-      grouped[majorId].minorCategories[minorId].items.push(
-        isPublic
-          ? itemBase
-          : {
-            ...itemBase,
-            youtubeCount: (item.youtubeUrls || []).length,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt,
-            createdAtFormatted: this.formatDateTime(item.createdAt),
-            updatedAtFormatted: this.formatDateTime(item.updatedAt),
-          },
-      );
+        grouped[majorId].minorCategories[minorId].items.push(
+          isPublic
+            ? itemBase
+            : {
+              ...itemBase,
+              youtubeCount: (item.youtubeUrls || []).length,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt,
+              createdAtFormatted: this.formatDateTime(item.createdAt),
+              updatedAtFormatted: this.formatDateTime(item.updatedAt),
+            },
+        );
+      }
     }
 
     // Convert to array format

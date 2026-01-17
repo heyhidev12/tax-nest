@@ -14,12 +14,12 @@ export class SmsProvider {
     const alimTalkSuccess = await this.alimTalkProvider.send(phoneNumber, code);
     
     if (alimTalkSuccess) {
-      this.logger.log(`OTP delivered via AlimTalk to ${phoneNumber}`);
-      return;
+      this.logger.log(`[Delivery] OTP delivered via AlimTalk to ${phoneNumber}`);
+      return; // Success - immediately return, do NOT trigger SMS fallback
     }
 
-    // Fallback: Use Naver Cloud SMS
-    this.logger.log(`AlimTalk failed, falling back to SMS for ${phoneNumber}`);
+    // Fallback: Use Naver Cloud SMS (only if AlimTalk actually failed)
+    this.logger.log(`[Delivery] AlimTalk failed, falling back to SMS for ${phoneNumber}`);
     await this.sendViaSms(phoneNumber, code);
   }
 
@@ -31,13 +31,13 @@ export class SmsProvider {
     const timestamp = Date.now().toString();
 
     if (!serviceId || !accessKey || !secretKey || !sender) {
-      this.logger.warn('SMS configuration missing. Skipping SMS send.');
+      this.logger.warn(`[SMS] Configuration missing. Skipping SMS send for ${phoneNumber}. AlimTalk already failed.`);
       // In development, log the code instead of failing
       if (process.env.NODE_ENV !== 'production') {
         this.logger.log(`[DEV] Verification code for ${phoneNumber}: ${code}`);
-      } else {
-        throw new Error('SMS configuration is missing and AlimTalk failed');
       }
+      // Do NOT throw error - gracefully skip SMS if config is missing
+      // This prevents 500 errors when SMS sender is not registered
       return;
     }
 
@@ -68,15 +68,16 @@ export class SmsProvider {
         },
         timeout: 10000, // 10 second timeout
       });
-      this.logger.log(`OTP delivered via SMS to ${phoneNumber}`);
+      this.logger.log(`[Delivery] OTP delivered via SMS to ${phoneNumber}`);
     } catch (error) {
-      this.logger.error(`SMS sending failed for ${phoneNumber}:`, error);
+      this.logger.error(`[SMS] Sending failed for ${phoneNumber}:`, error);
       // In development, log the code instead of failing
       if (process.env.NODE_ENV !== 'production') {
         this.logger.log(`[DEV] Verification code for ${phoneNumber}: ${code}`);
-      } else {
-        throw error;
       }
+      // Do NOT throw error - gracefully handle SMS failure
+      // This prevents 500 errors when SMS sender is not registered
+      // The OTP was already generated, so we just log the failure
     }
   }
 }

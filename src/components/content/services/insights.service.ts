@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, Repository, In } from 'typeorm';
+import { DataSource, Repository, In, ILike } from 'typeorm';
 import { InsightsCategory } from 'src/libs/entity/insights-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
 import { InsightsItem, InsightsComment, InsightsCommentReport } from 'src/libs/entity/insights-item.entity';
@@ -48,6 +48,7 @@ export class InsightsService {
     const category = this.categoryRepo.create({
       name: dto.name,
       type: dto.type,
+      targetMemberType: dto.targetMemberType,
       isActive: true,
     });
 
@@ -84,6 +85,7 @@ export class InsightsService {
 
     if (dto.name) category.name = dto.name;
     if (dto.type) category.type = dto.type;
+    if (dto.targetMemberType) category.targetMemberType = dto.targetMemberType;
 
     return this.categoryRepo.save(category);
   }
@@ -98,6 +100,24 @@ export class InsightsService {
     await this.categoryRepo.save(category);
 
     return { success: true, isActive: category.isActive };
+  }
+
+  async deleteCategory(id: number) {
+    const category = await this.categoryRepo.findOne({ where: { id } });
+    if (!category) {
+      throw new NotFoundException('카테고리를 찾을 수 없습니다.');
+    }
+
+    // Check if category is used by any items
+    const itemCount = await this.itemRepo.count({ where: { categoryId: id } });
+    if (itemCount > 0) {
+      throw new BadRequestException(
+        `카테고리가 ${itemCount}개의 아이템에서 사용 중이어서 삭제할 수 없습니다.`,
+      );
+    }
+
+    await this.categoryRepo.remove(category);
+    return { success: true };
   }
 
   // ========== SUBCATEGORY METHODS ==========
@@ -423,28 +443,60 @@ export class InsightsService {
     await this.itemRepo.remove(item);
     return { success: true };
   }
-
   async getItemsByCategoryAndSubcategory(
-    categoryId: number,
-    subcategoryId?: number,
+    categoryId?: number,
     includeHidden = false,
+    page = 1,
+    limit = 20,
+    authorName?: string,
   ) {
-    const where: any = { categoryId };
-    if (subcategoryId) {
-      where.subcategoryId = subcategoryId;
+    const skip = (page - 1) * limit;
+  
+    const qb = this.itemRepo
+      .createQueryBuilder('item')
+      .leftJoinAndSelect('item.category', 'category')
+      .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .leftJoin('item.admin', 'admin');
+  
+    // Category filter (optional)
+    if (categoryId) {
+      qb.andWhere('item.categoryId = :categoryId', { categoryId });
     }
+  
+    // Exposure filter
     if (!includeHidden) {
-      where.isExposed = true;
+      qb.andWhere('item.isExposed = :isExposed', { isExposed: true });
     }
-
-    const items = await this.itemRepo.find({
-      where,
-      relations: ['category', 'subcategory', 'admin'],
-      order: { createdAt: 'DESC' },
-    });
-
-    // Return frontend-friendly format
-    return Promise.all(items.map((item) => this.formatItemWithAttachments(item)));
+  
+    // Author name search (MySQL compatible, prevent NULL admin crash)
+    if (authorName && authorName.trim() !== '') {
+      qb.andWhere('admin.id IS NOT NULL')
+        .andWhere('admin.name LIKE :authorName', {
+          authorName: `%${authorName.trim()}%`,
+        });
+    }
+  
+    // Load admin relation for response formatting
+    qb.leftJoinAndSelect('item.admin', 'adminForSelect');
+  
+    // Pagination + sorting
+    qb.orderBy('item.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+  
+    const [items, total] = await qb.getManyAndCount();
+  
+    // Format response
+    const formattedItems = await Promise.all(
+      items.map((item) => this.formatItemWithAttachments(item)),
+    );
+  
+    return {
+      items: formattedItems,
+      total,
+      page,
+      limit,
+    };
   }
 
   async getItemById(id: number, includeHidden = false) {
@@ -466,16 +518,47 @@ export class InsightsService {
     return await this.formatItemWithAttachments(item);
   }
 
-  async getAllItems(includeHidden = false) {
-    const where = includeHidden ? {} : { isExposed: true };
-    const items = await this.itemRepo.find({
-      where,
-      relations: ['category', 'subcategory', 'admin'],
-      order: { createdAt: 'DESC' },
-    });
+  async getAllItems(includeHidden = false, page = 1, limit = 20, authorName?: string) {
+    const skip = (page - 1) * limit;
 
-    // Return frontend-friendly format
-    return Promise.all(items.map((item) => this.formatItemWithAttachments(item)));
+    const qb = this.itemRepo
+      .createQueryBuilder('item')
+      .leftJoinAndSelect('item.category', 'category')
+      .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .leftJoin('item.admin', 'admin');
+
+    // Exposure filter
+    if (!includeHidden) {
+      qb.andWhere('item.isExposed = :isExposed', { isExposed: true });
+    }
+
+    // Author name search (MySQL compatible, prevent NULL admin crash)
+    if (authorName && authorName.trim() !== '') {
+      qb.andWhere('admin.id IS NOT NULL')
+        .andWhere('admin.name LIKE :authorName', {
+          authorName: `%${authorName.trim()}%`,
+        });
+    }
+
+    // Load admin relation for response formatting
+    qb.leftJoinAndSelect('item.admin', 'adminForSelect');
+
+    // Pagination + sorting
+    qb.orderBy('item.createdAt', 'DESC')
+      .skip(skip)
+      .take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+
+    // Return frontend-friendly format with pagination
+    const formattedItems = await Promise.all(items.map((item) => this.formatItemWithAttachments(item)));
+
+    return {
+      items: formattedItems,
+      total,
+      page,
+      limit,
+    };
   }
 
   // ========== USER-FACING METHODS ==========

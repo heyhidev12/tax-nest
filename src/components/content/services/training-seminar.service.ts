@@ -401,6 +401,18 @@ export class TrainingSeminarService {
     });
     if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
 
+    // Check if recruitment deadline has passed (use server time)
+    const now = new Date();
+    const recruitmentEndDate = new Date(seminar.recruitmentEndDate);
+    
+    // Normalize dates to compare only date part (set time to 00:00:00)
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const deadline = new Date(recruitmentEndDate.getFullYear(), recruitmentEndDate.getMonth(), recruitmentEndDate.getDate());
+    
+    if (today > deadline) {
+      throw new BadRequestException('모집 기간이 종료되었습니다.');
+    }
+
     // 날짜 및 시간 유효성 검사
     if (!data.participationDate) {
       throw new BadRequestException('참여 일자를 선택해주세요.');
@@ -543,6 +555,7 @@ export class TrainingSeminarService {
         phoneNumber: item.phoneNumber,
         email: item.email,
         trainingSeminarName: item.trainingSeminar?.name,
+        recruitmentType: item.trainingSeminar?.recruitmentType,
         participationDate: item.participationDate,
         participationTime: item.participationTime, // HH:mm 형식
         attendeeCount: item.attendeeCount,
@@ -713,6 +726,7 @@ export class TrainingSeminarService {
         email: item.email,
         trainingSeminarId: item.trainingSeminarId,
         trainingSeminarName: item.trainingSeminar?.name,
+        recruitmentType: item.trainingSeminar?.recruitmentType,
         participationDate: item.participationDate,
         participationTime: item.participationTime, // HH:mm 형식
         attendeeCount: item.attendeeCount,
@@ -743,6 +757,7 @@ export class TrainingSeminarService {
     const base = {
       ...app,
       trainingSeminarName: app.trainingSeminar?.name,
+      recruitmentType: app.trainingSeminar?.recruitmentType,
     };
 
     if (isPublic) {

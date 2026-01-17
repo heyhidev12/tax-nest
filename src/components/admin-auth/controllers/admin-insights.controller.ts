@@ -87,6 +87,15 @@ export class AdminInsightsController extends AdminBaseController {
     return this.insightsService.toggleCategoryActive(id);
   }
 
+  @ApiOperation({ summary: '카테고리 삭제', description: '아이템에서 사용 중인 경우 삭제할 수 없습니다.' })
+  @ApiResponse({ status: 200, description: '카테고리 삭제 성공' })
+  @ApiResponse({ status: 400, description: '사용 중인 카테고리는 삭제할 수 없습니다.' })
+  @ApiResponse({ status: 404, description: '카테고리를 찾을 수 없습니다.' })
+  @Delete('categories/:id')
+  deleteCategory(@Param('id', ParseIntPipe) id: number) {
+    return this.insightsService.deleteCategory(id);
+  }
+
   // ========== SUBCATEGORY ENDPOINTS ==========
 
   @ApiOperation({ summary: '모든 서브카테고리 조회 (전역)', description: '서브카테고리는 전역으로 관리되며 카테고리와 연결되지 않습니다.' })
@@ -153,22 +162,32 @@ export class AdminInsightsController extends AdminBaseController {
   @ApiQuery({ name: 'categoryId', required: false, type: Number, description: '카테고리 ID (필터)' })
   @ApiQuery({ name: 'subcategoryId', required: false, type: Number, description: '서브카테고리 ID (필터)' })
   @ApiQuery({ name: 'includeHidden', required: false, type: Boolean, description: '비노출 항목 포함 여부' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: '페이지 번호 (기본: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: '페이지당 항목 수 (기본: 20)' })
+  @ApiQuery({ name: 'authorName', required: false, type: String, description: '작성자 이름 검색 (부분 일치, 대소문자 구분 없음)' })
   @Get('items')
   listItems(
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
     @Query('includeHidden') includeHidden?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('authorName') authorName?: string,
   ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+
     if (categoryId) {
       const categoryIdNum = Number(categoryId);
-      const subcategoryIdNum = subcategoryId ? Number(subcategoryId) : undefined;
       return this.insightsService.getItemsByCategoryAndSubcategory(
         categoryIdNum,
-        subcategoryIdNum,
         includeHidden === 'true',
+        pageNum,
+        limitNum,
+        authorName,
       );
     }
-    return this.insightsService.getAllItems(includeHidden === 'true');
+    return this.insightsService.getAllItems(includeHidden === 'true', pageNum, limitNum, authorName);
   }
 
   @ApiOperation({ summary: '아이템 상세 조회' })

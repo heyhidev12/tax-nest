@@ -89,21 +89,21 @@ export class VerificationService {
     const isSignupOrChangePhone = purpose === 'SIGNUP' || purpose === 'CHANGE_PHONE';
 
     if (!record) {
-      throw new BadRequestException(isSignupOrChangePhone ? 'Invalid or expired code' : '먼저 인증번호를 요청해주세요.');
+      throw new BadRequestException(isSignupOrChangePhone ? '유효하지 않거나 만료된 인증번호입니다.' : '먼저 인증번호를 요청해주세요.');
     }
 
     if (record.expiresAt.getTime() < Date.now()) {
-      throw new BadRequestException(isSignupOrChangePhone ? 'Invalid or expired code' : '인증번호가 만료되었습니다.');
+      throw new BadRequestException(isSignupOrChangePhone ? '유효하지 않거나 만료된 인증번호입니다.' : '인증번호가 만료되었습니다.');
     }
 
     if (record.attempts >= 5) {
-      throw new BadRequestException(isSignupOrChangePhone ? 'Too many attempts. Please request a new code.' : '인증 시도 횟수를 초과했습니다. 다시 인증번호를 요청해주세요.');
+      throw new BadRequestException(isSignupOrChangePhone ? '인증 시도 횟수를 초과했습니다. 새로운 인증번호를 요청해주세요.' : '인증 시도 횟수를 초과했습니다. 다시 인증번호를 요청해주세요.');
     }
 
     if (record.code !== code) {
       record.attempts += 1;
       await this.repo.save(record);
-      throw new BadRequestException(isSignupOrChangePhone ? 'Invalid or expired code' : '인증번호가 일치하지 않습니다.');
+      throw new BadRequestException(isSignupOrChangePhone ? '유효하지 않거나 만료된 인증번호입니다.' : '인증번호가 일치하지 않습니다.');
     }
 
     record.isUsed = true;

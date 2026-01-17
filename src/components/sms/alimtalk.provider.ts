@@ -51,20 +51,20 @@ export class AlimTalkProvider {
       );
 
       // Check if response indicates success
-      // NHN AlimTalk typically returns 200 with a header indicating success
+      // NHN AlimTalk returns 200 with header.isSuccessful === true on success
+      const header = response.data?.header;
       const isSuccess = 
         response.status === 200 && 
-        response.data?.header?.isSuccessful !== false &&
-        response.data?.header?.resultCode === 'SUCCESS';
+        header?.isSuccessful === true;
 
       if (isSuccess) {
         this.logger.log(`[AlimTalk] OTP sent successfully to ${phoneNumber}`);
         return true;
       } else {
-        const resultCode = response.data?.header?.resultCode;
-        const resultMessage = response.data?.header?.resultMessage;
+        const resultCode = header?.resultCode;
+        const resultMessage = header?.resultMessage;
         this.logger.warn(
-          `[AlimTalk] Response indicates failure for ${phoneNumber}: ${resultCode} - ${resultMessage}`,
+          `[AlimTalk] Response indicates failure for ${phoneNumber}: isSuccessful=${header?.isSuccessful}, resultCode=${resultCode}, resultMessage=${resultMessage}`,
         );
         return false;
       }

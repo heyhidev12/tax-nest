@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Patch,
   Post,
@@ -34,6 +35,7 @@ import { UpdateProfileDto } from 'src/libs/dto/auth/update-profile.dto';
 import { ChangePasswordDto } from 'src/libs/dto/auth/change-password.dto';
 import { VerifyPasswordDto } from 'src/libs/dto/auth/verify-password.dto';
 import { SendPhoneVerificationDto, VerifyPhoneCodeDto } from 'src/libs/dto/auth/phone-verification.dto';
+import { WithdrawAccountDto } from 'src/libs/dto/auth/withdraw-account.dto';
 import { OptionalJwtAuthGuard } from './optional-jwt-auth.guard';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiBearerAuth, ApiBody, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { TrainingSeminarService } from '../content/services/training-seminar.service';
@@ -126,6 +128,18 @@ export class AuthController {
   @Post('verify-password')
   verifyPassword(@Req() req: any, @Body() dto: VerifyPasswordDto) {
     return this.authService.verifyPassword(req.user.sub, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('user-auth')
+  @ApiOperation({ summary: '회원 탈퇴 (인증 필요)', description: '비밀번호 확인 후 회원 탈퇴를 처리합니다. 탈퇴는 되돌릴 수 없습니다.' })
+  @ApiResponse({ status: 200, description: '회원 탈퇴 성공' })
+  @ApiResponse({ status: 400, description: '비밀번호가 올바르지 않습니다.' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
+  @ApiBody({ type: WithdrawAccountDto })
+  @Delete('me')
+  withdrawAccount(@Req() req: any, @Body() dto: WithdrawAccountDto) {
+    return this.authService.withdrawAccount(req.user.sub, dto);
   }
 
   @UseGuards(OptionalJwtAuthGuard)
