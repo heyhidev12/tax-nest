@@ -1,26 +1,36 @@
 module.exports = {
-    apps: [{
+    apps: [
+      {
         name: 'tax-nest-api',
-        script: './dist/main.js',
+        script: 'dist/main.js',
+  
         instances: 1,
         exec_mode: 'fork',
+  
+        // Default (development)
         env: {
-            NODE_ENV: 'production',
-            PORT: 3000
+          NODE_ENV: 'development',
+          PORT: 3000
         },
-        // Load environment variables from .env file
-        env_file: '.env',
-        // Auto-restart on crash
+  
+        // Production mode
+        env_production: {
+          NODE_ENV: 'production',
+          PORT: 3000
+        },
+  
+        // Auto restart settings
         autorestart: true,
-        // Maximum memory before restart (optional)
-        max_memory_restart: '1G',
-        // Error and output logs
+        max_memory_restart: '800M',
+  
+        // Logs
         error_file: './logs/pm2-error.log',
         out_file: './logs/pm2-out.log',
         log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-        // Merge logs from all instances
         merge_logs: true,
-        // Time to wait before force killing the app
+  
         kill_timeout: 5000
-    }]
-};
+      }
+    ]
+  };
+  
