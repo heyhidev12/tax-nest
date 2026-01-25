@@ -65,6 +65,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return (await this.client.exists(key)) === 1;
   }
 
+  async keys(pattern: string): Promise<string[]> {
+    if (!this.enabled || !this.client) return [];
+    return await this.client.keys(pattern);
+  }
+
   async setPasswordResetToken(userId: number, token: string, ttlSeconds: number = 600): Promise<void> {
     await this.set(`password_reset:${token}`, userId.toString(), ttlSeconds);
   }

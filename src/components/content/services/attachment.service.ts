@@ -98,11 +98,21 @@ export class AttachmentService {
     }
 
     // Upload to S3
-    const { url, key } = await this.uploadService.uploadFile(file);
+    const { url, key, fileType } = await this.uploadService.uploadFile(file);
+
+    // Map fileType string to AttachmentFileType enum
+    let attachmentFileType: AttachmentFileType;
+    if (fileType === 'IMAGE') {
+      attachmentFileType = AttachmentFileType.IMAGE;
+    } else if (fileType === 'VIDEO') {
+      attachmentFileType = AttachmentFileType.VIDEO;
+    } else {
+      attachmentFileType = AttachmentFileType.FILE;
+    }
 
     // Create attachment record (no targetType/targetId needed)
     const attachment = this.attachmentRepo.create({
-      fileType: AttachmentFileType.FILE,
+      fileType: attachmentFileType,
       s3Key: key,
       mimeType: file.mimetype,
       size: file.size,
@@ -115,8 +125,59 @@ export class AttachmentService {
       id: saved.id,
       url,
       fileName: file.originalname,
-      type: 'FILE',
+      type: fileType,
     };
+  }
+
+  /**
+   * Upload multiple files and create attachment records
+   */
+  async uploadFilesSimple(files: Express.Multer.File[]): Promise<Array<{
+    id: number;
+    url: string;
+    fileName: string;
+    type: string;
+  }>> {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('파일이 제공되지 않았습니다.');
+    }
+
+    const results = await Promise.all(
+      files.map(async (file) => {
+        // Upload to S3
+        const { url, key, fileType } = await this.uploadService.uploadFile(file);
+
+        // Map fileType string to AttachmentFileType enum
+        let attachmentFileType: AttachmentFileType;
+        if (fileType === 'IMAGE') {
+          attachmentFileType = AttachmentFileType.IMAGE;
+        } else if (fileType === 'VIDEO') {
+          attachmentFileType = AttachmentFileType.VIDEO;
+        } else {
+          attachmentFileType = AttachmentFileType.FILE;
+        }
+
+        // Create attachment record
+        const attachment = this.attachmentRepo.create({
+          fileType: attachmentFileType,
+          s3Key: key,
+          mimeType: file.mimetype,
+          size: file.size,
+          originalName: file.originalname,
+        });
+
+        const saved = await this.attachmentRepo.save(attachment);
+
+        return {
+          id: saved.id,
+          url,
+          fileName: file.originalname,
+          type: fileType,
+        };
+      }),
+    );
+
+    return results;
   }
 
 

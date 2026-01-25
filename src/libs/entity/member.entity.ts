@@ -4,10 +4,12 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { MemberType,MemberStatus } from '../enums/members.enum';
 
 @Entity('members')
+@Index(['provider', 'providerId'], { unique: true })
 export class Member {
   @PrimaryGeneratedColumn()
   id: number;

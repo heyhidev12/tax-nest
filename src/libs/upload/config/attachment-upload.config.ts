@@ -1,8 +1,13 @@
 import { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface';
 import { memoryStorage } from 'multer';
 
-// Allowed file types: pdf, msword, vnd.*, zip
+// Allowed file types: images (jpeg, png), PDF/docs/zip/vcard, videos (mp4)
+// Note: Detailed validation with extensions happens in UploadService
 const ALLOWED_MIME_TYPES = [
+  // Images
+  'image/jpeg',
+  'image/png',
+  // PDF and documents
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
@@ -13,24 +18,25 @@ const ALLOWED_MIME_TYPES = [
   'application/zip',
   'application/x-zip-compressed',
   // V-Card formats
-    'application/vcard',
-    'text/vcard',
-    'text/x-vcard',
-    'text/plain'
+  'application/vcard',
+  'text/vcard',
+  'text/x-vcard',
+  // Videos
+  'video/mp4',
 ];
 
 export const fileUploadConfig: MulterOptions = {
   storage: memoryStorage(),
   limits: {},
   fileFilter: (req, file, cb) => {
-    // Check if it's in the allowed list or starts with application/vnd.
+    // Basic MIME type check - detailed validation with extensions happens in UploadService
     const isAllowed = ALLOWED_MIME_TYPES.includes(file.mimetype) || 
                      file.mimetype.startsWith('application/vnd.');
     
     if (isAllowed) {
       cb(null, true);
     } else {
-      cb(new Error(`Invalid file type. Allowed types: pdf, msword, vnd.*, zip`), false);
+      cb(new Error(`Invalid file type. Allowed types: images (jpeg, png), PDF/docs/zip/vcard, videos (mp4)`), false);
     }
   },
 };

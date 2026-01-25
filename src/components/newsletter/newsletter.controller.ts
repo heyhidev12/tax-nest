@@ -3,7 +3,6 @@ import { ApiTags, ApiOperation, ApiResponse, ApiProperty, ApiBearerAuth } from '
 import { NewsletterService } from './newsletter.service';
 import { IsEmail, IsOptional, IsString } from 'class-validator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ExposureSettingsService } from '../content/services/exposure-settings.service';
 
 class SubscribeDto {
   @ApiProperty({ example: '홍길동', description: '이름' })
@@ -27,7 +26,6 @@ class UnsubscribeDto {
 export class NewsletterController {
   constructor(
     private readonly newsletterService: NewsletterService,
-    private readonly exposureSettingsService: ExposureSettingsService,
   ) {}
 
   @ApiOperation({ summary: '뉴스레터 구독 (이름 + 이메일)' })
@@ -51,13 +49,7 @@ export class NewsletterController {
   @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMySubscription(@Req() req: any) {
-    const subscriptionData = await this.newsletterService.getMemberSubscription(req.user.sub);
-    const isExposed = await this.exposureSettingsService.isNewsletterPageExposed();
-    
-    return {
-      ...subscriptionData,
-      isExposed,
-    };
+    return this.newsletterService.getMemberSubscription(req.user.sub);
   }
 
   @ApiOperation({ summary: '뉴스레터 구독 취소 (인증된 회원)' })

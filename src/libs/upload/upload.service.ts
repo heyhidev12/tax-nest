@@ -7,13 +7,15 @@ export class UploadService {
   private readonly bucketName: string;
   private readonly region: string;
 
-  // Allowed image types: jpeg, png, webp
-  private readonly ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  // Allowed image types: jpeg, png
+  private readonly ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
+  private readonly ALLOWED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png'];
   
-  // Allowed video types: mp4, mov
-  private readonly ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime'];
+  // Allowed video types: mp4
+  private readonly ALLOWED_VIDEO_TYPES = ['video/mp4'];
+  private readonly ALLOWED_VIDEO_EXTENSIONS = ['.mp4'];
   
-  // Allowed file types: pdf, msword, vnd.*, zip
+  // Allowed file types: pdf, docs, zip, xsl, ppt, vcard
   private readonly ALLOWED_FILE_TYPES = [
     'application/pdf',
     'application/msword',
@@ -25,12 +27,15 @@ export class UploadService {
     'application/zip',
     'application/x-zip-compressed',
     'application/vcard',
-  'text/vcard',
-  'text/x-vcard',
-  'text/plain'
+    'text/vcard',
+    'text/x-vcard',
   ];
+  private readonly ALLOWED_FILE_EXTENSIONS = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.zip', '.vcf', '.vcard'];
   
-  // File size limits removed - no size restrictions
+  // File size limits (in bytes)
+  private readonly MAX_IMAGE_SIZE = 20 * 1024 * 1024; // 20MB
+  private readonly MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+  private readonly MAX_VIDEO_SIZE = 30 * 1024 * 1024; // 30MB
 
   constructor() {
     // Support both old and new env var names for backward compatibility
@@ -86,7 +91,11 @@ export class UploadService {
     // Generate unique key
     const timestamp = Date.now();
     const sanitizedFileName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `admin/uploads/images/${timestamp}-${sanitizedFileName}`;
+    const basePath = process.env.S3_BASE_PATH || '';
+
+const key = basePath
+  ? `${basePath}/admin/uploads/images/${timestamp}-${sanitizedFileName}`
+  : `admin/uploads/images/${timestamp}-${sanitizedFileName}`;
 
     // Upload to S3
     await this.s3.send(
@@ -134,7 +143,11 @@ export class UploadService {
     // Generate unique key
     const timestamp = Date.now();
     const sanitizedFileName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `admin/uploads/videos/${timestamp}-${sanitizedFileName}`;
+    const basePath = process.env.S3_BASE_PATH || '';
+
+const key = basePath
+  ? `${basePath}/admin/uploads/videos/${timestamp}-${sanitizedFileName}`
+  : `admin/uploads/videos/${timestamp}-${sanitizedFileName}`;
 
     // Upload to S3
     await this.s3.send(
@@ -155,11 +168,127 @@ export class UploadService {
   }
 
   /**
-   * Upload file to S3 (PDF, Docs, Zip, etc.)
-   * Validates file type - no size limit
-   * Key structure: admin/uploads/files/timestamp-filename
+   * Detect file type based on MIME type and extension
+   * Returns 'IMAGE', 'PDF', or 'VIDEO'
    */
-  async uploadFile(file: Express.Multer.File): Promise<{ url: string; key: string }> {
+  detectFileType(file: Express.Multer.File): 'IMAGE' | 'PDF' | 'VIDEO' {
+    const fileName = file.originalname.toLowerCase();
+    const ext = fileName.substring(fileName.lastIndexOf('.'));
+    const mimeType = file.mimetype.toLowerCase();
+
+    // Check for images
+    if (this.ALLOWED_IMAGE_TYPES.includes(mimeType) && this.ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+      return 'IMAGE';
+    }
+
+    // Check for videos
+    if (this.ALLOWED_VIDEO_TYPES.includes(mimeType) && this.ALLOWED_VIDEO_EXTENSIONS.includes(ext)) {
+      return 'VIDEO';
+    }
+
+    // Check for PDF/DOC/ZIP/etc files
+    if (
+      (this.ALLOWED_FILE_TYPES.includes(mimeType) || mimeType.startsWith('application/vnd.')) &&
+      (this.ALLOWED_FILE_EXTENSIONS.includes(ext) || ext === '.vcf' || ext === '.vcard')
+    ) {
+      return 'PDF';
+    }
+
+    return 'PDF'; // Default fallback
+  }
+
+  /**
+   * Validate file size based on file type
+   */
+  validateFileSize(file: Express.Multer.File, fileType: 'IMAGE' | 'PDF' | 'VIDEO'): void {
+    let maxSize: number;
+    let typeLabel: string;
+
+    switch (fileType) {
+      case 'IMAGE':
+        maxSize = this.MAX_IMAGE_SIZE;
+        typeLabel = '이미지';
+        break;
+      case 'PDF':
+        maxSize = this.MAX_FILE_SIZE;
+        typeLabel = '파일';
+        break;
+      case 'VIDEO':
+        maxSize = this.MAX_VIDEO_SIZE;
+        typeLabel = '비디오';
+        break;
+      default:
+        maxSize = this.MAX_FILE_SIZE;
+        typeLabel = '파일';
+    }
+
+    if (file.size > maxSize) {
+      const maxSizeMB = maxSize / (1024 * 1024);
+      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      throw new BadRequestException(
+        `${typeLabel} 파일 크기가 제한을 초과했습니다. 최대 크기: ${maxSizeMB}MB, 현재 파일 크기: ${fileSizeMB}MB`,
+      );
+    }
+  }
+
+  /**
+   * Validate file type (both MIME type and extension)
+   */
+  validateFileType(file: Express.Multer.File): { isValid: boolean; fileType: 'IMAGE' | 'PDF' | 'VIDEO'; error?: string } {
+    const fileName = file.originalname.toLowerCase();
+    const ext = fileName.substring(fileName.lastIndexOf('.'));
+    const mimeType = file.mimetype.toLowerCase();
+
+    // Check for images
+    if (this.ALLOWED_IMAGE_TYPES.includes(mimeType)) {
+      if (!this.ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+        return {
+          isValid: false,
+          fileType: 'IMAGE',
+          error: `이미지 파일 확장자가 일치하지 않습니다. MIME 타입: ${file.mimetype}, 확장자: ${ext}. 허용된 확장자: ${this.ALLOWED_IMAGE_EXTENSIONS.join(', ')}`,
+        };
+      }
+      return { isValid: true, fileType: 'IMAGE' };
+    }
+
+    // Check for videos
+    if (this.ALLOWED_VIDEO_TYPES.includes(mimeType)) {
+      if (!this.ALLOWED_VIDEO_EXTENSIONS.includes(ext)) {
+        return {
+          isValid: false,
+          fileType: 'VIDEO',
+          error: `비디오 파일 확장자가 일치하지 않습니다. MIME 타입: ${file.mimetype}, 확장자: ${ext}. 허용된 확장자: ${this.ALLOWED_VIDEO_EXTENSIONS.join(', ')}`,
+        };
+      }
+      return { isValid: true, fileType: 'VIDEO' };
+    }
+
+    // Check for PDF/DOC/ZIP/etc files
+    if (this.ALLOWED_FILE_TYPES.includes(mimeType) || mimeType.startsWith('application/vnd.')) {
+      // For vnd.* types, we're more lenient with extensions, but still check common ones
+      if (!mimeType.startsWith('application/vnd.') && !this.ALLOWED_FILE_EXTENSIONS.includes(ext)) {
+        return {
+          isValid: false,
+          fileType: 'PDF',
+          error: `파일 확장자가 일치하지 않습니다. MIME 타입: ${file.mimetype}, 확장자: ${ext}. 허용된 확장자: ${this.ALLOWED_FILE_EXTENSIONS.join(', ')}`,
+        };
+      }
+      return { isValid: true, fileType: 'PDF' };
+    }
+
+    return {
+      isValid: false,
+      fileType: 'PDF',
+      error: `허용되지 않은 파일 타입입니다. MIME 타입: ${file.mimetype}, 확장자: ${ext}`,
+    };
+  }
+
+  /**
+   * Upload file to S3 (PDF, Docs, Zip, Images, Videos)
+   * Validates file type and size based on detected type
+   * Key structure: admin/uploads/files/timestamp-filename or admin/uploads/images/timestamp-filename or admin/uploads/videos/timestamp-filename
+   */
+  async uploadFile(file: Express.Multer.File): Promise<{ url: string; key: string; fileType: 'IMAGE' | 'PDF' | 'VIDEO' }> {
     // Validate AWS configuration
     if (!this.s3 || !this.region || !this.bucketName) {
       throw new BadRequestException('AWS S3가 올바르게 설정되지 않았습니다. 환경 변수를 확인해주세요.');
@@ -170,27 +299,36 @@ export class UploadService {
       throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
-    // // Validate file type
-    // if (!this.ALLOWED_FILE_TYPES.includes(file.mimetype) &&
-    //     !file.mimetype.startsWith('application/vnd.')) {
-    //   throw new BadRequestException(
-    //     `Invalid file type: ${file.mimetype}. Allowed types: ${this.ALLOWED_FILE_TYPES.join(', ')}, application/vnd.*`,
-    //   );
-    // }
-    if (
-      !this.ALLOWED_FILE_TYPES.includes(file.mimetype) &&
-      !file.mimetype.startsWith('application/vnd.')
-    ) {
-      throw new BadRequestException(`Invalid file type: ${file.mimetype}`);
+    // Validate file type (MIME and extension) - this also returns the detected type
+    const typeValidation = this.validateFileType(file);
+    if (!typeValidation.isValid) {
+      throw new BadRequestException(typeValidation.error);
     }
-    
 
-    // No file size validation - unlimited size allowed
+    const fileType = typeValidation.fileType;
 
-    // Generate unique key
+    // Validate file size based on type
+    this.validateFileSize(file, fileType);
+
+    // Generate unique key based on file type
     const timestamp = Date.now();
     const sanitizedFileName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const key = `admin/uploads/files/${timestamp}-${sanitizedFileName}`;
+    const basePath = process.env.S3_BASE_PATH || '';
+
+    let key: string;
+    if (fileType === 'IMAGE') {
+      key = basePath
+        ? `${basePath}/admin/uploads/images/${timestamp}-${sanitizedFileName}`
+        : `admin/uploads/images/${timestamp}-${sanitizedFileName}`;
+    } else if (fileType === 'VIDEO') {
+      key = basePath
+        ? `${basePath}/admin/uploads/videos/${timestamp}-${sanitizedFileName}`
+        : `admin/uploads/videos/${timestamp}-${sanitizedFileName}`;
+    } else {
+      key = basePath
+        ? `${basePath}/admin/uploads/files/${timestamp}-${sanitizedFileName}`
+        : `admin/uploads/files/${timestamp}-${sanitizedFileName}`;
+    }
 
     // Upload to S3
     await this.s3.send(
@@ -207,7 +345,7 @@ export class UploadService {
     // For private buckets, you'll need to generate presigned URLs for access
     const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`;
 
-    return { url, key };
+    return { url, key, fileType };
   }
 
   /**

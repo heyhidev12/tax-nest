@@ -254,26 +254,55 @@ export class InsightsService {
    * @param isPublicApi Whether this is for public/user API (returns thumbnail.url only)
    */
   private async formatItemWithAttachments(item: InsightsItem, isPublicApi = false) {
-    // Format thumbnail and pdf based on API type
+    // Format thumbnail based on API type
     const thumbnail = isPublicApi
       ? (item.thumbnail ? { url: item.thumbnail.url } : null)
       : item.thumbnail;
 
-    const pdf = isPublicApi
-      ? (item.pdf ? { url: item.pdf.url } : null)
-      : item.pdf;
+    // Format files array - look up attachment details to get fileName
+    // Always return array (never null) even if empty
+    let formattedFiles: Array<{ id: number; url: string; type: string; fileName: string }> = [];
+    if (item.files && item.files.length > 0) {
+      const fileIds = item.files.map(f => f.id);
+      const attachments = await this.attachmentRepo.find({
+        where: { id: In(fileIds) },
+      });
+
+      formattedFiles = item.files.map(file => {
+        const attachment = attachments.find(a => a.id === file.id);
+        if (!attachment) {
+          // If attachment not found, return basic info without fileName
+          return {
+            id: file.id,
+            url: file.url || '',
+            type: file.type || 'FILE',
+            fileName: '',
+          };
+        }
+
+        // Use attachment details for fileName and type
+        const attachmentResponse = this.attachmentService.formatAttachmentResponse(attachment);
+        return {
+          id: attachment.id,
+          url: file.url || attachmentResponse.url,
+          type: file.type || attachment.fileType,
+          fileName: attachment.originalName,
+        };
+      });
+    }
 
     const base = {
       id: item.id,
       title: item.title,
       thumbnail,
-      pdf,
+      files: formattedFiles,
       content: item.content,
       category: item.category
         ? {
           id: item.category.id,
           name: item.category.name,
           type: item.category.type,
+          ...(isPublicApi && { targetMemberType: item.category.targetMemberType }),
         }
         : undefined,
       subcategory: item.subcategory
@@ -292,6 +321,8 @@ export class InsightsService {
       return {
         ...base,
         authorName: item.admin ? item.admin.name : 'Admin',
+        viewCount: item.viewCount || 0,
+        commentCount: item.commentCount || 0,
         createdAt: item.createdAt,
       };
     }
@@ -324,22 +355,43 @@ export class InsightsService {
       throw new NotFoundException('서브카테고리를 찾을 수 없습니다.');
     }
 
-    // Note: Attachments should be uploaded separately via /admin/attachments/upload
-    // with targetType=INSIGHT and targetId set after article creation
-    // The attachments array in DTO is kept for backward compatibility but is deprecated
+    // Process files array - look up attachment details if only IDs provided
+    let filesArray: Array<{ id: number; url: string; type?: string }> | null = null;
+    if (dto.files && dto.files.length > 0) {
+      const fileIds = dto.files.map(f => f.id);
+      const attachments = await this.attachmentRepo.find({
+        where: { id: In(fileIds) },
+      });
+
+      // Build files array with url and type from attachments
+      filesArray = dto.files.map(fileDto => {
+        const attachment = attachments.find(a => a.id === fileDto.id);
+        if (!attachment) {
+          throw new NotFoundException(`첨부파일을 찾을 수 없습니다: ID ${fileDto.id}`);
+        }
+
+        // Use attachment details if not provided in DTO
+        const url = ('url' in fileDto && fileDto.url) || this.attachmentService.formatAttachmentResponse(attachment).url;
+        const type = ('type' in fileDto && fileDto.type) || attachment.fileType;
+
+        return {
+          id: attachment.id,
+          url,
+          type,
+        };
+      });
+    }
 
     const item = this.itemRepo.create({
       title: dto.title,
       thumbnail: dto.thumbnail,
-      pdf: dto.pdf,
+      files: filesArray,
       content: dto.content,
       categoryId: dto.categoryId,
       subcategoryId: dto.subcategoryId,
       enableComments: dto.enableComments ?? false,
-      commentsLabel: dto.commentsLabel || 'N',
       isExposed: dto.isExposed ?? true,
       isMainExposed: dto.isMainExposed ?? false,
-      exposedLabel: dto.exposedLabel || 'Y',
       adminId: adminId,
     });
 
@@ -393,16 +445,40 @@ export class InsightsService {
       item.thumbnail = dto.thumbnail || null;
     }
 
-    // Handle pdf cleanup when being replaced or removed
-    if (dto.pdf !== undefined) {
-      if (dto.pdf === null && item.pdf) {
-        // PDF is being removed
-        await this.uploadService.deleteFileByUrl(item.pdf.url);
-      } else if (dto.pdf && item.pdf && dto.pdf.url !== item.pdf.url) {
-        // PDF is being replaced
-        await this.uploadService.deleteFileByUrl(item.pdf.url);
+    // Handle files array cleanup and update
+    if (dto.files !== undefined) {
+      if (dto.files === null || dto.files.length === 0) {
+        // All files are being removed
+        item.files = null;
+      } else {
+        // Process files array - look up attachment details if only IDs provided
+        const fileIds = dto.files.map(f => f.id);
+        const attachments = await this.attachmentRepo.find({
+          where: { id: In(fileIds) },
+        });
+
+        // Build files array with url and type from attachments
+        const filesArray = dto.files.map(fileDto => {
+          const attachment = attachments.find(a => a.id === fileDto.id);
+          if (!attachment) {
+            throw new NotFoundException(`첨부파일을 찾을 수 없습니다: ID ${fileDto.id}`);
+          }
+
+          // Use attachment details if not provided in DTO
+          const url = ('url' in fileDto && fileDto.url) || this.attachmentService.formatAttachmentResponse(attachment).url;
+          const type = ('type' in fileDto && fileDto.type) || attachment.fileType;
+
+          return {
+            id: attachment.id,
+            url,
+            type,
+          };
+        });
+
+        // Note: We don't delete attachment records - just update the association
+        // The files are already uploaded via /admin/uploads/file, we just link them here
+        item.files = filesArray;
       }
-      item.pdf = dto.pdf || null;
     }
 
     if (dto.title) item.title = dto.title;
@@ -410,10 +486,8 @@ export class InsightsService {
     if (dto.categoryId) item.categoryId = dto.categoryId;
     if (dto.subcategoryId) item.subcategoryId = dto.subcategoryId;
     if (dto.enableComments !== undefined) item.enableComments = dto.enableComments;
-    if (dto.commentsLabel) item.commentsLabel = dto.commentsLabel;
     if (dto.isExposed !== undefined) item.isExposed = dto.isExposed;
     if (dto.isMainExposed !== undefined) item.isMainExposed = dto.isMainExposed;
-    if (dto.exposedLabel) item.exposedLabel = dto.exposedLabel;
 
     await this.itemRepo.save(item);
 
@@ -433,11 +507,9 @@ export class InsightsService {
     }
 
     // Cleanup S3 files before deleting entity
+    // Note: Only delete thumbnail (unique per item), not files (shared attachments)
     if (item.thumbnail) {
       await this.uploadService.deleteFileByUrl(item.thumbnail.url);
-    }
-    if (item.pdf) {
-      await this.uploadService.deleteFileByUrl(item.pdf.url);
     }
 
     await this.itemRepo.remove(item);
@@ -668,6 +740,17 @@ export class InsightsService {
 
     const items = await qb.getMany();
 
+    // Batch load all attachments for all items to avoid N+1 queries
+    const allFileIds = new Set<number>();
+    items.forEach(item => {
+      if (item.files && item.files.length > 0) {
+        item.files.forEach(file => allFileIds.add(file.id));
+      }
+    });
+    const allAttachments = allFileIds.size > 0
+      ? await this.attachmentRepo.find({ where: { id: In(Array.from(allFileIds)) } })
+      : [];
+
     // Group by category, then by subcategory
     const grouped: Record<number, any> = {};
 
@@ -682,6 +765,7 @@ export class InsightsService {
             name: item.category.name,
             type: item.category.type,
             isActive: item.category.isActive,
+            targetMemberType: item.category.targetMemberType,
           },
           subcategories: {},
         };
@@ -698,17 +782,48 @@ export class InsightsService {
         };
       }
 
+      // Format files array - look up attachment details to get fileName
+      // Always return array (never null) even if empty
+      let formattedFiles: Array<{ id: number; url: string; type: string; fileName: string }> = [];
+      if (item.files && item.files.length > 0) {
+        formattedFiles = item.files.map(file => {
+          const attachment = allAttachments.find(a => a.id === file.id);
+          if (!attachment) {
+            return {
+              id: file.id,
+              url: file.url || '',
+              type: file.type || 'FILE',
+              fileName: '',
+            };
+          }
+
+          const attachmentResponse = this.attachmentService.formatAttachmentResponse(attachment);
+          return {
+            id: attachment.id,
+            url: file.url || attachmentResponse.url,
+            type: file.type || attachment.fileType,
+            fileName: attachment.originalName,
+          };
+        });
+      }
+
       const itemBase = {
         id: item.id,
         title: item.title,
         thumbnail: isPublic ? (item.thumbnail ? { url: item.thumbnail.url } : null) : item.thumbnail,
-        pdf: isPublic ? (item.pdf ? { url: item.pdf.url } : null) : item.pdf,
+        files: formattedFiles,
         content: item.content,
         enableComments: item.enableComments,
         isExposed: item.isExposed,
         isMainExposed: item.isMainExposed,
         authorName: item.admin ? item.admin.name : 'Admin',
+        viewCount: item.viewCount || 0,
+        commentCount: item.commentCount || 0,
         createdAt: item.createdAt,
+        subcategory: {
+          id: item.subcategory.id,
+          name: item.subcategory.name,
+        },
       };
 
       grouped[categoryId].subcategories[subcategoryId].items.push(
@@ -716,8 +831,6 @@ export class InsightsService {
           ? itemBase
           : {
             ...itemBase,
-            viewCount: item.viewCount || 0,
-            commentCount: item.commentCount || 0,
             updatedAt: item.updatedAt,
             createdAtFormatted: this.formatDateTime(item.createdAt),
             updatedAtFormatted: this.formatDateTime(item.updatedAt),

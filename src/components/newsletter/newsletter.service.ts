@@ -44,6 +44,7 @@ export class NewsletterService {
     if (existing) {
       existing.name = name ?? existing.name;
       existing.isSubscribed = true;
+      existing.subscribedAt = new Date(); // Set subscribedAt when re-subscribing
       existing.unsubscribedAt = null;
       existing.isMailSynced = true;
       await this.subscriberRepo.save(existing);
@@ -52,10 +53,18 @@ export class NewsletterService {
         email,
         name,
         isSubscribed: true,
+        subscribedAt: new Date(), // Set subscribedAt for new subscribers
         isMailSynced: true,
         unsubscribedAt: null,
       });
       await this.subscriberRepo.save(subscriber);
+    }
+
+    // Sync Member table if member exists
+    const member = await this.memberRepo.findOne({ where: { email } });
+    if (member) {
+      member.newsletterSubscribed = true;
+      await this.memberRepo.save(member);
     }
 
     return { success: true, message: '뉴스레터 구독이 완료되었습니다.' };
@@ -69,6 +78,13 @@ export class NewsletterService {
       existing.unsubscribedAt = new Date();
       existing.isMailSynced = true;
       await this.subscriberRepo.save(existing);
+    }
+
+    // Sync Member table if member exists
+    const member = await this.memberRepo.findOne({ where: { email } });
+    if (member) {
+      member.newsletterSubscribed = false;
+      await this.memberRepo.save(member);
     }
 
     return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
@@ -163,6 +179,15 @@ export class NewsletterService {
     subscriber.unsubscribedAt = newSubscribedStatus ? null : new Date();
     subscriber.isMailSynced = true;
     await this.subscriberRepo.save(subscriber);
+
+    // Sync with Member.newsletterSubscribed (single source of truth for GET /newsletter/me)
+    const member = await this.memberRepo.findOne({
+      where: { email: subscriber.email },
+    });
+    if (member) {
+      member.newsletterSubscribed = newSubscribedStatus;
+      await this.memberRepo.save(member);
+    }
 
     return {
       success: true,

@@ -9,6 +9,7 @@ import {
   Req,
   Res,
   UseGuards,
+  UseFilters,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
@@ -41,6 +42,7 @@ import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiBearerAuth, ApiBody, A
 import { TrainingSeminarService } from '../content/services/training-seminar.service';
 import { ConsultationsService } from '../consultations/consultations.service';
 import { ExposureSettingsService } from '../content/services/exposure-settings.service';
+import { OAuthRedirectFilter } from './filters/oauth-redirect.filter';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -78,8 +80,52 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'ID 또는 비밀번호가 올바르지 않습니다.' })
   @ApiBody({ type: LoginDto })
   @Post('login')
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: any) {
+    const result = await this.authService.login(dto);
+    
+    // Set refresh token cookie if autoLogin is enabled
+    if (result.refreshToken) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      res.cookie('refresh_token', result.refreshToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      });
+    } else {
+      // Clear any existing refresh token cookie if autoLogin is false
+      res.clearCookie('refresh_token');
+    }
+    
+    // Don't send refresh token in response body
+    const { refreshToken, ...response } = result;
+    return response;
+  }
+
+  @ApiOperation({ summary: '토큰 갱신 (자동 로그인)', description: '리프레시 토큰을 사용하여 새로운 액세스 토큰을 발급받습니다.' })
+  @ApiResponse({ status: 200, description: '토큰 갱신 성공' })
+  @ApiResponse({ status: 401, description: '유효하지 않거나 만료된 리프레시 토큰입니다.' })
+  @Post('refresh')
+  async refreshToken(@Req() req: any) {
+    const refreshToken = req.cookies?.refresh_token;
+    return this.authService.refreshAccessToken(refreshToken);
+  }
+
+  @ApiOperation({ summary: '로그아웃', description: '로그아웃하고 리프레시 토큰을 무효화합니다.' })
+  @ApiResponse({ status: 200, description: '로그아웃 성공' })
+  @Post('logout')
+  async logout(@Req() req: any, @Res({ passthrough: true }) res: any) {
+    const refreshToken = req.cookies?.refresh_token;
+    
+    // Clear refresh token cookie
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+    
+    return this.authService.logout(refreshToken);
   }
 
   // -------------------------------------
@@ -373,10 +419,16 @@ export class AuthController {
   @ApiExcludeEndpoint()
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
+  @UseFilters(OAuthRedirectFilter)
   async googleAuthCallback(@Req() req, @Res() res) {
-
-    const { accessToken, member } = req.user;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+
+    // Passport rejected login (user not found or validation failed)
+    if (!req.user) {
+      return res.redirect(`${frontendUrl}/signup?error=NOT_REGISTERED`);
+    }
+
+    const { accessToken } = req.user;
     return res.redirect(
       `${frontendUrl}/auth/callback?token=${accessToken}&provider=google`
     );
@@ -392,12 +444,17 @@ export class AuthController {
   @ApiExcludeEndpoint()
   @Get('kakao/callback')
   @UseGuards(AuthGuard('kakao'))
+  @UseFilters(OAuthRedirectFilter)
   @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
   async kakaoAuthCallback(@Req() req: any, @Res() res: any) {
-    // After successful Kakao authentication
-    const { accessToken, member } = req.user;
-    // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+
+    // Passport rejected login (user not found or validation failed)
+    if (!req.user) {
+      return res.redirect(`${frontendUrl}/signup?error=NOT_REGISTERED`);
+    }
+
+    const { accessToken } = req.user;
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=kakao`);
   }
 
@@ -411,12 +468,17 @@ export class AuthController {
   @ApiExcludeEndpoint()
   @Get('naver/callback')
   @UseGuards(AuthGuard('naver'))
+  @UseFilters(OAuthRedirectFilter)
   @ApiResponse({ status: 302, description: '프론트엔드로 리다이렉트 (토큰 포함)' })
   async naverAuthCallback(@Req() req: any, @Res() res: any) {
-    // After successful Naver authentication
-    const { accessToken, member } = req.user;
-    // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+
+    // Passport rejected login (user not found or validation failed)
+    if (!req.user) {
+      return res.redirect(`${frontendUrl}/signup?error=NOT_REGISTERED`);
+    }
+
+    const { accessToken } = req.user;
     res.redirect(`${frontendUrl}/auth/callback?token=${accessToken}&provider=naver`);
   }
 

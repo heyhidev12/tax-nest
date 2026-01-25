@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength, MaxLength, Matches, IsBoolean, IsOptional } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { MemberType } from 'src/libs/enums/members.enum';
 import { IsStrongPassword } from 'src/libs/validators/password.validator';
 import { IsValidLoginId } from 'src/libs/validators/login-id.validator';
@@ -40,7 +41,14 @@ export class SignUpDto {
   memberType: MemberType;
 
   @ApiProperty({ example: true, description: '뉴스레터 구독 여부', required: false, default: false })
-  newsletters?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value === undefined ? undefined : Boolean(value);
+  })
+  @IsBoolean({ message: '뉴스레터 구독 여부는 true 또는 false여야 합니다.' })
+  newsletterSubscribed?: boolean;
 
   @ApiProperty({ example: true, description: '약관 동의 여부' })
   @IsNotEmpty({ message: '약관에 동의해주세요.' })

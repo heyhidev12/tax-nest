@@ -4,12 +4,13 @@ import {
   Body,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   HttpCode,
   HttpStatus,
   BadRequestException,
   UseGuards,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { AdminBaseController } from './admin-base.controller';
 import { AttachmentService } from 'src/components/content/services/attachment.service';
@@ -76,51 +77,86 @@ export class AdminUploadsController extends AdminBaseController {
 
   @Post('file')
   @HttpCode(HttpStatus.OK)
-  @UseInterceptors(FileInterceptor('file', fileUploadConfig))
+  @UseInterceptors(FilesInterceptor('file', 100, fileUploadConfig))
   @ApiOperation({
-    summary: 'Upload file (PDF, Docs, ZIP, V-Card, etc.)',
-    description: 'Upload a file (PDF, Word, Excel, PowerPoint, ZIP, V-Card, etc.) to AWS S3. No file size limit. Returns public URL for use in forms.',
+    summary: 'Upload single or multiple files (Images, PDF, Docs, ZIP, V-Card, Videos)',
+    description: 'Upload one or multiple files to AWS S3. Supports images (jpeg, png) max 20MB, PDF/docs/zip/vcard max 20MB, videos (mp4) max 30MB. Validates both MIME type and file extension. Returns list of uploaded files with URLs and detected types. Supports both single file (field name: "file") and multiple files (field name: "file" as array).',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
-    description: 'File upload',
+    description: 'File upload - supports both single file and multiple files using field name "file"',
     schema: {
       type: 'object',
-      required: ['file'],
       properties: {
         file: {
-          type: 'string',
-          format: 'binary',
-          description: 'File to upload (pdf, msword, vnd.*, zip, no size limit)',
+          oneOf: [
+            {
+              type: 'string',
+              format: 'binary',
+              description: 'Single file to upload (for backward compatibility)',
+            },
+            {
+              type: 'array',
+              items: {
+                type: 'string',
+                format: 'binary',
+              },
+              description: 'Multiple files to upload',
+            },
+          ],
         },
       },
     },
   })
   @ApiResponse({
     status: 200,
-    description: 'File uploaded successfully. Returns attachment ID, URL and metadata.',
+    description: 'File(s) uploaded successfully. Returns array of uploaded files with attachment ID, URL, file name, and detected type (IMAGE, PDF, VIDEO). For single file upload (backward compatible), returns single object.',
     schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'number', description: 'Attachment database ID' },
-        url: { type: 'string', description: 'Public URL of uploaded file' },
-        fileName: { type: 'string', description: 'Original file name' },
-        type: { type: 'string', example: 'FILE' },
-      },
+      oneOf: [
+        {
+          type: 'object',
+          description: 'Single file response (backward compatible)',
+          properties: {
+            id: { type: 'number', description: 'Attachment database ID' },
+            url: { type: 'string', description: 'Public URL of uploaded file' },
+            fileName: { type: 'string', description: 'Original file name' },
+            type: { type: 'string', enum: ['IMAGE', 'PDF', 'VIDEO'], description: 'Detected file type' },
+          },
+        },
+        {
+          type: 'array',
+          description: 'Multiple files response',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number', description: 'Attachment database ID' },
+              url: { type: 'string', description: 'Public URL of uploaded file' },
+              fileName: { type: 'string', description: 'Original file name' },
+              type: { type: 'string', enum: ['IMAGE', 'PDF', 'VIDEO'], description: 'Detected file type' },
+            },
+          },
+        },
+      ],
     },
   })
   @ApiResponse({
     status: 400,
-    description: 'Invalid file type. Allowed types: pdf, msword, vnd.*, zip.',
+    description: 'Invalid file type or size limit exceeded. Allowed types: Images (jpeg, png) max 20MB, PDF/docs/zip/vcard max 20MB, Videos (mp4) max 30MB.',
   })
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
-    if (!file) {
+  async uploadFile(@UploadedFiles() files: Express.Multer.File[]) {
+    if (!files || files.length === 0) {
       throw new BadRequestException('파일이 제공되지 않았습니다.');
     }
 
-    const result = await this.attachmentService.uploadFileSimple(file);
+    // If single file, return single object for backward compatibility
+    if (files.length === 1) {
+      const result = await this.attachmentService.uploadFileSimple(files[0]);
+      return result;
+    }
 
-    return result;
+    // Multiple files, return array
+    const results = await this.attachmentService.uploadFilesSimple(files);
+    return results;
   }
 
   @Post('video')

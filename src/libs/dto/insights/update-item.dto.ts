@@ -32,23 +32,21 @@ export class UpdateItemDto {
   thumbnail?: { id: number; url: string } | null;
 
   @ApiPropertyOptional({
-    example: { id: 20, url: 'https://example.com/document.pdf' },
-    description: 'PDF 파일'
+    example: [
+      { id: 113 },
+      { id: 114 }
+    ],
+    description: '첨부 파일 배열 - 파일 ID 배열 (IMAGE, PDF, VIDEO 등). null로 설정하면 모든 파일이 제거됩니다.'
   })
   @IsOptional()
-  @IsObject({ message: 'PDF 파일 정보가 올바르지 않습니다.' })
-  pdf?: { id: number; url: string } | null;
+  @IsArray({ message: '파일은 배열이어야 합니다.' })
+  @ArrayMaxSize(100, { message: '최대 100개의 파일을 업로드할 수 있습니다.' })
+  files?: Array<{ id: number } | { id: number; url?: string; type?: string }> | null;
 
   @ApiPropertyOptional({ example: false, description: '댓글 허용 여부' })
   @IsOptional()
   @IsBoolean()
   enableComments?: boolean;
-
-  @ApiPropertyOptional({ example: 'N', description: '댓글 라벨' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  commentsLabel?: string;
 
    @ApiPropertyOptional({ example: true, description: '메인 노출 여부' })
   @IsOptional()
@@ -60,11 +58,6 @@ export class UpdateItemDto {
   @IsBoolean()
   isExposed?: boolean;
 
-  @ApiPropertyOptional({ example: 'Y', description: '노출 라벨' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  exposedLabel?: string;
 
   
 }

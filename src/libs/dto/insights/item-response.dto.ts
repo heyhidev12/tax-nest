@@ -29,6 +29,16 @@ export class ItemResponseDto {
   })
   thumbnail: { id: number; url: string } | null;
 
+  @ApiProperty({
+    example: [
+      { id: 113, url: 'https://example.com/document.pdf', type: 'PDF', fileName: 'file-113.pdf' },
+      { id: 114, url: 'https://example.com/image.jpg', type: 'IMAGE', fileName: 'about1.png' },
+    ],
+    nullable: true,
+    description: '첨부 파일 배열 - 여러 파일을 포함할 수 있습니다 (IMAGE, PDF, VIDEO 등)'
+  })
+  files?: Array<{ id: number; url: string; type: string; fileName: string }> | null;
+
   @ApiProperty({ example: '본문 내용입니다...' })
   content: string;
 

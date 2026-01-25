@@ -49,6 +49,34 @@ export class MembersService {
     return this.memberRepo.findOne({ where: { phoneNumber } });
   }
 
+  // Methods for checking uniqueness during signup/registration (excludes WITHDRAWN users)
+  findActiveByLoginId(loginId: string) {
+    return this.memberRepo.findOne({ 
+      where: { 
+        loginId, 
+        status: MemberStatus.ACTIVE 
+      } 
+    });
+  }
+
+  findActiveByEmail(email: string) {
+    return this.memberRepo.findOne({ 
+      where: { 
+        email, 
+        status: MemberStatus.ACTIVE 
+      } 
+    });
+  }
+
+  findActiveByPhoneNumber(phoneNumber: string) {
+    return this.memberRepo.findOne({ 
+      where: { 
+        phoneNumber, 
+        status: MemberStatus.ACTIVE 
+      } 
+    });
+  }
+
   create(data: Partial<Member>) {
     const member = this.memberRepo.create(data);
     return this.memberRepo.save(member);
@@ -210,20 +238,20 @@ export class MembersService {
   }
 
   async adminCreate(data: CreateMemberData) {
-    // Check loginId uniqueness
-    const existingLoginId = await this.findByLoginId(data.loginId);
+    // Check loginId uniqueness (only against ACTIVE users)
+    const existingLoginId = await this.findActiveByLoginId(data.loginId);
     if (existingLoginId) {
       throw new BadRequestException('이미 사용 중인 아이디입니다.');
     }
 
-    // Check email uniqueness
-    const existingEmail = await this.findByEmail(data.email);
+    // Check email uniqueness (only against ACTIVE users)
+    const existingEmail = await this.findActiveByEmail(data.email);
     if (existingEmail) {
       throw new BadRequestException('이미 등록된 이메일입니다.');
     }
 
-    // Check phoneNumber uniqueness
-    const existingPhone = await this.findByPhoneNumber(data.phoneNumber);
+    // Check phoneNumber uniqueness (only against ACTIVE users)
+    const existingPhone = await this.findActiveByPhoneNumber(data.phoneNumber);
     if (existingPhone) {
       throw new BadRequestException('이미 등록된 휴대폰 번호입니다.');
     }
@@ -275,17 +303,17 @@ export class MembersService {
   async adminUpdate(id: number, dto: AdminUpdateMemberDto) {
     const member = await this.findById(id);
 
-    // Validate email uniqueness if being updated
+    // Validate email uniqueness if being updated (only against ACTIVE users)
     if (dto.email !== undefined && dto.email !== member.email) {
-      const existingEmail = await this.findByEmail(dto.email);
+      const existingEmail = await this.findActiveByEmail(dto.email);
       if (existingEmail && existingEmail.id !== id) {
         throw new BadRequestException('이미 등록된 이메일입니다.');
       }
     }
 
-    // Validate phoneNumber uniqueness if being updated
+    // Validate phoneNumber uniqueness if being updated (only against ACTIVE users)
     if (dto.phoneNumber !== undefined && dto.phoneNumber !== member.phoneNumber) {
-      const existingPhone = await this.findByPhoneNumber(dto.phoneNumber);
+      const existingPhone = await this.findActiveByPhoneNumber(dto.phoneNumber);
       if (existingPhone && existingPhone.id !== id) {
         throw new BadRequestException('이미 등록된 휴대폰 번호입니다.');
       }

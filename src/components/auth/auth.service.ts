@@ -35,31 +35,63 @@ export class AuthService {
     if (dto.password !== dto.passwordConfirm)
       throw new BadRequestException('비밀번호가 일치하지 않습니다.');
 
-    // Check loginId uniqueness
-    const existingLoginId = await this.membersService.findByLoginId(dto.loginId);
-    if (existingLoginId) throw new BadRequestException('이미 사용 중인 아이디입니다.');
+    // Check if ACTIVE user exists by email OR loginId OR phoneNumber
+    const existingByLoginId = await this.membersService.findActiveByLoginId(dto.loginId);
+    const existingByEmail = await this.membersService.findActiveByEmail(dto.email);
+    const existingByPhone = await this.membersService.findActiveByPhoneNumber(dto.phoneNumber);
 
-    // Check email uniqueness
-    const existingEmail = await this.membersService.findByEmail(dto.email);
-    if (existingEmail) throw new BadRequestException('이미 등록된 이메일입니다.');
+    // If any ACTIVE user exists with these credentials, block signup
+    if (existingByLoginId || existingByEmail || existingByPhone) {
+      throw new BadRequestException('이미 등록된 계정입니다.');
+    }
 
-    // Check phoneNumber uniqueness
-    const existingPhone = await this.membersService.findByPhoneNumber(dto.phoneNumber);
-    if (existingPhone) throw new BadRequestException('이미 등록된 휴대폰 번호입니다.');
+    // Check if WITHDRAWN user exists (to reactivate)
+    const withdrawnByLoginId = await this.membersService.findByLoginId(dto.loginId);
+    const withdrawnByEmail = await this.membersService.findByEmail(dto.email);
+    const withdrawnByPhone = await this.membersService.findByPhoneNumber(dto.phoneNumber);
+
+    // Find any existing WITHDRAWN user (prioritize loginId, then email, then phone)
+    const existingUser = withdrawnByLoginId || withdrawnByEmail || withdrawnByPhone;
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
+    // Explicitly convert to boolean - only true if explicitly true, otherwise false
+    const newsletterSubscribed = dto.newsletterSubscribed === true;
 
-    // Save newsletter preference (default to false if not provided)
-    const newsletterSubscribed = dto.newsletters === true;
 
-    const member = await this.membersService.create({
-      ...dto,
-      passwordHash,
-      isApproved: dto.memberType !== 'INSURANCE',
-      newsletterSubscribed,
-    });
+    let member: Member;
+
+    // Case 1: WITHDRAWN user exists - Reactivate
+    if (existingUser && existingUser.status === MemberStatus.WITHDRAWN) {
+      // Reactivate existing account - DO NOT create new DB row
+      existingUser.passwordHash = passwordHash;
+      existingUser.name = dto.name;
+      existingUser.email = dto.email;
+      existingUser.loginId = dto.loginId;
+      existingUser.phoneNumber = dto.phoneNumber;
+      existingUser.memberType = dto.memberType;
+      existingUser.status = MemberStatus.ACTIVE;
+      existingUser.isApproved = dto.memberType !== 'INSURANCE';
+      existingUser.newsletterSubscribed = newsletterSubscribed;
+
+      member = await this.memberRepo.save(existingUser);
+    } else {
+      // Case 2: User does not exist - Normal signup flow
+      // Explicitly pass only needed fields (don't use spread to avoid unwanted fields)
+      member = await this.membersService.create({
+        loginId: dto.loginId,
+        name: dto.name,
+        email: dto.email,
+        phoneNumber: dto.phoneNumber,
+        memberType: dto.memberType,
+        passwordHash,
+        isApproved: dto.memberType !== 'INSURANCE',
+        newsletterSubscribed,
+        status: MemberStatus.ACTIVE,
+      });
+    }
 
     // If user opted in for newsletters, subscribe them via newsletter service (DB + provider)
+    // IMPORTANT: This must happen AFTER member is saved to DB so newsletter service can sync
     if (newsletterSubscribed) {
       try {
         await this.newsletterService.subscribe(member.name, member.email);
@@ -75,12 +107,13 @@ export class AuthService {
       name: member.name,
       memberType: member.memberType,
       isApproved: member.isApproved,
-      newsletterSubscribed: member.newsletterSubscribed,
+      newsletterSubscribed: newsletterSubscribed, // Use computed value, not member.newsletterSubscribed
     };
   }
 
   async checkLoginIdExists(loginId: string) {
-    const existing = await this.membersService.findByLoginId(loginId);
+    // Only check against ACTIVE users (ignore WITHDRAWN users)
+    const existing = await this.membersService.findActiveByLoginId(loginId);
     return { exists: !!existing };
   }
 
@@ -104,8 +137,6 @@ export class AuthService {
     const match = await bcrypt.compare(dto.password, member.passwordHash);
     if (!match) throw new UnauthorizedException('ID 또는 비밀번호가 올바르지 않습니다.');
 
-    if (!member.isApproved)
-      throw new UnauthorizedException('관리자 승인 대기 중입니다.');
     console.log("JWT SECRET", process.env.JWT_SECRET);
 
     const payload = {
@@ -114,8 +145,80 @@ export class AuthService {
       memberType: member.memberType,
     };
 
-    const token = await this.jwtService.signAsync(payload, {
-      expiresIn: dto.autoLogin ? '30d' : '1d',
+    // Generate access token (short-lived)
+    const accessToken = await this.jwtService.signAsync(payload, {
+      expiresIn: '15m', // 15 minutes
+    });
+
+    // Generate refresh token if autoLogin is true
+    let refreshToken: string | null = null;
+    if (dto.autoLogin) {
+      refreshToken = crypto.randomBytes(64).toString('hex');
+      
+      // Store refresh token in Redis with 7 days expiration
+      // Key: refresh_token:{token} -> Value: userId
+      const refreshTokenKey = `refresh_token:${refreshToken}`;
+      await this.redisService.set(refreshTokenKey, JSON.stringify({
+        userId: member.id,
+        loginId: member.loginId,
+        createdAt: new Date().toISOString(),
+      }), 60 * 60 * 24 * 7); // 7 days
+    }
+
+    const safeMember = {
+      id: member.id,
+      loginId: member.loginId,
+      name: member.name,
+      email: member.email,
+      memberType: member.memberType,
+      status: member.status,
+      isApproved: member.isApproved,
+    };
+    
+    return { 
+      accessToken, 
+      refreshToken, 
+      autoLogin: dto.autoLogin || false,
+      member: safeMember 
+    };
+  }
+
+  // -------------------------------------
+  // REFRESH TOKEN
+  // -------------------------------------
+  async refreshAccessToken(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('리프레시 토큰이 필요합니다.');
+    }
+
+    // Find user by refresh token in Redis
+    const refreshTokenKey = `refresh_token:${refreshToken}`;
+    const tokenData = await this.redisService.get(refreshTokenKey);
+    
+    if (!tokenData) {
+      throw new UnauthorizedException('유효하지 않거나 만료된 리프레시 토큰입니다.');
+    }
+
+    const parsedData = JSON.parse(tokenData);
+    const userId = parsedData.userId;
+
+    // Verify user still exists and is active
+    const member = await this.membersService.findById(userId);
+    if (!member || member.status === MemberStatus.WITHDRAWN) {
+      // Clear invalid refresh token
+      await this.redisService.del(refreshTokenKey);
+      throw new UnauthorizedException('사용자를 찾을 수 없거나 탈퇴한 회원입니다.');
+    }
+
+    // Generate new access token
+    const payload = {
+      sub: member.id,
+      loginId: member.loginId,
+      memberType: member.memberType,
+    };
+
+    const accessToken = await this.jwtService.signAsync(payload, {
+      expiresIn: '15m', // 15 minutes
     });
 
     const safeMember = {
@@ -127,7 +230,21 @@ export class AuthService {
       status: member.status,
       isApproved: member.isApproved,
     };
-    return { accessToken: token, member: safeMember };
+
+    return { accessToken, member: safeMember };
+  }
+
+  // -------------------------------------
+  // LOGOUT
+  // -------------------------------------
+  async logout(refreshToken?: string) {
+    // Clear refresh token from Redis if provided
+    if (refreshToken) {
+      const refreshTokenKey = `refresh_token:${refreshToken}`;
+      await this.redisService.del(refreshTokenKey);
+    }
+    
+    return { success: true, message: '로그아웃 되었습니다.' };
   }
 
   // -------------------------------------
@@ -154,9 +271,9 @@ export class AuthService {
     // Verify the code first
     await this.verification.verifyCode(dto.phone, purpose, dto.code);
     
-    // For signup flow, check if phone number is already registered
+    // For signup flow, check if phone number is already registered (only check ACTIVE users)
     if (purpose === 'SIGNUP') {
-      const existingPhone = await this.membersService.findByPhoneNumber(dto.phone);
+      const existingPhone = await this.membersService.findActiveByPhoneNumber(dto.phone);
       if (existingPhone) {
         throw new BadRequestException({
           statusCode: 400,
@@ -204,7 +321,7 @@ export class AuthService {
       // 실패 시 시도 횟수 증가 (5분간 유지)
       const currentAttempts = attempts ? parseInt(attempts, 10) + 1 : 1;
       await this.redisService.set(rateLimitKey, currentAttempts.toString(), 300);
-      throw new UnauthorizedException('Invalid password');
+      throw new UnauthorizedException('비밀번호가 올바르지 않습니다.');
     }
 
     // 성공 시 시도 횟수 초기화

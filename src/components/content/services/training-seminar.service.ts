@@ -18,7 +18,7 @@ interface TrainingSeminarListOptions {
   targetMemberType?: TargetMemberType;
   isExposed?: boolean;
   isRecommended?: boolean;
-  sort?: 'latest' | 'oldest';
+  sort?: 'latest' | 'oldest' | 'deadline';
   page?: number;
   limit?: number;
   includeHidden?: boolean;
@@ -160,7 +160,13 @@ export class TrainingSeminarService {
     }
 
     // 정렬 (기본: 최신순)
-    qb.orderBy('seminar.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
+    if (sort === 'deadline') {
+      // 마감일 기준 정렬 (가까운 마감일 먼저 - 오름차순)
+      qb.orderBy('seminar.recruitmentEndDate', 'ASC');
+    } else {
+      // 최신순/오래된순 정렬
+      qb.orderBy('seminar.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
+    }
 
     // 페이지네이션
     qb.skip((page - 1) * limit).take(limit);
@@ -168,12 +174,20 @@ export class TrainingSeminarService {
     const [items, total] = await qb.getManyAndCount();
 
     // 응답 포맷: No, 교육/세미나명, 교육/세미나유형, 모집유형, 회원유형, 이미지, 교육일자, 참여시간, 노출여부, 등록일시
-    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
+    // 번호는 정렬 기준에 따라 순차 번호 부여
     const formattedItems = items.map((item, index) => {
-      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest'
-        ? total - ((page - 1) * limit + index)
-        : (page - 1) * limit + index + 1;
+      // 정렬 기준에 따른 번호 부여
+      let no: number;
+      if (sort === 'deadline') {
+        // 마감일순: 1부터 순차적으로 (가까운 마감일이 1번)
+        no = (page - 1) * limit + index + 1;
+      } else if (sort === 'latest') {
+        // 최신순: 큰 번호부터
+        no = total - ((page - 1) * limit + index);
+      } else {
+        // 오래된순: 작은 번호부터
+        no = (page - 1) * limit + index + 1;
+      }
 
       const base = {
         no,

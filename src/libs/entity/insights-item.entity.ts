@@ -26,9 +26,9 @@ export class InsightsItem {
   @Column({ type: 'json', nullable: true })
   thumbnail: { id: number; url: string } | null;
 
-  // PDF 파일 - {id, url} object
-  @Column({ type: 'json', nullable: true })
-  pdf: { id: number; url: string } | null;
+  // 첨부 파일 배열 - [{id, url, type?}] array (supports multiple files: IMAGE, PDF, VIDEO)
+  @Column({ type: 'json', nullable: true, default: null })
+  files: Array<{ id: number; url: string; type?: string }> | null;
 
   @Column({ type: 'text' })
   content: string;

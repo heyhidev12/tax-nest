@@ -168,14 +168,14 @@ export class PublicContentController {
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String, description: '제목으로 검색' })
   @ApiQuery({ name: 'type', required: false, enum: ['VOD', 'SEMINAR', 'TRAINING', 'LECTURE'], description: '교육/세미나 유형 필터링' })
-  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest'], description: '정렬 방식 (기본: latest)' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'deadline'], description: '정렬 방식 (기본: latest, deadline: 마감일순)' })
   @Get('training-seminars')
   async getTrainingSeminars(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('type') type?: string,
-    @Query('sort') sort?: 'latest' | 'oldest',
+    @Query('sort') sort?: 'latest' | 'oldest' | 'deadline',
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;

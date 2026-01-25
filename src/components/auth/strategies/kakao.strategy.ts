@@ -46,9 +46,16 @@ export class KakaoStrategy extends PassportStrategy(Strategy, 'kakao') {
 
     try {
       const result = await this.oauthService.validateOAuthLogin(oauthProfile);
+      
+      // Check if login was successful
+      if (!result || !result.accessToken) {
+        return done(null, false);
+      }
+      
       done(null, result);
     } catch (error) {
-      done(error, null);
+      // Pass the error to Passport, which will trigger the exception filter
+      done(error);
     }
   }
 }

@@ -12,7 +12,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   ) {
     const clientID = configService.get<string>('GOOGLE_CLIENT_ID') || '';
     const clientSecret = configService.get<string>('GOOGLE_CLIENT_SECRET') || '';
-    const callbackURL = configService.get<string>('GOOGLE_CALLBACK_URL') || 'http://localhost:3000/auth/google/callback';
+    const callbackURL = configService.get<string>('GOOGLE_CALLBACK_URL');
 
     // Use empty strings if not configured - OAuth will fail gracefully
     super({
@@ -42,8 +42,15 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
     try {
       const result = await this.oauthService.validateOAuthLogin(oauthProfile);
+      
+      // Check if login was successful
+      if (!result || !result.accessToken) {
+        return done(null, false);
+      }
+      
       done(null, result);
     } catch (error) {
+      // Pass the error to Passport, which will trigger the exception filter
       done(error);
     }
   }

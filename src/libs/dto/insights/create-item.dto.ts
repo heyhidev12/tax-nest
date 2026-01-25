@@ -37,13 +37,17 @@ export class CreateItemDto {
   thumbnail: { id: number; url: string };
 
   @ApiProperty({
-    example: { id: 20, url: 'https://example.com/document.pdf' },
-    description: 'PDF 파일 (필수)'
+    example: [
+      { id: 113 },
+      { id: 114 }
+    ],
+    description: '첨부 파일 배열 (필수) - 파일 ID 배열 (IMAGE, PDF, VIDEO 등)'
   })
-  @IsDefined({ message: 'PDF 파일을 업로드해주세요.' })
-  @IsNotEmpty({ message: 'PDF 파일을 업로드해주세요.' })
-  @IsObject({ message: 'PDF 파일 정보가 올바르지 않습니다.' })
-  pdf: { id: number; url: string };
+  @IsDefined({ message: '파일을 업로드해주세요.' })
+  @IsNotEmpty({ message: '파일을 업로드해주세요.' })
+  @IsArray({ message: '파일은 배열이어야 합니다.' })
+  @ArrayMaxSize(100, { message: '최대 100개의 파일을 업로드할 수 있습니다.' })
+  files: Array<{ id: number } | { id: number; url?: string; type?: string }>;
 
   @ApiPropertyOptional({ example: true, description: '메인 노출 여부', default: false })
   @IsOptional()
@@ -60,19 +64,8 @@ export class CreateItemDto {
   @IsBoolean()
   enableComments?: boolean;
 
-  @ApiPropertyOptional({ example: 'N', description: '댓글 라벨', default: 'N' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  commentsLabel?: string;
-
-  @ApiPropertyOptional({ example: 'Y', description: '노출 라벨', default: 'Y' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  exposedLabel?: string;
-
 }
+
 
 
 
