@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/components/auth/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from 'src/components/auth/optional-jwt-auth.guard';
 import { TaxMemberService } from '../services/tax-member.service';
 import { AwardService } from '../services/award.service';
 import { TrainingSeminarService } from '../services/training-seminar.service';
@@ -85,6 +86,14 @@ export class PublicContentController {
       includeHidden: false,
       isPublic: true,
     });
+  }
+
+  @ApiOperation({ summary: '구성원 랜덤 목록 조회 (공개, 메인 페이지용)' })
+  @ApiResponse({ status: 200, description: '랜덤 구성원 목록 조회 성공 (최대 10명)' })
+  @Get('members/random')
+  async getRandomMembers() {
+    // Return 10 random exposed members for main page (already formatted in service)
+    return this.taxMemberService.findRandom(10);
   }
 
   @ApiOperation({ summary: '구성원 상세 조회 (공개)' })
@@ -169,6 +178,8 @@ export class PublicContentController {
   @ApiQuery({ name: 'search', required: false, type: String, description: '제목으로 검색' })
   @ApiQuery({ name: 'type', required: false, enum: ['VOD', 'SEMINAR', 'TRAINING', 'LECTURE'], description: '교육/세미나 유형 필터링' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'deadline'], description: '정렬 방식 (기본: latest, deadline: 마감일순)' })
+  @ApiQuery({ name: 'memberType', required: false, enum: ['GENERAL', 'OTHER', 'INSURANCE'], description: '회원 유형 (접근 제어용)' })
+  @ApiQuery({ name: 'isApproved', required: false, type: Boolean, description: '승인 여부 (보험사 회원용, 접근 제어용)' })
   @Get('training-seminars')
   async getTrainingSeminars(
     @Query('page') page?: string,
@@ -176,9 +187,12 @@ export class PublicContentController {
     @Query('search') search?: string,
     @Query('type') type?: string,
     @Query('sort') sort?: 'latest' | 'oldest' | 'deadline',
+    @Query('memberType') memberType?: string,
+    @Query('isApproved') isApproved?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
+    const isApprovedBool = isApproved === 'true' ? true : isApproved === 'false' ? false : undefined;
 
     return this.trainingSeminarService.findAll({
       page: pageNum,
@@ -189,12 +203,15 @@ export class PublicContentController {
       sort: sort || 'latest',
       includeHidden: false,
       isPublic: true,
+      memberType: memberType || undefined,
+      isApproved: isApprovedBool,
     });
   }
 
   @ApiOperation({ summary: '교육/세미나 상세 조회 (공개)' })
   @ApiResponse({ status: 200, description: '교육/세미나 상세 조회 성공' })
   @ApiResponse({ status: 404, description: '교육/세미나를 찾을 수 없습니다' })
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('training-seminars/:id')
   async getTrainingSeminarDetail(
     @Param('id', ParseIntPipe) id: number,
@@ -206,25 +223,26 @@ export class PublicContentController {
       throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
     }
 
-    // Check if user is authenticated and has confirmed application to expose Vimeo URL
-    const userEmail = req.user?.email;
-    let vimeoVideoUrl: string | null = null;
+    // Get viewer context: memberType and isApproved (nullable for guests)
+    let memberType: string | null = null;
+    let isApproved: boolean | null = null;
 
-    if (userEmail) {
-      // Check if user has a confirmed application for this seminar
-      const hasConfirmedApplication = seminar.applications?.some(app =>
-        app.email === userEmail &&
-        app.status === 'CONFIRMED'
-      );
-
-      if (hasConfirmedApplication && seminar.vimeoVideoUrl) {
-        vimeoVideoUrl = seminar.vimeoVideoUrl;
+    if (req.user?.sub) {
+      // Fetch member to get memberType and isApproved from database
+      const user = await this.membersService.findById(req.user.sub);
+      if (user) {
+        memberType = user.memberType;
+        isApproved = user.isApproved;
       }
     }
 
+    // Authorization logic: Only INSURANCE + approved can view video
+    const canViewVideo = memberType === 'INSURANCE' && isApproved === true;
+
+    // Response mapping: Return vimeoVideoUrl only if user can view, otherwise null
     return {
       ...seminar,
-      vimeoVideoUrl,
+      vimeoVideoUrl: canViewVideo ? seminar.vimeoVideoUrl : null,
     };
   }
 
@@ -278,6 +296,46 @@ export class PublicContentController {
         appliedAt: application.appliedAt,
       },
     };
+  }
+
+  @ApiOperation({ summary: '교육/세미나 신청 취소 (인증 필요)' })
+  @ApiResponse({ status: 200, description: '신청 취소 성공' })
+  @ApiResponse({ status: 400, description: '교육/세미나 하루 전에는 취소할 수 없습니다.' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
+  @ApiResponse({ status: 404, description: '신청을 찾을 수 없습니다.' })
+  @ApiBearerAuth('user-auth')
+  @UseGuards(JwtAuthGuard)
+  @Delete('training-seminars/:id/apply')
+  async cancelSeminarApplication(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id || req.user.sub;
+
+    // Get user details from MembersService
+    const user = await this.membersService.findById(userId);
+
+    // Cancel application
+    return this.trainingSeminarService.cancelApplication(id, user.email);
+  }
+
+  @ApiOperation({ summary: '내 교육/세미나 신청 조회 (인증 필요)' })
+  @ApiResponse({ status: 200, description: '신청 정보 조회 성공 (신청한 경우: {id, status}, 신청하지 않은 경우: null)' })
+  @ApiResponse({ status: 401, description: '인증되지 않은 사용자' })
+  @ApiBearerAuth('user-auth')
+  @UseGuards(JwtAuthGuard)
+  @Get('training-seminars/:id/my-application')
+  async getMyApplication(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id || req.user.sub;
+
+    // Get user details from MembersService
+    const user = await this.membersService.findById(userId);
+
+    // Get user's application for this seminar
+    return this.trainingSeminarService.getUserApplication(id, user.email);
   }
 
 
@@ -441,9 +499,15 @@ export class PublicContentController {
 
   @ApiOperation({ summary: '인사이트 계층 구조 데이터 조회 (Accordion UI용)', description: 'Category별로 그룹화된 계층 구조 데이터 반환' })
   @ApiResponse({ status: 200, description: '계층 구조 데이터 조회 성공' })
+  @ApiQuery({ name: 'memberType', required: false, enum: ['GENERAL', 'OTHER', 'INSURANCE'], description: '회원 유형 (접근 제어용)' })
+  @ApiQuery({ name: 'isApproved', required: false, type: Boolean, description: '승인 여부 (보험사 회원용, 접근 제어용)' })
   @Get('insights/hierarchical')
-  getInsightsHierarchical() {
-    return this.insightsService.getHierarchicalData(true);
+  getInsightsHierarchical(
+    @Query('memberType') memberType?: string,
+    @Query('isApproved') isApproved?: string,
+  ) {
+    const isApprovedBool = isApproved === 'true' ? true : isApproved === 'false' ? false : undefined;
+    return this.insightsService.getHierarchicalData(true, memberType || undefined, isApprovedBool);
   }
 
   @ApiOperation({ summary: '인사이트 목록 조회 (공개, 페이지네이션 및 필터 지원)' })
@@ -453,6 +517,8 @@ export class PublicContentController {
   @ApiQuery({ name: 'categoryId', required: false, type: Number, description: '카테고리 ID 필터링' })
   @ApiQuery({ name: 'subcategoryId', required: false, type: Number, description: '서브카테고리 ID 필터링' })
   @ApiQuery({ name: 'dataRoom', required: false, enum: ['A', 'B', 'C'], description: '데이터룸 유형 필터링 (A, B, C)' })
+  @ApiQuery({ name: 'memberType', required: false, enum: ['GENERAL', 'OTHER', 'INSURANCE'], description: '회원 유형 (접근 제어용)' })
+  @ApiQuery({ name: 'isApproved', required: false, type: Boolean, description: '승인 여부 (보험사 회원용, 접근 제어용)' })
   @Get('insights')
   async getInsights(
     @Query('page') page?: string,
@@ -460,11 +526,14 @@ export class PublicContentController {
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
     @Query('dataRoom') dataRoom?: string,
+    @Query('memberType') memberType?: string,
+    @Query('isApproved') isApproved?: string,
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
     const subcategoryIdNum = subcategoryId ? parseInt(subcategoryId, 10) : undefined;
+    const isApprovedBool = isApproved === 'true' ? true : isApproved === 'false' ? false : undefined;
 
     return this.insightsService.getPublicInsights({
       page: pageNum,
@@ -472,6 +541,8 @@ export class PublicContentController {
       categoryId: categoryIdNum,
       subcategoryId: subcategoryIdNum,
       dataRoom,
+      memberType: memberType || undefined,
+      isApproved: isApprovedBool,
     });
   }
 

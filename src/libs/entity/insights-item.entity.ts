@@ -13,6 +13,7 @@ import { InsightsCategory } from './insights-category.entity';
 import { InsightsSubcategory } from './insights-subcategory.entity';
 import { Member } from './member.entity';
 import { AdminUser } from './admin-user.entity';
+import { BusinessAreaCategory } from './business-area-category.entity';
 
 @Entity('insights_items')
 export class InsightsItem {
@@ -52,6 +53,16 @@ export class InsightsItem {
   })
   @JoinColumn({ name: 'subcategoryId', referencedColumnName: 'id' })
   subcategory: InsightsSubcategory;
+
+  @Column({ nullable: true })
+  subMinorCategoryId: number;
+
+  @ManyToOne(() => BusinessAreaCategory, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'subMinorCategoryId', referencedColumnName: 'id' })
+  subMinorCategory: BusinessAreaCategory;
 
   @Column({ nullable: true })
   adminId: number;

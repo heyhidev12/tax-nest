@@ -576,14 +576,26 @@ export class BusinessAreaService {
     // If minor category is being updated, validate it exists and belongs to major category
     if (dto.minorCategory) {
       const majorCategoryId = dto.majorCategory?.id ?? item.majorCategoryId;
+    
       const minorCategory = await this.categoryRepo.findOne({
-        where: { id: dto.minorCategory.id, majorCategoryId, isExposed: true },
+        where: {
+          id: dto.minorCategory.id,
+          majorCategoryId,
+          isExposed: true,
+        },
       });
+    
       if (!minorCategory) {
-        throw new BadRequestException('Minor Category를 찾을 수 없거나 선택한 Major Category에 속하지 않습니다.');
+        throw new BadRequestException(
+          'Minor Category를 찾을 수 없거나 선택한 Major Category에 속하지 않습니다.',
+        );
       }
+    
+      // IMPORTANT FIX
       item.minorCategoryId = dto.minorCategory.id;
+      item.minorCategory = minorCategory;
     }
+    
 
     // Validate sectionContents if provided
     if (dto.sectionContents && majorCategory && majorCategory.sections) {
@@ -642,11 +654,53 @@ export class BusinessAreaService {
       item.displayOrder = targetOrder;
     }
 
-    await this.areaRepo.save(item);
-    return this.areaRepo.findOne({
-      where: { id: item.id },
+    // Save the entity with all updates including minorCategoryId
+    // Using save() ensures all changes including minorCategoryId are persisted
+    const saved = await this.areaRepo.save(item);
+    
+    // Reload the entity with relations to ensure minorCategory is properly loaded and returned
+    const updated = await this.areaRepo.findOne({
+      where: { id: saved.id },
       relations: ['majorCategory', 'minorCategory'],
     });
+    
+    if (!updated) {
+      throw new NotFoundException('업무분야를 찾을 수 없습니다.');
+    }
+    
+    // Format the response to match findById format
+    const base = {
+      id: updated.id,
+      name: updated.name,
+      subDescription: updated.subDescription,
+      image: updated.image,
+      majorCategory: updated.majorCategory
+        ? {
+          id: updated.majorCategory.id,
+          name: updated.majorCategory.name,
+          sections: updated.majorCategory.sections || [],
+          isExposed: updated.majorCategory.isExposed,
+          displayOrder: updated.majorCategory.displayOrder,
+        }
+        : null,
+      minorCategory: updated.minorCategory
+        ? {
+          id: updated.minorCategory.id,
+          name: updated.minorCategory.name,
+          isExposed: updated.minorCategory.isExposed,
+        }
+        : null,
+      overview: updated.overview,
+      sectionContents: updated.sectionContents || [],
+      youtubeUrls: updated.youtubeUrls || [],
+      isExposed: updated.isExposed,
+      displayOrder: updated.displayOrder,
+      youtubeCount: (updated.youtubeUrls || []).length,
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
+    };
+    
+    return base;
   }
 
   async delete(id: number) {

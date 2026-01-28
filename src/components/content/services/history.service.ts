@@ -33,7 +33,7 @@ export class HistoryService {
       isExposed,
       sort = 'order',
       page = 1,
-      limit = 50,
+      limit = 10,
       includeHidden = false
     } = options;
 
@@ -59,9 +59,8 @@ export class HistoryService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
+    // 응답 포맷 (row number는 프론트엔드에서 계산)
+    const formattedItems = items.map((item) => ({
       id: item.id,
       year: item.year,
       displayOrder: item.displayOrder,
@@ -83,8 +82,7 @@ export class HistoryService {
     // 아이템 정렬 및 포맷
     const formattedItems = (year.items || [])
       .sort((a, b) => a.displayOrder - b.displayOrder || b.createdAt.getTime() - a.createdAt.getTime())
-      .map((item, index) => ({
-        no: year.items.length - index,
+      .map((item) => ({
         id: item.id,
         month: item.month,
         content: item.content,

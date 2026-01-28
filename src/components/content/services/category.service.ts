@@ -33,7 +33,7 @@ export class CategoryService {
       isExposed,
       sort = 'order',
       page = 1,
-      limit = 50,
+      limit = 10,
       includeHidden = false,
     } = options;
 
@@ -64,9 +64,8 @@ export class CategoryService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
+    // 응답 포맷 (row number는 프론트엔드에서 계산)
+    const formattedItems = items.map((item) => ({
       id: item.id,
       name: item.name,
       displayOrder: item.displayOrder,
@@ -144,7 +143,7 @@ export class CategoryService {
       isExposed,
       sort = 'order',
       page = 1,
-      limit = 50,
+      limit = 10,
       includeHidden = false,
     } = options;
 
@@ -176,9 +175,8 @@ export class CategoryService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷
-    const formattedItems = items.map((item, index) => ({
-      no: total - ((page - 1) * limit + index),
+    // 응답 포맷 (row number는 프론트엔드에서 계산)
+    const formattedItems = items.map((item) => ({
       id: item.id,
       majorCategoryId: item.majorCategoryId,
       majorCategoryName: item.majorCategory?.name || '-',

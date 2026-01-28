@@ -6,6 +6,7 @@ import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity
 import { InsightsItem, InsightsComment, InsightsCommentReport } from 'src/libs/entity/insights-item.entity';
 import { Attachment } from 'src/libs/entity/attachment.entity';
 import { Member } from 'src/libs/entity/member.entity';
+import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
 import { CreateCategoryDto } from 'src/libs/dto/insights/create-category.dto';
 import { UpdateCategoryDto } from 'src/libs/dto/insights/update-category.dto';
 import { CreateSubcategoryDto } from 'src/libs/dto/insights/create-subcategory.dto';
@@ -13,6 +14,7 @@ import { UpdateSubcategoryDto } from 'src/libs/dto/insights/update-subcategory.d
 import { CreateItemDto } from 'src/libs/dto/insights/create-item.dto';
 import { UpdateItemDto } from 'src/libs/dto/insights/update-item.dto';
 import { VALID_INSIGHTS_SECTIONS } from 'src/libs/enums/insights-sections.enum';
+import { TargetMemberType } from 'src/libs/entity/training-seminar.entity';
 import { AttachmentService } from './attachment.service';
 import { UploadService } from 'src/libs/upload/upload.service';
 
@@ -33,6 +35,8 @@ export class InsightsService {
     private readonly memberRepo: Repository<Member>,
     @InjectRepository(Attachment)
     private readonly attachmentRepo: Repository<Attachment>,
+    @InjectRepository(BusinessAreaCategory)
+    private readonly businessAreaCategoryRepo: Repository<BusinessAreaCategory>,
     @InjectDataSource()
     private readonly dataSource: DataSource,
     private readonly attachmentService: AttachmentService,
@@ -63,6 +67,18 @@ export class InsightsService {
     });
 
     return categories;
+  }
+
+  async adminListCategories(options: { includeInactive?: boolean; page?: number; limit?: number } = {}) {
+    const { includeInactive = false, page = 1, limit = 10 } = options;
+    const where = includeInactive ? {} : { isActive: true };
+
+    const qb = this.categoryRepo.createQueryBuilder('category').where(where);
+    qb.orderBy('category.createdAt', 'DESC');
+    qb.skip((page - 1) * limit).take(limit);
+    const [items, total] = await qb.getManyAndCount();
+
+    return { items, total, page, limit };
   }
 
   async findCategoryById(id: number, includeInactive = false) {
@@ -141,6 +157,31 @@ export class InsightsService {
       createdAt: sub.createdAt,
       updatedAt: sub.updatedAt,
     }));
+  }
+
+  async adminListSubcategories(options: { includeHidden?: boolean; page?: number; limit?: number } = {}) {
+    const { includeHidden = false, page = 1, limit = 10 } = options;
+    const where = includeHidden ? {} : { isExposed: true };
+
+    const qb = this.subcategoryRepo.createQueryBuilder('subcategory');
+    if (!includeHidden) {
+      qb.where('subcategory.isExposed = :isExposed', { isExposed: true });
+    }
+    qb.orderBy('subcategory.displayOrder', 'ASC').addOrderBy('subcategory.createdAt', 'ASC');
+    qb.skip((page - 1) * limit).take(limit);
+
+    const [items, total] = await qb.getManyAndCount();
+    const mapped = items.map((sub) => ({
+      id: sub.id,
+      name: sub.name,
+      sections: sub.sections || [],
+      isExposed: sub.isExposed,
+      displayOrder: sub.displayOrder,
+      createdAt: sub.createdAt,
+      updatedAt: sub.updatedAt,
+    }));
+
+    return { items: mapped, total, page, limit };
   }
 
   /**
@@ -312,6 +353,18 @@ export class InsightsService {
           sections: item.subcategory.sections || [],
         }
         : undefined,
+      subMinorCategory: item.subMinorCategory
+        ? {
+          id: item.subMinorCategory.id,
+          name: item.subMinorCategory.name,
+          majorCategory: item.subMinorCategory.majorCategory
+            ? {
+              id: item.subMinorCategory.majorCategory.id,
+              name: item.subMinorCategory.majorCategory.name,
+            }
+            : undefined,
+        }
+        : undefined,
       enableComments: item.enableComments,
       isExposed: item.isExposed,
       isMainExposed: item.isMainExposed,
@@ -355,6 +408,22 @@ export class InsightsService {
       throw new NotFoundException('서브카테고리를 찾을 수 없습니다.');
     }
 
+    // Validate subMinorCategoryId if provided
+    let subMinorCategory: BusinessAreaCategory | null = null;
+    if (dto.subMinorCategoryId) {
+      subMinorCategory = await this.businessAreaCategoryRepo.findOne({
+        where: { id: dto.subMinorCategoryId },
+        relations: ['majorCategory'],
+      });
+      if (!subMinorCategory) {
+        throw new NotFoundException('서브마이너카테고리를 찾을 수 없습니다.');
+      }
+      // Validate that subMinorCategory's majorCategory matches subcategoryId
+      if (subMinorCategory.majorCategory.id !== dto.subcategoryId) {
+        throw new BadRequestException('Invalid subMinorCategory: majorCategory does not match selected subcategory');
+      }
+    }
+
     // Process files array - look up attachment details if only IDs provided
     let filesArray: Array<{ id: number; url: string; type?: string }> | null = null;
     if (dto.files && dto.files.length > 0) {
@@ -389,6 +458,7 @@ export class InsightsService {
       content: dto.content,
       categoryId: dto.categoryId,
       subcategoryId: dto.subcategoryId,
+      subMinorCategoryId: dto.subMinorCategoryId,
       enableComments: dto.enableComments ?? false,
       isExposed: dto.isExposed ?? true,
       isMainExposed: dto.isMainExposed ?? false,
@@ -403,7 +473,7 @@ export class InsightsService {
     // Reload with relations for frontend-friendly response
     const itemWithRelations = await this.itemRepo.findOne({
       where: { id: savedItem.id },
-      relations: ['category', 'subcategory', 'admin'],
+      relations: ['category', 'subcategory', 'subMinorCategory', 'subMinorCategory.majorCategory', 'admin'],
     });
 
     return await this.formatItemWithAttachments(itemWithRelations!);
@@ -431,6 +501,31 @@ export class InsightsService {
       if (!subcategory) {
         throw new NotFoundException('서브카테고리를 찾을 수 없습니다.');
       }
+    }
+
+    // Validate subMinorCategoryId if provided
+    if (dto.subMinorCategoryId !== undefined && dto.subMinorCategoryId !== null) {
+      // Need to validate against current or new subcategoryId
+      const targetSubcategoryId = dto.subcategoryId || item.subcategoryId;
+      if (!targetSubcategoryId) {
+        throw new BadRequestException('subcategoryId must be set before setting subMinorCategoryId');
+      }
+
+      const subMinorCategory = await this.businessAreaCategoryRepo.findOne({
+        where: { id: dto.subMinorCategoryId },
+        relations: ['majorCategory'],
+      });
+      if (!subMinorCategory) {
+        throw new NotFoundException('서브마이너카테고리를 찾을 수 없습니다.');
+      }
+      // Validate that subMinorCategory's majorCategory matches subcategoryId
+      if (subMinorCategory.majorCategory.id !== targetSubcategoryId) {
+        throw new BadRequestException('Invalid subMinorCategory: majorCategory does not match selected subcategory');
+      }
+      item.subMinorCategoryId = dto.subMinorCategoryId;
+    } else if (dto.subMinorCategoryId === null) {
+      // Explicitly clearing subMinorCategoryId - set to undefined for nullable column
+      (item as any).subMinorCategoryId = undefined;
     }
 
     // Handle thumbnail cleanup when being replaced or removed
@@ -494,7 +589,7 @@ export class InsightsService {
     // Reload with relations for frontend-friendly response
     const updatedItem = await this.itemRepo.findOne({
       where: { id: item.id },
-      relations: ['category', 'subcategory', 'admin'],
+      relations: ['category', 'subcategory', 'subMinorCategory', 'subMinorCategory.majorCategory', 'admin'],
     });
 
     return await this.formatItemWithAttachments(updatedItem!);
@@ -579,7 +674,7 @@ export class InsightsService {
 
     const item = await this.itemRepo.findOne({
       where,
-      relations: ['category', 'subcategory', 'admin'],
+      relations: ['category', 'subcategory', 'subMinorCategory', 'subMinorCategory.majorCategory', 'admin'],
     });
 
     if (!item) {
@@ -597,6 +692,8 @@ export class InsightsService {
       .createQueryBuilder('item')
       .leftJoinAndSelect('item.category', 'category')
       .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .leftJoinAndSelect('item.subMinorCategory', 'subMinorCategory')
+      .leftJoinAndSelect('subMinorCategory.majorCategory', 'subMinorCategoryMajorCategory')
       .leftJoin('item.admin', 'admin');
 
     // Exposure filter
@@ -644,6 +741,8 @@ export class InsightsService {
     categoryId?: number;
     subcategoryId?: number;
     dataRoom?: string;
+    memberType?: string; // 'GENERAL' | 'OTHER' | 'INSURANCE' | null
+    isApproved?: boolean;
   }) {
     const page = options.page || 1;
     const limit = options.limit || 20;
@@ -653,8 +752,11 @@ export class InsightsService {
       .createQueryBuilder('item')
       .leftJoinAndSelect('item.category', 'category')
       .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .leftJoinAndSelect('item.subMinorCategory', 'subMinorCategory')
+      .leftJoinAndSelect('subMinorCategory.majorCategory', 'subMinorCategoryMajorCategory')
       .leftJoinAndSelect('item.admin', 'admin')
-      .where('item.isExposed = :isExposed', { isExposed: true });
+      .where('item.isExposed = :isExposed', { isExposed: true })
+      .andWhere('category.isActive = :isActive', { isActive: true });
 
     if (options.categoryId) {
       qb.andWhere('item.categoryId = :categoryId', { categoryId: options.categoryId });
@@ -666,6 +768,25 @@ export class InsightsService {
 
     if (options.dataRoom) {
       qb.andWhere('category.type = :dataRoom', { dataRoom: options.dataRoom });
+    }
+
+    // Access control filtering based on memberType and isApproved
+    if (options.memberType !== undefined || options.isApproved !== undefined) {
+      // Guest users (no memberType) can only see ALL
+      if (!options.memberType) {
+        qb.andWhere('category.targetMemberType = :allType', { allType: TargetMemberType.ALL });
+      } else {
+        // For logged-in users: ALL OR (matching memberType AND (not INSURANCE OR isApproved))
+        qb.andWhere(
+          '(category.targetMemberType = :allType OR (category.targetMemberType = :memberType AND (:memberType != :insuranceType OR :isApproved = true)))',
+          {
+            allType: TargetMemberType.ALL,
+            memberType: options.memberType,
+            insuranceType: TargetMemberType.INSURANCE,
+            isApproved: options.isApproved === true,
+          }
+        );
+      }
     }
 
     const [items, total] = await qb
@@ -691,7 +812,7 @@ export class InsightsService {
   async getPublicInsightById(id: number) {
     const item = await this.itemRepo.findOne({
       where: { id, isExposed: true },
-      relations: ['category', 'subcategory', 'admin'],
+      relations: ['category', 'subcategory', 'subMinorCategory', 'subMinorCategory.majorCategory', 'admin'],
     });
 
     if (!item) {
@@ -721,17 +842,38 @@ export class InsightsService {
    * Get hierarchical data for public frontend (accordion-style UI)
    * Groups items by category and then by subcategory
    */
-  async getHierarchicalData(isPublic = true) {
+  async getHierarchicalData(isPublic = true, memberType?: string, isApproved?: boolean) {
     const qb = this.itemRepo
       .createQueryBuilder('item')
       .leftJoinAndSelect('item.category', 'category')
       .leftJoinAndSelect('item.subcategory', 'subcategory')
+      .leftJoinAndSelect('item.subMinorCategory', 'subMinorCategory')
+      .leftJoinAndSelect('subMinorCategory.majorCategory', 'subMinorCategoryMajorCategory')
       .leftJoinAndSelect('item.admin', 'admin');
 
     if (isPublic) {
       qb.where('item.isExposed = :isExposed', { isExposed: true })
         .andWhere('category.isActive = :isActive', { isActive: true })
         .andWhere('subcategory.isExposed = :subcategoryExposed', { subcategoryExposed: true });
+    }
+
+    // Access control filtering based on memberType and isApproved
+    if (memberType !== undefined || isApproved !== undefined) {
+      // Guest users (no memberType) can only see ALL
+      if (!memberType) {
+        qb.andWhere('category.targetMemberType = :allType', { allType: TargetMemberType.ALL });
+      } else {
+        // For logged-in users: ALL OR (matching memberType AND (not INSURANCE OR isApproved))
+        qb.andWhere(
+          '(category.targetMemberType = :allType OR (category.targetMemberType = :memberType AND (:memberType != :insuranceType OR :isApproved = true)))',
+          {
+            allType: TargetMemberType.ALL,
+            memberType: memberType,
+            insuranceType: TargetMemberType.INSURANCE,
+            isApproved: isApproved === true,
+          }
+        );
+      }
     }
 
     qb.orderBy('item.categoryId', 'ASC')
@@ -824,6 +966,18 @@ export class InsightsService {
           id: item.subcategory.id,
           name: item.subcategory.name,
         },
+        subMinorCategory: item.subMinorCategory
+          ? {
+            id: item.subMinorCategory.id,
+            name: item.subMinorCategory.name,
+            majorCategory: item.subMinorCategory.majorCategory
+              ? {
+                id: item.subMinorCategory.majorCategory.id,
+                name: item.subMinorCategory.majorCategory.name,
+              }
+              : undefined,
+          }
+          : undefined,
       };
 
       grouped[categoryId].subcategories[subcategoryId].items.push(

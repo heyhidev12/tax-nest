@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { UploadService } from 'src/libs/upload/upload.service';
 import {
   TrainingSeminar,
@@ -23,6 +23,8 @@ interface TrainingSeminarListOptions {
   limit?: number;
   includeHidden?: boolean;
   isPublic?: boolean;
+  memberType?: string; // 'GENERAL' | 'OTHER' | 'INSURANCE' | null
+  isApproved?: boolean;
 }
 
 interface ApplicationListOptions {
@@ -43,6 +45,8 @@ export class TrainingSeminarService {
     private readonly seminarRepo: Repository<TrainingSeminar>,
     @InjectRepository(TrainingSeminarApplication)
     private readonly appRepo: Repository<TrainingSeminarApplication>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
     private readonly uploadService: UploadService,
   ) { }
 
@@ -57,6 +61,12 @@ export class TrainingSeminarService {
 
     // 날짜 문자열을 Date 객체로 변환 (YYYY.MM.DD 또는 YYYY-MM-DD 형식 지원)
     const seminarData: any = { ...data };
+    
+    // Set default price to 0 if not provided
+    if (seminarData.price === undefined || seminarData.price === null) {
+      seminarData.price = 0;
+    }
+    
     if (seminarData.recruitmentEndDate && typeof seminarData.recruitmentEndDate === 'string') {
       // YYYY.MM.DD 형식을 YYYY-MM-DD로 변환
       const normalizedDate = seminarData.recruitmentEndDate.replace(/\./g, '-');
@@ -119,9 +129,11 @@ export class TrainingSeminarService {
       isRecommended,
       sort = 'latest',
       page = 1,
-      limit = 20,
+      limit = 10,
       includeHidden = false,
-      isPublic = false
+      isPublic = false,
+      memberType,
+      isApproved,
     } = options;
 
     const qb = this.seminarRepo.createQueryBuilder('seminar')
@@ -154,6 +166,25 @@ export class TrainingSeminarService {
       qb.andWhere('seminar.targetMemberType = :targetMemberType', { targetMemberType });
     }
 
+    // Access control filtering based on memberType and isApproved
+    if (memberType !== undefined || isApproved !== undefined) {
+      // Guest users (no memberType) can only see ALL
+      if (!memberType) {
+        qb.andWhere('seminar.targetMemberType = :allType', { allType: TargetMemberType.ALL });
+      } else {
+        // For logged-in users: ALL OR (matching memberType AND (not INSURANCE OR isApproved))
+        qb.andWhere(
+          '(seminar.targetMemberType = :allType OR (seminar.targetMemberType = :memberType AND (:memberType != :insuranceType OR :isApproved = true)))',
+          {
+            allType: TargetMemberType.ALL,
+            memberType: memberType,
+            insuranceType: 'INSURANCE',
+            isApproved: isApproved === true,
+          }
+        );
+      }
+    }
+
     // 이름 검색
     if (search) {
       qb.andWhere('seminar.name LIKE :search', { search: `%${search}%` });
@@ -173,24 +204,12 @@ export class TrainingSeminarService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 교육/세미나명, 교육/세미나유형, 모집유형, 회원유형, 이미지, 교육일자, 참여시간, 노출여부, 등록일시
-    // 번호는 정렬 기준에 따라 순차 번호 부여
-    const formattedItems = items.map((item, index) => {
-      // 정렬 기준에 따른 번호 부여
-      let no: number;
-      if (sort === 'deadline') {
-        // 마감일순: 1부터 순차적으로 (가까운 마감일이 1번)
-        no = (page - 1) * limit + index + 1;
-      } else if (sort === 'latest') {
-        // 최신순: 큰 번호부터
-        no = total - ((page - 1) * limit + index);
-      } else {
-        // 오래된순: 작은 번호부터
-        no = (page - 1) * limit + index + 1;
-      }
+    // 응답 포맷: row number는 프론트엔드에서 계산
+    const formattedItems = await Promise.all(items.map(async (item) => {
+      // Get quota info (currentApplicantsCount, remainingSlots, isFull)
+      const quotaInfo = await this.getQuotaInfo(item);
 
       const base = {
-        no,
         id: item.id,
         name: item.name,
         type: item.type,
@@ -203,7 +222,11 @@ export class TrainingSeminarService {
         location: item.location,
         otherInfo: item.otherInfo,
         quota: item.quota,
+        price: item.price ?? 0,
         applicationCount: item.applications?.length || 0,
+        currentApplicantsCount: quotaInfo.currentApplicantsCount,
+        remainingSlots: quotaInfo.remainingSlots,
+        isFull: quotaInfo.isFull,
         isExposed: item.isExposed,
         isRecommended: item.isRecommended,
       };
@@ -223,7 +246,7 @@ export class TrainingSeminarService {
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
       };
-    });
+    }));
 
     return { items: formattedItems, total, page, limit };
   }
@@ -257,19 +280,35 @@ export class TrainingSeminarService {
     });
     if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
 
+    // Get quota info
+    const quotaInfo = await this.getQuotaInfo(seminar);
+
     const base = {
       ...seminar,
       applicationCount: seminar.applications?.length || 0,
+      price: seminar.price ?? 0,
+      currentApplicantsCount: quotaInfo.currentApplicantsCount,
+      remainingSlots: quotaInfo.remainingSlots,
+      isFull: quotaInfo.isFull,
     };
 
     if (isPublic) {
-      const { createdAt, updatedAt, ...rest } = base;
+      // Remove admin-only and UI-helper fields for public API
+      const { 
+        createdAt, 
+        updatedAt, 
+        isRecommended,
+        applications, // Exclude applications relation
+        remainingSlots, // Exclude admin-only quota info
+        isFull, // Exclude admin-only quota info
+        ...rest 
+      } = base;
+      
+      // Return only public fields (explicitly exclude admin/UI-helper fields)
       return {
         ...rest,
-        typeLabel: this.getTypeLabel(seminar.type),
-        recruitmentTypeLabel: this.getRecruitmentTypeLabel(seminar.recruitmentType),
-        targetMemberTypeLabel: this.getTargetMemberTypeLabel(seminar.targetMemberType),
-        exposedLabel: seminar.isExposed ? 'Y' : 'N',
+        typeLabel: this.getTypeLabel(seminar.type), // Add typeLabel for public API
+        // Note: vimeoVideoUrl will be handled in controller based on user permissions
       };
     }
 
@@ -407,126 +446,191 @@ export class TrainingSeminarService {
     return { success: true, isRecommended: seminar.isRecommended };
   }
 
+  // === Helper Methods ===
+
+  /**
+   * Get quota information for a seminar
+   * Returns currentApplicantsCount, remainingSlots, and isFull
+   */
+  private async getQuotaInfo(seminar: TrainingSeminar): Promise<{
+    currentApplicantsCount: number;
+    remainingSlots: number | null;
+    isFull: boolean;
+  }> {
+    if (!seminar.quota) {
+      return {
+        currentApplicantsCount: 0,
+        remainingSlots: null,
+        isFull: false,
+      };
+    }
+
+    const currentActiveCount = await this.getActiveApplicationCount(seminar.id);
+    const remainingSlots = Math.max(0, seminar.quota - currentActiveCount);
+    const isFull = currentActiveCount >= seminar.quota;
+
+    return {
+      currentApplicantsCount: currentActiveCount,
+      remainingSlots,
+      isFull,
+    };
+  }
+
+  /**
+   * Calculate active application count for a seminar
+   * Active = CONFIRMED + WAITING (excludes CANCELLED)
+   * Optionally filters by participationDate and participationTime for slot-specific quota
+   * @param manager Optional transaction manager for use within transactions
+   */
+  private async getActiveApplicationCount(
+    trainingSeminarId: number,
+    participationDate?: string | Date,
+    participationTime?: string,
+    manager?: any,
+  ): Promise<number> {
+    // Normalize date to YYYY-MM-DD format for comparison
+    let normalizedDate: string | undefined;
+    if (participationDate) {
+      if (typeof participationDate === 'string') {
+        normalizedDate = participationDate.replace(/\./g, '-');
+      } else if (participationDate instanceof Date) {
+        normalizedDate = participationDate.toISOString().split('T')[0];
+      }
+    }
+
+    // Normalize time format (handle both ~ and -)
+    const normalizedTime = participationTime ? participationTime.replace(/~/g, '-') : undefined;
+
+    // Use transaction manager if provided, otherwise use repository
+    const repo = manager ? manager.getRepository(TrainingSeminarApplication) : this.appRepo;
+
+    // Get all active applications for this seminar
+    const activeApps = await repo.find({
+      where: {
+        trainingSeminarId,
+        status: In([ApplicationStatus.CONFIRMED, ApplicationStatus.WAITING]),
+      },
+    });
+
+    // Filter by date/time if provided
+    let filteredApps = activeApps;
+    if (normalizedDate && normalizedTime) {
+      filteredApps = activeApps.filter(app => {
+        const appDate = typeof app.participationDate === 'string'
+          ? app.participationDate.replace(/\./g, '-')
+          : app.participationDate instanceof Date
+            ? app.participationDate.toISOString().split('T')[0]
+            : String(app.participationDate);
+        const appTime = app.participationTime ? app.participationTime.replace(/~/g, '-') : '';
+        return appDate === normalizedDate && appTime === normalizedTime;
+      });
+    }
+
+    // Sum attendeeCount (default to 1 if not set)
+    return filteredApps.reduce((sum, app) => sum + (app.attendeeCount || 1), 0);
+  }
+
   // === Application CRUD ===
   async createApplication(trainingSeminarId: number, data: Partial<TrainingSeminarApplication>) {
-    const seminar = await this.seminarRepo.findOne({
-      where: { id: trainingSeminarId },
-      relations: ['applications'],
-    });
-    if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
+    // Use transaction with lock for concurrency protection
+    return await this.dataSource.transaction(async (manager) => {
+      // Lock the seminar row to prevent concurrent quota issues
+      const seminar = await manager.findOne(TrainingSeminar, {
+        where: { id: trainingSeminarId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
 
-    // Check if recruitment deadline has passed (use server time)
-    const now = new Date();
-    const recruitmentEndDate = new Date(seminar.recruitmentEndDate);
-    
-    // Normalize dates to compare only date part (set time to 00:00:00)
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const deadline = new Date(recruitmentEndDate.getFullYear(), recruitmentEndDate.getMonth(), recruitmentEndDate.getDate());
-    
-    if (today > deadline) {
-      throw new BadRequestException('모집 기간이 종료되었습니다.');
-    }
-
-    // 날짜 및 시간 유효성 검사
-    if (!data.participationDate) {
-      throw new BadRequestException('참여 일자를 선택해주세요.');
-    }
-    if (!data.participationTime) {
-      throw new BadRequestException('참여 시간을 선택해주세요.');
-    }
-
-    // 교육 일자 검증: 사용자가 선택한 날짜가 교육 일자 목록에 있는지 확인
-    if (seminar.educationDates && seminar.educationDates.length > 0) {
-      // participationDate를 YYYY-MM-DD 형식으로 정규화 (문자열 비교만 사용)
-      const participationDateValue: string | Date = data.participationDate;
-      const normalizedParticipationDate = typeof participationDateValue === 'string'
-        ? participationDateValue.replace(/\./g, '-')
-        : participationDateValue.toISOString().split('T')[0];
-
-      // educationDates 배열을 YYYY-MM-DD 형식으로 정규화
-      const normalizedEducationDates = seminar.educationDates.map(date =>
-        date.replace(/\./g, '-')
-      );
-
-      // 문자열 비교로 일치하는 날짜 찾기
-      const dateMatches = normalizedEducationDates.includes(normalizedParticipationDate);
-
-      if (!dateMatches) {
-        throw new BadRequestException(
-          `선택하신 날짜(${normalizedParticipationDate})는 이 교육/세미나의 교육 일자와 일치하지 않습니다. 가능한 교육 일자: ${normalizedEducationDates.join(', ')}`
-        );
+      // Check if recruitment deadline has passed (use server time)
+      const now = new Date();
+      const recruitmentEndDate = new Date(seminar.recruitmentEndDate);
+      
+      // Normalize dates to compare only date part (set time to 00:00:00)
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const deadline = new Date(recruitmentEndDate.getFullYear(), recruitmentEndDate.getMonth(), recruitmentEndDate.getDate());
+      
+      if (today > deadline) {
+        throw new BadRequestException('모집 기간이 종료되었습니다.');
       }
-    }
 
-    // 교육 시간 슬롯 검증: 사용자가 선택한 시간이 교육 시간 슬롯 목록에 있는지 확인
-    if (seminar.educationTimeSlots && seminar.educationTimeSlots.length > 0) {
-      // participationTime 형식 정규화 (HH:mm~HH:mm 또는 HH:mm-HH:mm -> HH:mm-HH:mm)
-      const normalizedTime = data.participationTime.replace(/~/g, '-');
+      // 날짜 및 시간 유효성 검사
+      if (!data.participationDate) {
+        throw new BadRequestException('참여 일자를 선택해주세요.');
+      }
+      if (!data.participationTime) {
+        throw new BadRequestException('참여 시간을 선택해주세요.');
+      }
 
-      // educationTimeSlots 배열에서 일치하는 시간 찾기
-      const timeMatches = seminar.educationTimeSlots.some(timeSlot => {
-        // educationTimeSlots는 "HH:mm-HH:mm" 형식
-        return timeSlot === normalizedTime;
+      // 교육 일자 검증: 사용자가 선택한 날짜가 교육 일자 목록에 있는지 확인
+      if (seminar.educationDates && seminar.educationDates.length > 0) {
+        const participationDateValue: string | Date = data.participationDate;
+        const normalizedParticipationDate = typeof participationDateValue === 'string'
+          ? participationDateValue.replace(/\./g, '-')
+          : participationDateValue.toISOString().split('T')[0];
+
+        const normalizedEducationDates = seminar.educationDates.map(date =>
+          date.replace(/\./g, '-')
+        );
+
+        if (!normalizedEducationDates.includes(normalizedParticipationDate)) {
+          throw new BadRequestException(
+            `선택하신 날짜(${normalizedParticipationDate})는 이 교육/세미나의 교육 일자와 일치하지 않습니다. 가능한 교육 일자: ${normalizedEducationDates.join(', ')}`
+          );
+        }
+      }
+
+      // 교육 시간 슬롯 검증
+      if (seminar.educationTimeSlots && seminar.educationTimeSlots.length > 0) {
+        const normalizedTime = data.participationTime.replace(/~/g, '-');
+        const timeMatches = seminar.educationTimeSlots.some(timeSlot => timeSlot === normalizedTime);
+
+        if (!timeMatches) {
+          throw new BadRequestException(
+            `선택하신 시간(${data.participationTime})은 이 교육/세미나의 교육 시간과 일치하지 않습니다. 가능한 교육 시간: ${seminar.educationTimeSlots.join(', ')}`
+          );
+        }
+      }
+
+      // Quota validation (applies to both FIRST_COME and SELECTION types)
+      if (seminar.quota) {
+        const requestedAttendeeCount = data.attendeeCount || 1;
+        
+        // Calculate current active count for this slot (CONFIRMED + WAITING, excludes CANCELLED)
+        const currentActiveCount = await this.getActiveApplicationCount(
+          trainingSeminarId,
+          data.participationDate,
+          data.participationTime,
+          manager,
+        );
+
+        // Check if quota would be exceeded
+        if (currentActiveCount + requestedAttendeeCount > seminar.quota) {
+          throw new BadRequestException(
+            `모집 정원이 마감되었습니다. (정원: ${seminar.quota}명, 현재 신청: ${currentActiveCount}명, 요청: ${requestedAttendeeCount}명)`
+          );
+        }
+      }
+
+      // Determine application status based on recruitment type
+      let applicationStatus: ApplicationStatus;
+      if (seminar.recruitmentType === RecruitmentType.FIRST_COME) {
+        // FIRST_COME: If quota check passed, immediately confirm
+        applicationStatus = ApplicationStatus.CONFIRMED;
+      } else {
+        // SELECTION: Set to WAITING (admin will confirm later)
+        // But we still enforce quota: WAITING + CONFIRMED <= quota
+        applicationStatus = ApplicationStatus.WAITING;
+      }
+
+      // Create application within transaction
+      const app = manager.create(TrainingSeminarApplication, {
+        trainingSeminarId,
+        ...data,
+        status: applicationStatus,
       });
 
-      if (!timeMatches) {
-        throw new BadRequestException(
-          `선택하신 시간(${data.participationTime})은 이 교육/세미나의 교육 시간과 일치하지 않습니다. 가능한 교육 시간: ${seminar.educationTimeSlots.join(', ')}`
-        );
-      }
-    }
-
-    // 선착순일 경우 정원 체크 (날짜+시간별로 별도 관리)
-    if (seminar.recruitmentType === RecruitmentType.FIRST_COME && seminar.quota) {
-      // 사용자가 선택한 날짜를 YYYY-MM-DD 형식으로 정규화
-      const participationDateValue: string | Date = data.participationDate;
-      const normalizedParticipationDate = typeof participationDateValue === 'string'
-        ? participationDateValue.replace(/\./g, '-')
-        : participationDateValue.toISOString().split('T')[0];
-      const normalizedTime = data.participationTime.replace(/~/g, '-');
-
-      // 같은 날짜와 시간에 확정된 신청만 필터링
-      const confirmedApplicationsForSameSlot = (seminar.applications || []).filter(app => {
-        if (app.status !== ApplicationStatus.CONFIRMED) return false;
-
-        // 날짜 비교 (문자열 비교만 사용)
-        const appDateValue: string | Date = app.participationDate;
-        const appNormalizedDate = typeof appDateValue === 'string'
-          ? appDateValue.replace(/\./g, '-')
-          : appDateValue.toISOString().split('T')[0];
-
-        // 시간 비교 (형식 정규화)
-        const appNormalizedTime = app.participationTime ? app.participationTime.replace(/~/g, '-') : '';
-
-        return appNormalizedDate === normalizedParticipationDate && appNormalizedTime === normalizedTime;
-      });
-
-      // 해당 시간 슬롯의 현재 참석 인원 수 계산
-      const currentAttendeeCountForSlot = confirmedApplicationsForSameSlot.reduce(
-        (sum, app) => sum + (app.attendeeCount || 1),
-        0
-      );
-
-      // 신청하려는 참석 인원 수
-      const requestedAttendeeCount = data.attendeeCount || 1;
-
-      // 해당 시간 슬롯의 정원 초과 체크
-      if (currentAttendeeCountForSlot + requestedAttendeeCount > seminar.quota) {
-        throw new BadRequestException(
-          `선택하신 시간(${data.participationTime})의 모집 정원이 마감되었습니다. (정원: ${seminar.quota}명, 현재 신청: ${currentAttendeeCountForSlot}명, 요청: ${requestedAttendeeCount}명)`
-        );
-      }
-    }
-
-    const app = this.appRepo.create({
-      trainingSeminarId,
-      ...data,
-      // 선착순일 경우 바로 확정
-      status: seminar.recruitmentType === RecruitmentType.FIRST_COME
-        ? ApplicationStatus.CONFIRMED
-        : ApplicationStatus.WAITING,
+      return await manager.save(app);
     });
-    return this.appRepo.save(app);
   }
 
   async findApplications(trainingSeminarId: number, options: ApplicationListOptions = {}) {
@@ -724,16 +828,9 @@ export class TrainingSeminarService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // 응답 포맷: No, 이름, 휴대폰번호, 이메일, 교육/세미나명, 참여일자, 참여시간, 참석인원, 신청상태, 신청일시
-    // 번호는 최신 등록일 기준으로 순차 번호 부여 (등록일 DESC 기준)
-    const formattedItems = items.map((item, index) => {
-      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest'
-        ? total - ((page - 1) * limit + index)
-        : (page - 1) * limit + index + 1;
-
+    // 응답 포맷: row number는 프론트엔드에서 계산
+    const formattedItems = items.map((item) => {
       const base = {
-        no,
         id: item.id,
         name: item.name,
         phoneNumber: item.phoneNumber,
@@ -784,12 +881,132 @@ export class TrainingSeminarService {
     return base;
   }
 
+  /**
+   * Get user's application for a specific training seminar
+   * Returns application with id and status, or null if not applied
+   */
+  async getUserApplication(trainingSeminarId: number, userEmail: string) {
+    const app = await this.appRepo.findOne({
+      where: {
+        trainingSeminarId,
+        email: userEmail,
+      },
+    });
+
+    if (!app) {
+      return null;
+    }
+
+    return {
+      id: app.id,
+      status: app.status,
+    };
+  }
+
   async updateApplicationStatus(id: number, status: ApplicationStatus) {
-    const app = await this.appRepo.findOne({ where: { id } });
-    if (!app) throw new NotFoundException('신청을 찾을 수 없습니다.');
-    app.status = status;
-    await this.appRepo.save(app);
-    return { success: true, status };
+    // Use transaction with lock for concurrency protection
+    return await this.dataSource.transaction(async (manager) => {
+      const app = await manager.findOne(TrainingSeminarApplication, {
+        where: { id },
+        relations: ['trainingSeminar'],
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!app) throw new NotFoundException('신청을 찾을 수 없습니다.');
+
+      const seminar = app.trainingSeminar;
+      if (!seminar) throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
+
+      const oldStatus = app.status;
+      const newStatus = status;
+
+      // If changing to CONFIRMED or WAITING, validate quota
+      // (CANCELLED doesn't count toward quota, so no validation needed)
+      if ((newStatus === ApplicationStatus.CONFIRMED || newStatus === ApplicationStatus.WAITING) && seminar.quota) {
+        // If old status was CANCELLED, we need to check if adding this application would exceed quota
+        // If old status was already CONFIRMED/WAITING, no change in quota count
+        if (oldStatus === ApplicationStatus.CANCELLED) {
+          const requestedAttendeeCount = app.attendeeCount || 1;
+          const currentActiveCount = await this.getActiveApplicationCount(
+            seminar.id,
+            app.participationDate,
+            app.participationTime,
+            manager,
+          );
+
+          // Check if quota would be exceeded
+          if (currentActiveCount + requestedAttendeeCount > seminar.quota) {
+            throw new BadRequestException(
+              `정원이 마감되어 상태를 변경할 수 없습니다. (정원: ${seminar.quota}명, 현재 신청: ${currentActiveCount}명, 요청: ${requestedAttendeeCount}명)`
+            );
+          }
+        }
+        // If old status was already CONFIRMED or WAITING, changing to CONFIRMED/WAITING doesn't change quota count
+        // So no validation needed
+      }
+
+      // Update status
+      app.status = newStatus;
+      await manager.save(app);
+
+      return { success: true, status: newStatus };
+    });
+  }
+
+  async cancelApplication(trainingSeminarId: number, userEmail: string) {
+    // Find the application for this seminar and user
+    const app = await this.appRepo.findOne({
+      where: {
+        trainingSeminarId,
+        email: userEmail,
+      },
+      relations: ['trainingSeminar'],
+    });
+
+    if (!app) {
+      throw new NotFoundException('신청을 찾을 수 없습니다.');
+    }
+
+    // Get the seminar to access education dates
+    const seminar = app.trainingSeminar;
+    if (!seminar) {
+      throw new NotFoundException('교육/세미나를 찾을 수 없습니다.');
+    }
+
+    // Get participation date from application
+    const participationDateValue: string | Date = app.participationDate;
+    const normalizedParticipationDate = typeof participationDateValue === 'string'
+      ? participationDateValue.replace(/\./g, '-')
+      : participationDateValue.toISOString().split('T')[0];
+
+    // Parse participation date
+    const participationDate = new Date(normalizedParticipationDate);
+    if (isNaN(participationDate.getTime())) {
+      throw new BadRequestException('신청 일자 형식이 올바르지 않습니다.');
+    }
+
+    // Get today's date (server time, normalized to date only)
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const seminarDate = new Date(participationDate.getFullYear(), participationDate.getMonth(), participationDate.getDate());
+
+
+    // Cancel NOT allowed if seminar date is today (D-day) or tomorrow (1 day before)
+    const daysDifference = Math.ceil(
+      (seminarDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    
+    if (daysDifference <= 0) {
+      throw new BadRequestException('교육/세미나 당일에는 취소할 수 없습니다.');
+    }
+    
+
+    // Cancel allowed - delete the application (allows user to apply again)
+    await this.appRepo.remove(app);
+
+    return {
+      success: true,
+      message: '신청이 취소되었습니다.',
+    };
   }
 
   async deleteApplication(id: number) {

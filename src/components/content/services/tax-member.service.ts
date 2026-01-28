@@ -164,6 +164,28 @@ export class TaxMemberService {
     return { items: formattedItems, total, page, limit };
   }
 
+  async findRandom(limit: number = 10) {
+    // Return random members with isExposed = true, ordered by RAND() at DB level
+    // Using raw SQL expression for RAND() function (MySQL)
+    const members = await this.memberRepo
+      .createQueryBuilder('member')
+      .where('member.isExposed = :isExposed', { isExposed: true })
+      .orderBy('RAND()') // MySQL RAND() function for random ordering at DB level
+      .limit(limit)
+      .getMany();
+
+    // Format workAreas and remove internal fields for public API
+    const allCategories = await this.categoryRepo.find();
+    return members.map(member => {
+      const workAreasFormatted = this.mapWorkAreas(member.workAreas, allCategories);
+      const { createdAt, updatedAt, ...rest } = member;
+      return {
+        ...rest,
+        workAreas: workAreasFormatted,
+      };
+    });
+  }
+
   async findById(id: number, isPublic = false) {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');

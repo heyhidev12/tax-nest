@@ -39,9 +39,19 @@ export class AdminInsightsController extends AdminBaseController {
     type: [CategoryResponseDto],
   })
   @ApiQuery({ name: 'includeInactive', required: false, type: Boolean, description: '비활성화된 항목 포함 여부' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @Get('categories')
-  listCategories(@Query('includeInactive') includeInactive?: string) {
-    return this.insightsService.findAllCategories(includeInactive === 'true');
+  listCategories(
+    @Query('includeInactive') includeInactive?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.insightsService.adminListCategories({
+      includeInactive: includeInactive === 'true',
+      page: Number(page),
+      limit: Number(limit),
+    });
   }
 
   @ApiOperation({ summary: '카테고리 상세 조회' })
@@ -101,9 +111,19 @@ export class AdminInsightsController extends AdminBaseController {
   @ApiOperation({ summary: '모든 서브카테고리 조회 (전역)', description: '서브카테고리는 전역으로 관리되며 카테고리와 연결되지 않습니다.' })
   @ApiResponse({ status: 200, description: '서브카테고리 목록 조회 성공' })
   @ApiQuery({ name: 'includeHidden', required: false, type: Boolean, description: '비노출 항목 포함 여부' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @Get('subcategories')
-  getAllSubcategories(@Query('includeHidden') includeHidden?: string) {
-    return this.insightsService.getAllSubcategories(includeHidden === 'true');
+  getAllSubcategories(
+    @Query('includeHidden') includeHidden?: string,
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+  ) {
+    return this.insightsService.adminListSubcategories({
+      includeHidden: includeHidden === 'true',
+      page: Number(page),
+      limit: Number(limit),
+    });
   }
 
   @ApiOperation({ summary: '서브카테고리 상세 조회' })

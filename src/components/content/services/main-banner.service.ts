@@ -7,7 +7,6 @@ import { UploadService } from 'src/libs/upload/upload.service';
 export interface CreateBannerDto {
   mediaType: BannerMediaType;
   media: { id: number; url: string };
-  linkUrl?: string;
   displayOrder?: number;
 }
 
@@ -36,13 +35,14 @@ export class MainBannerService {
     const banner = this.bannerRepo.create({
       mediaType: dto.mediaType,
       media: dto.media,
-      linkUrl: dto.linkUrl,
       displayOrder: targetOrder,
     });
 
+    let savedId: number | null = null;
     await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(MainBanner);
       const saved = await repo.save(banner);
+      savedId = saved.id;
 
       // Rebuild the list with the new item at target position
       const newList = [...allBanners];
@@ -55,7 +55,13 @@ export class MainBannerService {
       }
     });
 
-    return (await this.bannerRepo.findOne({ where: { media: { url: dto.media.url } }, order: { createdAt: 'DESC' } }))!;
+    // IMPORTANT:
+    // Do not refetch by JSON column (media.url). That query can fail depending on DB/driver.
+    // Instead, return the saved entity by id.
+    if (!savedId) {
+      throw new NotFoundException('생성된 배너를 찾을 수 없습니다.');
+    }
+    return this.findById(savedId);
   }
 
   async findAll(includeInactive = false) {
@@ -64,6 +70,20 @@ export class MainBannerService {
       where,
       order: { displayOrder: 'ASC', createdAt: 'DESC' },
     });
+  }
+
+  async adminList(options: { includeInactive?: boolean; page?: number; limit?: number } = {}) {
+    const { includeInactive = true, page = 1, limit = 10 } = options;
+    const where = includeInactive ? {} : { isActive: true };
+
+    const [items, total] = await this.bannerRepo.findAndCount({
+      where,
+      order: { displayOrder: 'ASC', createdAt: 'DESC' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return { items, total, page, limit };
   }
 
   async findById(id: number) {
@@ -114,6 +134,7 @@ export class MainBannerService {
       await this.bannerRepo.save(banner);
     }
 
+    // findById already removes linkUrl from response
     return this.findById(id);
   }
 

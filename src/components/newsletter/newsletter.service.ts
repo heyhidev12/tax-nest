@@ -1,6 +1,6 @@
 import { Injectable, ConflictException, NotFoundException, Logger, Inject } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { Repository, DataSource, In } from 'typeorm';
 import { NewsletterSubscriber } from 'src/libs/entity/newsletter-subscriber.entity';
 import { Member } from 'src/libs/entity/member.entity';
 import { MAIL_PROVIDER_TOKEN } from './services/mail-provider.interface';
@@ -31,6 +31,8 @@ export class NewsletterService {
     private readonly memberRepo: Repository<Member>,
     @Inject(MAIL_PROVIDER_TOKEN)
     private readonly mailProvider: MailProvider,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) { }
 
   // POST /newsletter/subscribe - 뉴스레터 구독 (이름 + 이메일)
@@ -113,15 +115,28 @@ export class NewsletterService {
 
     const [items, total] = await qb.getManyAndCount();
 
+    // Batch load members to check for mismatches
+    const emails = items.map(s => s.email).filter(Boolean);
+    const members = emails.length > 0 
+      ? await this.memberRepo.find({ where: { email: In(emails) } })
+      : [];
+    const memberMap = new Map(members.map(m => [m.email, m]));
+
     const formattedItems = items.map((subscriber, index) => {
       const subscribedAt = subscriber.subscribedAt || new Date();
       const unsubscribedAt = subscriber.unsubscribedAt || null;
+      
+      // Single source of truth: prefer member.newsletterSubscribed if member exists
+      const member = subscriber.email ? memberMap.get(subscriber.email) : null;
+      const finalIsSubscribed = member 
+        ? member.newsletterSubscribed 
+        : subscriber.isSubscribed;
+      
       return {
-        no: total - ((page - 1) * limit + index),
         id: subscriber.id,
         name: subscriber.name || '-',
         email: subscriber.email,
-        isSubscribed: subscriber.isSubscribed,
+        isSubscribed: finalIsSubscribed,
         subscribedAt,
         unsubscribedAt,
         isMailSynced: subscriber.isMailSynced,
@@ -167,32 +182,45 @@ export class NewsletterService {
   // 구독 상태 토글 (DB 처리)
   async toggleSubscription(id: number | string) {
     const numericId = typeof id === 'string' ? Number(id) : id;
-    const subscriber = await this.subscriberRepo.findOne({
-      where: { id: numericId as number },
+    
+    // Use transaction to ensure both updates succeed or fail together
+    return await this.dataSource.transaction(async (transactionalEntityManager) => {
+      const subscriber = await transactionalEntityManager.findOne(NewsletterSubscriber, {
+        where: { id: numericId as number },
+      });
+      if (!subscriber) {
+        throw new NotFoundException('구독자를 찾을 수 없습니다.');
+      }
+
+      // Step 1: Toggle newsletter table
+      const newSubscribedStatus = !subscriber.isSubscribed;
+      subscriber.isSubscribed = newSubscribedStatus;
+      subscriber.unsubscribedAt = newSubscribedStatus ? null : new Date();
+      subscriber.isMailSynced = true;
+      await transactionalEntityManager.save(NewsletterSubscriber, subscriber);
+
+      // Step 2: Sync related member (find by email or memberId)
+      // Priority: memberId (if exists) > email (fallback)
+      let member: Member | null = null;
+      
+      // Try to find by email first (most common case)
+      if (subscriber.email) {
+        member = await transactionalEntityManager.findOne(Member, {
+          where: { email: subscriber.email },
+        });
+      }
+
+      if (member) {
+        member.newsletterSubscribed = newSubscribedStatus;
+        await transactionalEntityManager.save(Member, member);
+      }
+
+      return {
+        success: true,
+        isSubscribed: subscriber.isSubscribed,
+        newsletterSubscribed: newSubscribedStatus, // Return for frontend consistency
+      };
     });
-    if (!subscriber) {
-      throw new NotFoundException('구독자를 찾을 수 없습니다.');
-    }
-
-    const newSubscribedStatus = !subscriber.isSubscribed;
-    subscriber.isSubscribed = newSubscribedStatus;
-    subscriber.unsubscribedAt = newSubscribedStatus ? null : new Date();
-    subscriber.isMailSynced = true;
-    await this.subscriberRepo.save(subscriber);
-
-    // Sync with Member.newsletterSubscribed (single source of truth for GET /newsletter/me)
-    const member = await this.memberRepo.findOne({
-      where: { email: subscriber.email },
-    });
-    if (member) {
-      member.newsletterSubscribed = newSubscribedStatus;
-      await this.memberRepo.save(member);
-    }
-
-    return {
-      success: true,
-      isSubscribed: subscriber.isSubscribed,
-    };
   }
 
   // 구독자 삭제 (DB 삭제)

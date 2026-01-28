@@ -47,7 +47,7 @@ export class AwardService {
       isMainExposed,
       sort = 'order',
       page = 1,
-      limit = 50,
+      limit = 10,
       includeHidden = false
     } = options;
 
@@ -78,23 +78,15 @@ export class AwardService {
     const [items, total] = await qb.getManyAndCount();
 
     // 응답 포맷: No, 노출순서, 체크박스, 년도 명, 노출여부, 등록일시
-    const formattedItems = items.map((item, index) => {
-      // 최신순이면 큰 번호부터, 오래된순이면 작은 번호부터
-      const no = sort === 'latest'
-        ? total - ((page - 1) * limit + index)
-        : (page - 1) * limit + index + 1;
-
-      return {
-        no,
-        id: item.id,
-        yearName: item.yearName,
-        displayOrder: item.displayOrder,
-        isMainExposed: item.isMainExposed,
-        isExposed: item.isExposed,
-        awardCount: item.awards?.length || 0,
-        createdAt: item.createdAt,
-      };
-    });
+    const formattedItems = items.map((item) => ({
+      id: item.id,
+      yearName: item.yearName,
+      displayOrder: item.displayOrder,
+      isMainExposed: item.isMainExposed,
+      isExposed: item.isExposed,
+      awardCount: item.awards?.length || 0,
+      createdAt: item.createdAt,
+    }));
 
     return { items: formattedItems, total, page, limit };
   }

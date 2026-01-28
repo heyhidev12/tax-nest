@@ -87,6 +87,12 @@ export class AdminUpdateTrainingSeminarDto {
   @Min(1, { message: '정원은 최소 1명 이상이어야 합니다.' })
   quota?: number;
 
+  @ApiPropertyOptional({ example: 0, description: '가격 (최소: 0)' })
+  @IsOptional()
+  @IsInt({ message: '가격은 숫자여야 합니다.' })
+  @Min(0, { message: '가격은 0 이상이어야 합니다.' })
+  price?: number;
+
   @ApiPropertyOptional({ example: true, description: '노출 여부' })
   @IsOptional()
   @IsBoolean()

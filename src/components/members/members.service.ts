@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { Member } from 'src/libs/entity/member.entity';
 import { Consultation } from 'src/libs/entity/consultation.entity';
-import { In, Repository } from 'typeorm';
+import { NewsletterSubscriber } from 'src/libs/entity/newsletter-subscriber.entity';
+import { In, Repository, DataSource } from 'typeorm';
 import { MemberStatus, MemberType } from 'src/libs/enums/members.enum';
 import * as bcrypt from 'bcrypt';
 import { AdminUpdateMemberDto } from 'src/libs/dto/admin/admin-update-member.dto';
@@ -35,6 +36,10 @@ export class MembersService {
     private readonly memberRepo: Repository<Member>,
     @InjectRepository(Consultation)
     private readonly consultationRepo: Repository<Consultation>,
+    @InjectRepository(NewsletterSubscriber)
+    private readonly newsletterSubscriberRepo: Repository<NewsletterSubscriber>,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) { }
 
   findByLoginId(loginId: string) {
@@ -146,26 +151,19 @@ export class MembersService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    const formattedItems = items.map((m, index) => {
-      const no = sort === 'latest'
-        ? total - ((page - 1) * limit + index)
-        : (page - 1) * limit + index + 1;
-
-      return {
-        no,
-        id: m.id,
-        memberType: m.memberType,
-        loginId: m.loginId,
-        name: m.name,
-        email: m.email,
-        phoneNumber: m.phoneNumber,
-        newsletterSubscribed: m.newsletterSubscribed,
-        isApproved: m.isApproved,
-        status: m.status,
-        affiliation: m.affiliation,
-        createdAt: m.createdAt,
-      };
-    });
+    const formattedItems = items.map((m) => ({
+      id: m.id,
+      memberType: m.memberType,
+      loginId: m.loginId,
+      name: m.name,
+      email: m.email,
+      phoneNumber: m.phoneNumber,
+      newsletterSubscribed: m.newsletterSubscribed,
+      isApproved: m.isApproved,
+      status: m.status,
+      affiliation: m.affiliation,
+      createdAt: m.createdAt,
+    }));
 
     return {
       items: formattedItems,
@@ -187,15 +185,18 @@ export class MembersService {
       take: limit,
     });
 
-    const formattedItems = items.map((m, index) => ({
-      no: total - ((page - 1) * limit + index),
+    // Use same formatting as adminList to ensure response shape consistency (without row number)
+    const formattedItems = items.map((m) => ({
       id: m.id,
+      memberType: m.memberType,
       loginId: m.loginId,
       name: m.name,
       email: m.email,
       phoneNumber: m.phoneNumber,
-      affiliation: m.affiliation,
+      newsletterSubscribed: m.newsletterSubscribed,
       isApproved: m.isApproved,
+      status: m.status,
+      affiliation: m.affiliation,
       createdAt: m.createdAt,
     }));
 
@@ -344,7 +345,55 @@ export class MembersService {
       member.isApproved = dto.isApproved;
     }
 
-    await this.memberRepo.save(member);
+    // Sync newsletter subscription status with newsletter table using transaction
+    if (dto.newsletterSubscribed !== undefined) {
+      await this.dataSource.transaction(async (transactionalEntityManager) => {
+        // Step 1: Update member table
+        await transactionalEntityManager.save(Member, member);
+
+        // Step 2: Sync newsletter table
+        const memberEmail = dto.email !== undefined ? dto.email : member.email;
+        if (memberEmail) {
+          let newsletterRecord = await transactionalEntityManager.findOne(NewsletterSubscriber, {
+            where: { email: memberEmail },
+          });
+
+          if (dto.newsletterSubscribed === true) {
+            // Create or update newsletter record
+            if (newsletterRecord) {
+              newsletterRecord.isSubscribed = true;
+              newsletterRecord.subscribedAt = newsletterRecord.subscribedAt || new Date();
+              newsletterRecord.unsubscribedAt = null;
+              newsletterRecord.isMailSynced = true;
+              await transactionalEntityManager.save(NewsletterSubscriber, newsletterRecord);
+            } else {
+              // Create new newsletter record
+              const newSubscriber = transactionalEntityManager.create(NewsletterSubscriber, {
+                email: memberEmail,
+                name: member.name,
+                isSubscribed: true,
+                subscribedAt: new Date(),
+                unsubscribedAt: null,
+                isMailSynced: true,
+              });
+              await transactionalEntityManager.save(NewsletterSubscriber, newSubscriber);
+            }
+          } else {
+            // Update newsletter record to unsubscribed (do NOT delete)
+            if (newsletterRecord) {
+              newsletterRecord.isSubscribed = false;
+              newsletterRecord.unsubscribedAt = new Date();
+              newsletterRecord.isMailSynced = true;
+              await transactionalEntityManager.save(NewsletterSubscriber, newsletterRecord);
+            }
+          }
+        }
+      });
+    } else {
+      // No newsletter subscription change, just save member
+      await this.memberRepo.save(member);
+    }
+
     return this.adminGetOne(id);
   }
 

@@ -41,7 +41,7 @@ export class AdminMembersController extends AdminBaseController {
   @Get('pending-approval')
   pendingApprovalList(
     @Query('page') page = 1,
-    @Query('limit') limit = 20,
+    @Query('limit') limit = 10,
     @Query('sort') sort: 'latest' | 'oldest' = 'latest',
   ) {
     return this.membersService.adminPendingApprovalList(Number(page), Number(limit), sort);

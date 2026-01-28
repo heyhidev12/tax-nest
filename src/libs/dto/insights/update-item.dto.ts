@@ -23,6 +23,14 @@ export class UpdateItemDto {
   @IsNumber({}, { message: '서브카테고리 ID는 숫자여야 합니다.' })
   subcategoryId?: number;
 
+  @ApiPropertyOptional({ 
+    example: 1, 
+    description: 'Business area category id where majorCategory === selected subcategory' 
+  })
+  @IsOptional()
+  @IsNumber({}, { message: '서브마이너카테고리 ID는 숫자여야 합니다.' })
+  subMinorCategoryId?: number;
+
   @ApiPropertyOptional({
     example: { id: 10, url: 'https://example.com/thumbnail.jpg' },
     description: '썸네일 이미지'

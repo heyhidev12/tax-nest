@@ -23,9 +23,6 @@ export class MainBanner {
   @Column({ type: 'json' })
   media: { id: number; url: string };
 
-  @Column({ nullable: true })
-  linkUrl: string;
-
   @Column({ default: 0 })
   displayOrder: number;
 

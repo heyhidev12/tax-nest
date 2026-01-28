@@ -66,8 +66,14 @@ export class AdminContentController extends AdminBaseController {
   // ===== MAIN BANNER =====
   @ApiOperation({ summary: '메인 배너 목록' })
   @Get('banners')
-  listBanners() {
-    return this.bannerService.findAll(true);
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  listBanners(@Query('page') page = 1, @Query('limit') limit = 10) {
+    return this.bannerService.adminList({
+      includeInactive: true,
+      page: Number(page),
+      limit: Number(limit),
+    });
   }
 
   @ApiOperation({ summary: '메인 배너 생성' })
@@ -83,7 +89,6 @@ export class AdminContentController extends AdminBaseController {
           description: '미디어 타입 (필수)',
         },
         mediaUrl: { type: 'string', description: '미디어 URL (필수)' },
-        linkUrl: { type: 'string', description: '링크 URL (선택)' },
         displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
         isActive: { type: 'boolean', description: '활성화 여부 (기본: true)' },
       },
@@ -106,7 +111,6 @@ export class AdminContentController extends AdminBaseController {
           description: '미디어 타입',
         },
         mediaUrl: { type: 'string', description: '미디어 URL' },
-        linkUrl: { type: 'string', description: '링크 URL' },
         displayOrder: { type: 'number', description: '표시 순서' },
         isActive: { type: 'boolean', description: '활성화 여부' },
       },
@@ -548,7 +552,13 @@ export class AdminContentController extends AdminBaseController {
   @ApiOperation({ summary: '본사/지점 목록' })
   @Get('branches')
   listBranches(@Query() query: any) {
-    return this.branchService.findAll({ ...query, includeHidden: true });
+    const { page, limit, ...rest } = query;
+    return this.branchService.findAll({
+      ...rest,
+      includeHidden: true,
+      page: page !== undefined ? Number(page) : undefined,
+      limit: limit !== undefined ? Number(limit) : undefined,
+    });
   }
 
   @ApiOperation({ summary: '본사/지점 상세' })
@@ -661,7 +671,13 @@ export class AdminContentController extends AdminBaseController {
   @ApiOperation({ summary: '주요 고객 목록' })
   @Get('key-customers')
   listKeyCustomers(@Query() query: any) {
-    return this.keyCustomerService.findAll({ ...query, includeHidden: true });
+    const { page, limit, ...rest } = query;
+    return this.keyCustomerService.findAll({
+      ...rest,
+      includeHidden: true,
+      page: page !== undefined ? Number(page) : undefined,
+      limit: limit !== undefined ? Number(limit) : undefined,
+    });
   }
 
   @ApiOperation({ summary: '주요 고객 상세' })
@@ -841,11 +857,13 @@ export class AdminContentController extends AdminBaseController {
   })
   @Get('business-areas')
   listBusinessAreas(@Query() query: any) {
-    const { majorCategoryId, minorCategoryId, ...rest } = query;
+    const { majorCategoryId, minorCategoryId, page, limit, ...rest } = query;
     return this.businessAreaService.findAll({
       ...rest,
       majorCategoryId: majorCategoryId ? Number(majorCategoryId) : undefined,
       minorCategoryId: minorCategoryId ? Number(minorCategoryId) : undefined,
+      page: page !== undefined ? Number(page) : undefined,
+      limit: limit !== undefined ? Number(limit) : undefined,
       includeHidden: true,
     });
   }
@@ -1012,7 +1030,12 @@ export class AdminContentController extends AdminBaseController {
   @ApiOperation({ summary: '전체 신청 목록 (검색: 이름)' })
   @Get('training-seminar-applications')
   listAllApplications(@Query() query: any) {
-    return this.trainingSeminarService.findAllApplications(query);
+    const { page, limit, ...rest } = query;
+    return this.trainingSeminarService.findAllApplications({
+      ...rest,
+      page: page !== undefined ? Number(page) : undefined,
+      limit: limit !== undefined ? Number(limit) : undefined,
+    });
   }
 
   @ApiOperation({ summary: '신청 상세' })

@@ -98,6 +98,10 @@ export class TrainingSeminar {
   @Column({ nullable: true })
   quota: number;
 
+  // 가격
+  @Column({ type: 'int', default: 0 })
+  price: number;
+
   // 노출 여부
   @Column({ default: true })
   isExposed: boolean;
