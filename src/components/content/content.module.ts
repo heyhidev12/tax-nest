@@ -18,6 +18,9 @@ import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity
 import { InsightsItem, InsightsComment, InsightsCommentReport } from 'src/libs/entity/insights-item.entity';
 import { Attachment } from 'src/libs/entity/attachment.entity';
 import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
+import { FooterPolicy } from 'src/libs/entity/footer-policy.entity';
+import { FamilySite } from 'src/libs/entity/family-site.entity';
+import { MemberWorkCategory } from 'src/libs/entity/member-work-category.entity';
 
 // Services
 import { MainBannerService } from './services/main-banner.service';
@@ -33,6 +36,9 @@ import { TaxMemberService } from './services/tax-member.service';
 import { ExposureSettingsService } from './services/exposure-settings.service';
 import { InsightsService } from './services/insights.service';
 import { AttachmentService } from './services/attachment.service';
+import { FooterPolicyService } from './services/footer-policy.service';
+import { FamilySiteService } from './services/family-site.service';
+import { WorkAreasMigrationService } from './services/work-areas-migration.service';
 import { PublicContentController } from './controllers/public-content.controller';
 import { AttachmentsController } from './controllers/attachments.controller';
 
@@ -64,6 +70,9 @@ import { MembersModule } from '../members/members.module';
       InsightsCommentReport,
       Attachment,
       BusinessAreaCategory,
+      FooterPolicy,
+      FamilySite,
+      MemberWorkCategory,
     ]),
   ],
   providers: [
@@ -80,6 +89,9 @@ import { MembersModule } from '../members/members.module';
     ExposureSettingsService,
     InsightsService,
     AttachmentService,
+    FooterPolicyService,
+    FamilySiteService,
+    WorkAreasMigrationService,
   ],
   controllers: [PublicContentController, AttachmentsController],
   exports: [
@@ -95,6 +107,9 @@ import { MembersModule } from '../members/members.module';
     ExposureSettingsService,
     InsightsService,
     AttachmentService,
+    FooterPolicyService,
+    FamilySiteService,
+    WorkAreasMigrationService,
   ],
 })
 export class ContentModule { }

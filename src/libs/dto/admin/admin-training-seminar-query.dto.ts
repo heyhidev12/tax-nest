@@ -30,10 +30,10 @@ export class AdminTrainingSeminarQueryDto {
   @IsBoolean()
   isExposed?: boolean;
 
-  @ApiPropertyOptional({ example: 'latest', enum: ['latest', 'oldest'], description: '정렬 (기본: latest - 최신순)' })
+  @ApiPropertyOptional({ example: 'latest', enum: ['latest', 'oldest', 'deadline', 'new'], description: '정렬 (기본: latest - 최신순, new: 최근 30일, deadline: 마감일순)' })
   @IsOptional()
   @IsString()
-  sort?: 'latest' | 'oldest';
+  sort?: 'latest' | 'oldest' | 'deadline' | 'new';
 
   @ApiPropertyOptional({ example: 1, description: '페이지 번호' })
   @IsOptional()

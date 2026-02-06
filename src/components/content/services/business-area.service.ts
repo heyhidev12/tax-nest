@@ -5,6 +5,7 @@ import { BusinessArea } from 'src/libs/entity/business-area.entity';
 import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
 import { InsightsSubcategory } from 'src/libs/entity/insights-subcategory.entity';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
+import { MemberWorkCategory } from 'src/libs/entity/member-work-category.entity';
 import { CreateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/create-category.dto';
 import { UpdateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/update-category.dto';
 import { CreateBusinessAreaItemDto } from 'src/libs/dto/business-area/create-item.dto';
@@ -14,7 +15,7 @@ interface BusinessAreaListOptions {
   search?: string;
   majorCategoryId?: number;
   minorCategoryId?: number;
-  memberId?: number; // Filter by member ID (matches minorCategory.name with member workAreas)
+  memberId?: number; // Filter by member ID (uses member_work_categories mapping)
   minorCategoryName?: string; // Filter by minor category name directly
   isExposed?: boolean;
   sort?: 'latest' | 'oldest' | 'order';
@@ -35,6 +36,8 @@ export class BusinessAreaService {
     private readonly insightsSubcategoryRepo: Repository<InsightsSubcategory>,
     @InjectRepository(TaxMember)
     private readonly taxMemberRepo: Repository<TaxMember>,
+    @InjectRepository(MemberWorkCategory)
+    private readonly memberWorkCategoryRepo: Repository<MemberWorkCategory>,
     private readonly dataSource: DataSource,
   ) { }
 
@@ -55,6 +58,7 @@ export class BusinessAreaService {
       },
       name: cat.name,
       image: cat.image,
+      displayOrder: cat.displayOrder,
       isExposed: cat.isExposed,
       isMainExposed: cat.isMainExposed,
       createdAt: cat.createdAt,
@@ -98,7 +102,7 @@ export class BusinessAreaService {
     const categories = await this.categoryRepo.find({
       where,
       relations: ['majorCategory'],
-      order: { createdAt: 'ASC' },
+      order: { displayOrder: 'ASC', createdAt: 'ASC' },
     });
 
     return categories.map((cat) => this.formatCategoryResponse(cat));
@@ -121,10 +125,53 @@ export class BusinessAreaService {
     const categories = await this.categoryRepo.find({
       where,
       relations: ['majorCategory'],
-      order: { createdAt: 'ASC' },
+      order: { displayOrder: 'ASC', createdAt: 'ASC' },
     });
 
     return categories.map((cat) => this.formatCategoryResponse(cat));
+  }
+
+  async updateCategoryOrder(majorCategoryId: number, orders: { categoryId: number; displayOrder: number }[]) {
+    // Validate major category exists
+    const majorCategory = await this.insightsSubcategoryRepo.findOne({
+      where: { id: majorCategoryId },
+    });
+    if (!majorCategory) {
+      throw new NotFoundException('Major Category를 찾을 수 없습니다.');
+    }
+
+    // Get all categories for this major category
+    const categories = await this.categoryRepo.find({
+      where: { majorCategoryId },
+    });
+
+    const categoryIds = categories.map((c) => c.id);
+
+    // Validate all categories belong to the major category
+    for (const order of orders) {
+      if (!categoryIds.includes(order.categoryId)) {
+        throw new BadRequestException(
+          `카테고리 ID ${order.categoryId}는 Major Category ID ${majorCategoryId}에 속하지 않습니다.`,
+        );
+      }
+    }
+
+    // Validate no duplicate displayOrder values
+    const displayOrders = orders.map((o) => o.displayOrder);
+    const uniqueOrders = new Set(displayOrders);
+    if (displayOrders.length !== uniqueOrders.size) {
+      throw new BadRequestException('중복된 표시 순서가 있습니다.');
+    }
+
+    // Use transaction to ensure atomic update
+    await this.dataSource.transaction(async (manager) => {
+      const repo = manager.getRepository(BusinessAreaCategory);
+      for (const order of orders) {
+        await repo.update(order.categoryId, { displayOrder: order.displayOrder });
+      }
+    });
+
+    return { success: true };
   }
 
   async getCategoryById(id: number, includeHidden = false) {
@@ -232,28 +279,27 @@ export class BusinessAreaService {
       const member = await this.taxMemberRepo.findOne({ where: { id: memberId } });
       if (!member) throw new NotFoundException('구성원을 찾을 수 없습니다.');
 
-      const workAreas = member.workAreas || [];
-      const ids = workAreas.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id));
-
-      if (ids.length === 0) return [];
-
-      const categories = await this.categoryRepo.find({
-        where: { id: In(ids), isExposed: true },
-        relations: ['majorCategory'],
+      // Get categories from member_work_categories mapping table
+      const memberWorkCategories = await this.memberWorkCategoryRepo.find({
+        where: { memberId },
+        relations: ['category', 'category.majorCategory'],
+        order: { displayOrder: 'ASC' },
       });
 
-      // Sort according to workAreas order
-      return ids
-        .map((id) => categories.find((c) => c.id === id))
-        .filter(Boolean)
-        .map((cat) => ({
-          id: cat!.id,
-          name: cat!.name,
-          image: cat!.image,
-          isExposed: cat!.isExposed,
-          isMainExposed: cat!.isMainExposed,
-          majorCategoryId: cat!.majorCategoryId,
-          majorCategoryName: cat!.majorCategory?.name || '',
+      if (memberWorkCategories.length === 0) return [];
+
+      // Return categories in displayOrder from the mapping table
+      return memberWorkCategories
+        .filter((mwc) => mwc.category && mwc.category.isExposed)
+        .map((mwc) => ({
+          id: mwc.category.id,
+          name: mwc.category.name,
+          image: mwc.category.image,
+          isExposed: mwc.category.isExposed,
+          isMainExposed: mwc.category.isMainExposed,
+          majorCategoryId: mwc.category.majorCategoryId,
+          majorCategoryName: mwc.category.majorCategory?.name || '',
+          displayOrder: mwc.displayOrder,
         }));
     }
 
@@ -399,28 +445,26 @@ export class BusinessAreaService {
       qb.andWhere('area.minorCategoryId = :minorCategoryId', { minorCategoryId });
     }
 
-    // Filter by memberId: Get member's workAreas, then filter by minorCategory.name
+    // Filter by memberId: Get member's categories from member_work_categories mapping table
     if (memberId) {
       const member = await this.taxMemberRepo.findOne({ where: { id: memberId } });
       if (!member) {
         throw new NotFoundException('구성원을 찾을 수 없습니다.');
       }
 
-      // Get workAreas array (filter out empty/null values)
-      const workAreas = (member.workAreas || []).filter(Boolean);
+      // Get category IDs from member_work_categories mapping table
+      const memberWorkCategories = await this.memberWorkCategoryRepo.find({
+        where: { memberId },
+        select: ['categoryId'],
+      });
 
-      if (workAreas.length === 0) {
-        // If member has no workAreas, return empty result
+      const categoryIds = memberWorkCategories.map((mwc) => mwc.categoryId);
+
+      if (categoryIds.length === 0) {
+        // If member has no categories, return empty result
         qb.andWhere('1 = 0'); // Always false condition
       } else {
-        // Filter business areas where minorCategory.id is in the member's workAreas (stored as IDs)
-        // Note: member.workAreas stores IDs as strings, so we convert them to numbers for the IN clause
-        const workAreaIds = workAreas.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
-        if (workAreaIds.length === 0) {
-          qb.andWhere('1 = 0');
-        } else {
-          qb.andWhere('minorCategory.id IN (:...workAreaIds)', { workAreaIds });
-        }
+        qb.andWhere('minorCategory.id IN (:...categoryIds)', { categoryIds });
       }
     }
 
@@ -814,6 +858,7 @@ export class BusinessAreaService {
       relations: ['majorCategory'],
       order: {
         majorCategoryId: 'ASC',
+        displayOrder: 'ASC', // Use displayOrder for proper sorting
         createdAt: 'ASC',
       },
     });
@@ -872,6 +917,7 @@ export class BusinessAreaService {
           id: minorCategory.id,
           name: minorCategory.name,
           image: minorCategory.image,
+          displayOrder: minorCategory.displayOrder,
           isExposed: minorCategory.isExposed,
           isMainExposed: minorCategory.isMainExposed,
           items: [],
@@ -908,11 +954,14 @@ export class BusinessAreaService {
       }
     }
 
-    // Convert to array format
-    return Object.values(grouped).map((group: any) => ({
-      majorCategory: group.majorCategory,
-      minorCategories: Object.values(group.minorCategories),
-    }));
+    // Convert to array format and sort minorCategories by displayOrder
+    return Object.values(grouped)
+      .sort((a: any, b: any) => a.majorCategory.displayOrder - b.majorCategory.displayOrder)
+      .map((group: any) => ({
+        majorCategory: group.majorCategory,
+        minorCategories: Object.values(group.minorCategories)
+          .sort((a: any, b: any) => (a.displayOrder || 0) - (b.displayOrder || 0)),
+      }));
   }
 
   // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)

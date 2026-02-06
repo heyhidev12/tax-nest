@@ -4,7 +4,9 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { MemberWorkCategory } from './member-work-category.entity';
 
 // 세무사 회원 (공개 프로필) - Module 06
 @Entity('tax_members')
@@ -24,9 +26,18 @@ export class TaxMember {
   @Column({ type: 'json' })
   subPhoto: { id: number; url: string };
 
-  // 업무분야 (3개까지 - 1순위/2순위/3순위)
-  @Column({ type: 'json' })
-  workAreas: string[];
+  /**
+   * Legacy workAreas column - DO NOT USE IN NEW CODE
+   * Kept temporarily for migration purposes only.
+   * After migration is complete, this column will be removed.
+   * @deprecated Use memberWorkCategories instead
+   */
+  @Column({ type: 'json', nullable: true, select: false })
+  workAreas: Array<{ id: number; value: string }> | string[] | null;
+
+  // Many-to-many relationship with categories via mapping table
+  @OneToMany(() => MemberWorkCategory, (mwc) => mwc.member, { cascade: true })
+  memberWorkCategories: MemberWorkCategory[];
 
   // 소속명 (선택)
   @Column({ nullable: true })

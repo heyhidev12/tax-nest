@@ -1,5 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsEmail, IsNotEmpty, IsObject, IsOptional, IsString, ArrayMaxSize } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsEmail, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+
+export class CategoryAssignmentDto {
+  @ApiProperty({ example: 1, description: '카테고리 ID' })
+  @IsInt()
+  categoryId: number;
+
+  @ApiProperty({ example: 1, description: '카테고리 내 표시 순서' })
+  @IsInt()
+  @Min(0)
+  displayOrder: number;
+}
 
 export class AdminCreateTaxMemberDto {
   @ApiProperty({ example: '홍길동', description: '구성원 명 (필수)' })
@@ -23,17 +35,19 @@ export class AdminCreateTaxMemberDto {
   @IsNotEmpty({ message: '구성원 서브 사진을 업로드해주세요.' })
   subPhoto: { id: number; url: string };
 
-  @ApiProperty({ 
-    example: ['세무조정', '세무신고', '법인세'], 
-    description: '업무 분야 (필수, 최대 3개 - 1순위/2순위/3순위)',
-    type: [String],
-    maxItems: 3,
+  @ApiProperty({
+    type: [CategoryAssignmentDto],
+    description: '카테고리 할당 목록 (무제한)',
+    example: [
+      { categoryId: 1, displayOrder: 1 },
+      { categoryId: 2, displayOrder: 2 },
+    ],
   })
   @IsArray()
-  @IsString({ each: true })
-  @IsNotEmpty({ message: '업무 분야를 선택해주세요.' })
-  @ArrayMaxSize(3, { message: '업무 분야는 최대 3개까지 선택 가능합니다.' })
-  workAreas: string[];
+  @ValidateNested({ each: true })
+  @Type(() => CategoryAssignmentDto)
+  @IsNotEmpty({ message: '카테고리를 선택해주세요.' })
+  categories: CategoryAssignmentDto[];
 
   @ApiPropertyOptional({ example: '세무법인 투게더', description: '소속 명 (선택)' })
   @IsOptional()

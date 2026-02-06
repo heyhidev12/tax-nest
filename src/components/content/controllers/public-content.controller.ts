@@ -26,6 +26,8 @@ import { HistoryService } from '../services/history.service';
 import { InsightsService } from '../services/insights.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
 import { ExposureSettingsService } from '../services/exposure-settings.service';
+import { FooterPolicyService } from '../services/footer-policy.service';
+import { FamilySiteService } from '../services/family-site.service';
 import { MembersService } from 'src/components/members/members.service';
 
 @ApiTags('Content')
@@ -42,44 +44,41 @@ export class PublicContentController {
     private readonly historyService: HistoryService,
     private readonly insightsService: InsightsService,
     private readonly exposureSettingsService: ExposureSettingsService,
+    private readonly footerPolicyService: FooterPolicyService,
+    private readonly familySiteService: FamilySiteService,
     private readonly membersService: MembersService,
   ) { }
 
   // ===== MEMBERS (구성원) =====
 
   @ApiOperation({ summary: '구성원 목록 조회 (공개)' })
-  @ApiResponse({ status: 200, description: '구성원 목록 조회 성공' })
-  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
-  @ApiQuery({ name: 'search', required: false, type: String, description: '이름 또는 소속명으로 검색' })
-  @ApiQuery({ name: 'workArea', required: false, type: String, description: '업무 분야로 필터링' })
-  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
   @ApiOperation({ summary: '구성원 목록 조회 (공개)' })
   @ApiResponse({ status: 200, description: '구성원 목록 조회 성공' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String, description: '구성원명 또는 소속명으로 검색' })
-  @ApiQuery({ name: 'workArea', required: false, type: String, description: '업무분야명으로 필터링' })
-  @ApiQuery({ name: 'businessAreaId', required: false, type: Number, description: '업무분야 항목 ID로 필터링 (해당 업무분야의 minorCategory.name과 일치하는 구성원만 반환)' })
+  @ApiQuery({ name: 'categoryId', required: false, type: Number, description: '카테고리 ID로 필터링' })
+  @ApiQuery({ name: 'businessAreaId', required: false, type: Number, description: '업무분야 항목 ID로 필터링 (해당 업무분야의 minorCategoryId로 구성원 필터링)' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
   @Get('members')
   async getMembers(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
-    @Query('workArea') workArea?: string,
+    @Query('categoryId') categoryId?: string,
     @Query('businessAreaId') businessAreaId?: string,
     @Query('sort') sort?: 'latest' | 'oldest' | 'order',
   ) {
     const pageNum = page ? parseInt(page, 10) : 1;
     const limitNum = limit ? parseInt(limit, 10) : 20;
+    const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
     const businessAreaIdNum = businessAreaId ? parseInt(businessAreaId, 10) : undefined;
 
     return this.taxMemberService.findAll({
       page: pageNum,
       limit: limitNum,
       search,
-      workArea,
+      categoryId: categoryIdNum,
       businessAreaId: businessAreaIdNum,
       isExposed: true, // Only exposed members
       sort: sort || 'order',
@@ -107,6 +106,22 @@ export class PublicContentController {
       throw new NotFoundException('구성원을 찾을 수 없습니다.');
     }
     return member;
+  }
+
+  @ApiOperation({
+    summary: '관련 전문가 목록 조회 (공개)',
+    description: '현재 전문가와 같은 카테고리에 속한 다른 전문가들을 반환합니다. 카테고리별 displayOrder ASC, 동일 순서일 경우 랜덤 정렬.',
+  })
+  @ApiResponse({ status: 200, description: '관련 전문가 목록 조회 성공' })
+  @ApiResponse({ status: 404, description: '구성원을 찾을 수 없습니다' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 6, description: '반환할 최대 전문가 수 (기본: 6)' })
+  @Get('members/:id/related')
+  async getRelatedMembers(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('limit') limit?: string,
+  ) {
+    const limitNum = limit ? parseInt(limit, 10) : 6;
+    return this.taxMemberService.findRelated(id, limitNum);
   }
 
   // ===== HISTORY (연혁) =====
@@ -177,7 +192,7 @@ export class PublicContentController {
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20 })
   @ApiQuery({ name: 'search', required: false, type: String, description: '제목으로 검색' })
   @ApiQuery({ name: 'type', required: false, enum: ['VOD', 'SEMINAR', 'TRAINING', 'LECTURE'], description: '교육/세미나 유형 필터링' })
-  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'deadline'], description: '정렬 방식 (기본: latest, deadline: 마감일순)' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'deadline', 'new'], description: '정렬 방식 (기본: latest, new: 최근 30일 신규, deadline: 마감일순)' })
   @ApiQuery({ name: 'memberType', required: false, enum: ['GENERAL', 'OTHER', 'INSURANCE'], description: '회원 유형 (접근 제어용)' })
   @ApiQuery({ name: 'isApproved', required: false, type: Boolean, description: '승인 여부 (보험사 회원용, 접근 제어용)' })
   @Get('training-seminars')
@@ -186,7 +201,7 @@ export class PublicContentController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('type') type?: string,
-    @Query('sort') sort?: 'latest' | 'oldest' | 'deadline',
+    @Query('sort') sort?: 'latest' | 'oldest' | 'deadline' | 'new',
     @Query('memberType') memberType?: string,
     @Query('isApproved') isApproved?: string,
   ) {
@@ -448,7 +463,7 @@ export class PublicContentController {
   @ApiQuery({ name: 'search', required: false, type: String, description: '업무분야명으로 검색' })
   @ApiQuery({ name: 'majorCategoryId', required: false, type: Number, description: 'Major Category ID 필터링' })
   @ApiQuery({ name: 'minorCategoryId', required: false, type: Number, description: 'Minor Category ID 필터링' })
-  @ApiQuery({ name: 'memberId', required: false, type: Number, description: '구성원 ID로 필터링 (해당 구성원의 workAreas와 일치하는 minorCategory.name을 가진 업무분야만 반환)' })
+  @ApiQuery({ name: 'memberId', required: false, type: Number, description: '구성원 ID로 필터링 (해당 구성원의 카테고리와 일치하는 업무분야만 반환)' })
   @ApiQuery({ name: 'minorCategoryName', required: false, type: String, description: 'Minor Category 이름으로 직접 필터링' })
   @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'oldest', 'order'], description: '정렬 방식 (기본: order)' })
   @Get('business-areas')
@@ -514,8 +529,10 @@ export class PublicContentController {
   @ApiResponse({ status: 200, description: '인사이트 목록 조회 성공' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1, description: '페이지 번호 (기본: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 20, description: '페이지당 항목 수 (기본: 20)' })
+  @ApiQuery({ name: 'search', required: false, type: String, description: '검색어 (제목, 내용 검색)' })
   @ApiQuery({ name: 'categoryId', required: false, type: Number, description: '카테고리 ID 필터링' })
   @ApiQuery({ name: 'subcategoryId', required: false, type: Number, description: '서브카테고리 ID 필터링' })
+  @ApiQuery({ name: 'subMinorCategoryId', required: false, type: Number, description: '서브마이너카테고리 ID 필터링' })
   @ApiQuery({ name: 'dataRoom', required: false, enum: ['A', 'B', 'C'], description: '데이터룸 유형 필터링 (A, B, C)' })
   @ApiQuery({ name: 'memberType', required: false, enum: ['GENERAL', 'OTHER', 'INSURANCE'], description: '회원 유형 (접근 제어용)' })
   @ApiQuery({ name: 'isApproved', required: false, type: Boolean, description: '승인 여부 (보험사 회원용, 접근 제어용)' })
@@ -523,8 +540,10 @@ export class PublicContentController {
   async getInsights(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
+    @Query('subMinorCategoryId') subMinorCategoryId?: string,
     @Query('dataRoom') dataRoom?: string,
     @Query('memberType') memberType?: string,
     @Query('isApproved') isApproved?: string,
@@ -533,13 +552,16 @@ export class PublicContentController {
     const limitNum = limit ? parseInt(limit, 10) : 20;
     const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
     const subcategoryIdNum = subcategoryId ? parseInt(subcategoryId, 10) : undefined;
+    const subMinorCategoryIdNum = subMinorCategoryId ? parseInt(subMinorCategoryId, 10) : undefined;
     const isApprovedBool = isApproved === 'true' ? true : isApproved === 'false' ? false : undefined;
 
     return this.insightsService.getPublicInsights({
       page: pageNum,
       limit: limitNum,
+      search: search || undefined,
       categoryId: categoryIdNum,
       subcategoryId: subcategoryIdNum,
+      subMinorCategoryId: subMinorCategoryIdNum,
       dataRoom,
       memberType: memberType || undefined,
       isApproved: isApprovedBool,
@@ -666,4 +688,24 @@ export class PublicContentController {
     return `${year}.${month}.${day} ${hours}:${minutes}`;
   }
 
+  // ===== FOOTER (푸터) =====
+
+  @ApiOperation({ summary: 'Footer Policy 목록 조회 (공개)' })
+  @ApiResponse({ status: 200, description: 'Footer Policy 목록 조회 성공 (이용약관, 개인정보처리방침)' })
+  @ApiQuery({ name: 'type', required: false, enum: ['TERMS', 'PRIVACY'], description: '정책 유형으로 필터링' })
+  @Get('footer/policies')
+  async getFooterPolicies(@Query('type') type?: 'TERMS' | 'PRIVACY') {
+    if (type) {
+      const policy = await this.footerPolicyService.findByType(type as any);
+      return policy ? [policy] : [];
+    }
+    return this.footerPolicyService.findAllPublic();
+  }
+
+  @ApiOperation({ summary: 'Family Site 목록 조회 (공개)' })
+  @ApiResponse({ status: 200, description: 'Family Site 목록 조회 성공' })
+  @Get('footer/family-sites')
+  async getFooterFamilySites() {
+    return this.familySiteService.findAllPublic();
+  }
 }

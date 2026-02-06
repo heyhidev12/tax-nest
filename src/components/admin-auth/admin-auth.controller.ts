@@ -88,7 +88,6 @@ export class AdminAuthController {
   }
 
   private setAuthCookies(res: Response, accessToken: string, refreshToken: string) {
-    const isProd = process.env.NODE_ENV === 'production';
 
     res.cookie('access_token', accessToken, {
       httpOnly: true,

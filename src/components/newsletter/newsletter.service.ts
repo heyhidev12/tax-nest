@@ -39,18 +39,26 @@ export class NewsletterService {
   async subscribe(name: string | undefined, email: string) {
     const existing = await this.subscriberRepo.findOne({ where: { email } });
 
-    if (existing && existing.isSubscribed) {
+    // Log before state
+    const beforeIsSubscribed = existing?.isSubscribed ?? null;
+    this.logger.log(`[SUBSCRIBE] email=${email}, existingId=${existing?.id ?? 'null'}, beforeIsSubscribed=${beforeIsSubscribed}`);
+
+    // Only throw 409 if subscriber exists AND is already subscribed
+    if (existing && existing.isSubscribed === true) {
       throw new ConflictException('이미 구독 중인 이메일입니다.');
     }
 
     if (existing) {
+      // Re-subscribe: update existing row
       existing.name = name ?? existing.name;
       existing.isSubscribed = true;
       existing.subscribedAt = new Date(); // Set subscribedAt when re-subscribing
       existing.unsubscribedAt = null;
       existing.isMailSynced = true;
       await this.subscriberRepo.save(existing);
+      this.logger.log(`[SUBSCRIBE] Re-subscribed: email=${email}, id=${existing.id}, afterIsSubscribed=true`);
     } else {
+      // Create new subscriber
       const subscriber = this.subscriberRepo.create({
         email,
         name,
@@ -59,7 +67,8 @@ export class NewsletterService {
         isMailSynced: true,
         unsubscribedAt: null,
       });
-      await this.subscriberRepo.save(subscriber);
+      const saved = await this.subscriberRepo.save(subscriber);
+      this.logger.log(`[SUBSCRIBE] New subscriber: email=${email}, id=${saved.id}, isSubscribed=true`);
     }
 
     // Sync Member table if member exists
@@ -75,11 +84,26 @@ export class NewsletterService {
   // 구독 취소 - DB에서만 처리
   async unsubscribe(email: string) {
     const existing = await this.subscriberRepo.findOne({ where: { email } });
+    
+    // Log before state
+    const beforeIsSubscribed = existing?.isSubscribed ?? null;
+    this.logger.log(`[UNSUBSCRIBE] email=${email}, existingId=${existing?.id ?? 'null'}, beforeIsSubscribed=${beforeIsSubscribed}`);
+
     if (existing) {
+      // Already unsubscribed - return success (idempotent)
+      if (existing.isSubscribed === false) {
+        this.logger.log(`[UNSUBSCRIBE] Already unsubscribed: email=${email}, id=${existing.id}`);
+        return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
+      }
+
       existing.isSubscribed = false;
       existing.unsubscribedAt = new Date();
       existing.isMailSynced = true;
       await this.subscriberRepo.save(existing);
+      this.logger.log(`[UNSUBSCRIBE] Unsubscribed: email=${email}, id=${existing.id}, afterIsSubscribed=false`);
+    } else {
+      // No subscriber row exists - still return success (idempotent)
+      this.logger.log(`[UNSUBSCRIBE] No subscriber row found: email=${email}`);
     }
 
     // Sync Member table if member exists
@@ -279,10 +303,15 @@ export class NewsletterService {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
 
-    // Single source of truth: member.newsletterSubscribed
+    // Single source of truth: NewsletterSubscriber table (same table that subscribe/unsubscribe updates)
+    const subscriber = await this.subscriberRepo.findOne({ where: { email: member.email } });
+    
+    // If subscriber row exists, use its isSubscribed value; otherwise default to member.newsletterSubscribed
+    const isSubscribed = subscriber ? subscriber.isSubscribed : (member.newsletterSubscribed ?? false);
+
     return {
       email: member.email,
-      isSubscribed: member.newsletterSubscribed,
+      isSubscribed,
     };
   }
 
@@ -293,7 +322,40 @@ export class NewsletterService {
       throw new NotFoundException('회원을 찾을 수 없습니다.');
     }
 
-    // Single source of truth: Update only member.newsletterSubscribed
+    // Find or create subscriber row
+    let subscriber = await this.subscriberRepo.findOne({ where: { email: member.email } });
+    
+    // Log before state
+    const beforeIsSubscribed = subscriber?.isSubscribed ?? null;
+    this.logger.log(`[UNSUBSCRIBE_MEMBER] memberId=${memberId}, email=${member.email}, subscriberId=${subscriber?.id ?? 'null'}, beforeIsSubscribed=${beforeIsSubscribed}`);
+
+    if (subscriber) {
+      // Already unsubscribed - return success (idempotent)
+      if (subscriber.isSubscribed === false) {
+        this.logger.log(`[UNSUBSCRIBE_MEMBER] Already unsubscribed: email=${member.email}, id=${subscriber.id}`);
+        return { success: true, message: '뉴스레터 구독이 취소되었습니다.' };
+      }
+
+      // Update NewsletterSubscriber table (single source of truth)
+      subscriber.isSubscribed = false;
+      subscriber.unsubscribedAt = new Date();
+      subscriber.isMailSynced = true;
+      await this.subscriberRepo.save(subscriber);
+      this.logger.log(`[UNSUBSCRIBE_MEMBER] Unsubscribed: email=${member.email}, id=${subscriber.id}, afterIsSubscribed=false`);
+    } else {
+      // No subscriber row exists - create one with isSubscribed=false
+      subscriber = this.subscriberRepo.create({
+        email: member.email,
+        name: member.name,
+        isSubscribed: false,
+        unsubscribedAt: new Date(),
+        isMailSynced: true,
+      });
+      const saved = await this.subscriberRepo.save(subscriber);
+      this.logger.log(`[UNSUBSCRIBE_MEMBER] Created unsubscribed row: email=${member.email}, id=${saved.id}, isSubscribed=false`);
+    }
+
+    // Sync Member table
     member.newsletterSubscribed = false;
     await this.memberRepo.save(member);
 

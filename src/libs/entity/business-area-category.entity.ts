@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { InsightsSubcategory } from './insights-subcategory.entity';
 import { BusinessArea } from './business-area.entity';
+import { MemberWorkCategory } from './member-work-category.entity';
 
 /**
  * Business Area Category Entity (Minor Category)
@@ -42,6 +43,9 @@ export class BusinessAreaCategory {
   @Column({ type: 'json', nullable: true })
   image: { id: number; url: string };
 
+  @Column({ default: 0 })
+  displayOrder: number;
+
   @Column({ default: true })
   isExposed: boolean;
 
@@ -57,5 +61,9 @@ export class BusinessAreaCategory {
 
   @OneToMany(() => BusinessArea, (item) => item.minorCategory)
   items: BusinessArea[];
+
+  // Many-to-many relationship with TaxMembers via mapping table
+  @OneToMany(() => MemberWorkCategory, (mwc) => mwc.category)
+  memberWorkCategories: MemberWorkCategory[];
 }
 

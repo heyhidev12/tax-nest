@@ -82,22 +82,25 @@ export class AuthController {
   @Post('login')
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: any) {
     const result = await this.authService.login(dto);
-    
+
     // Set refresh token cookie if autoLogin is enabled
     if (result.refreshToken) {
       const isProduction = process.env.NODE_ENV === 'production';
-      
+      const maxAge = result.autoLogin
+        ? 1000 * 60 * 60 * 24 * 7  // 7 days for autoLogin = true
+        : 1000 * 60 * 15;          // 15 minutes for autoLogin = false
+
       res.cookie('refresh_token', result.refreshToken, {
         httpOnly: true,
         secure: isProduction,
         sameSite: 'lax',
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        maxAge: maxAge,
       });
     } else {
       // Clear any existing refresh token cookie if autoLogin is false
       res.clearCookie('refresh_token');
     }
-    
+
     // Don't send refresh token in response body
     const { refreshToken, ...response } = result;
     return response;
@@ -117,14 +120,14 @@ export class AuthController {
   @Post('logout')
   async logout(@Req() req: any, @Res({ passthrough: true }) res: any) {
     const refreshToken = req.cookies?.refresh_token;
-    
+
     // Clear refresh token cookie
     res.clearCookie('refresh_token', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
     });
-    
+
     return this.authService.logout(refreshToken);
   }
 

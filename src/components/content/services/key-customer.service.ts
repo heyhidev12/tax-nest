@@ -53,7 +53,19 @@ export class KeyCustomerService {
       }
     });
 
-    return (await this.customerRepo.findOne({ where: { logo: data.logo }, order: { createdAt: 'DESC' } }))!;
+    const created = await this.customerRepo.findOne({
+      where: { logo: data.logo as any },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!created) {
+      return null;
+    }
+
+    const { name, ...rest } = created;
+    return {
+      ...rest,
+    };
   }
 
   async findAll(options: KeyCustomerListOptions = {}) {
@@ -98,13 +110,17 @@ export class KeyCustomerService {
         return {
           id: item.id,
           logo: item.logo,
+          websiteUrl: item.websiteUrl ?? null,
           displayOrder: item.displayOrder,
           isMainExposed: item.isMainExposed,
           isExposed: item.isExposed,
         };
       }
+
+      // Admin/internal 목록: name은 노출하지 않고 websiteUrl 포함
+      const { name, ...rest } = item;
       return {
-        ...item,
+        ...rest,
       };
     });
 
@@ -120,6 +136,7 @@ export class KeyCustomerService {
     return customers.map((item) => ({
       id: item.id,
       logo: item.logo,
+      websiteUrl: item.websiteUrl ?? null,
       displayOrder: item.displayOrder,
     }));
   }
@@ -127,8 +144,9 @@ export class KeyCustomerService {
   async findById(id: number) {
     const customer = await this.customerRepo.findOne({ where: { id } });
     if (!customer) throw new NotFoundException('주요고객을 찾을 수 없습니다.');
+    const { name, ...rest } = customer;
     return {
-      ...customer,
+      ...rest,
     };
   }
 
@@ -274,17 +292,5 @@ export class KeyCustomerService {
         });
       }
     }
-  }
-
-  // 날짜 포맷 헬퍼 (yyyy.MM.dd HH:mm:ss)
-  private formatDateTime(date: Date): string {
-    const d = new Date(date);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const seconds = String(d.getSeconds()).padStart(2, '0');
-    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
   }
 }

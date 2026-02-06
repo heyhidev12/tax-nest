@@ -19,6 +19,10 @@ export class KeyCustomer {
   @Column({ nullable: true })
   name: string;
 
+  // 고객사 웹사이트 URL (선택)
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  websiteUrl: string | null;
+
   @Column({ default: 0 })
   displayOrder: number;
 
@@ -35,20 +39,5 @@ export class KeyCustomer {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

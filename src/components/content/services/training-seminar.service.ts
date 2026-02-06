@@ -18,7 +18,7 @@ interface TrainingSeminarListOptions {
   targetMemberType?: TargetMemberType;
   isExposed?: boolean;
   isRecommended?: boolean;
-  sort?: 'latest' | 'oldest' | 'deadline';
+  sort?: 'latest' | 'oldest' | 'deadline' | 'new';
   page?: number;
   limit?: number;
   includeHidden?: boolean;
@@ -190,13 +190,31 @@ export class TrainingSeminarService {
       qb.andWhere('seminar.name LIKE :search', { search: `%${search}%` });
     }
 
-    // 정렬 (기본: 최신순)
-    if (sort === 'deadline') {
-      // 마감일 기준 정렬 (가까운 마감일 먼저 - 오름차순)
-      qb.orderBy('seminar.recruitmentEndDate', 'ASC');
+    // Sorting
+    // - latest (default): createdAt DESC
+    // - new: createdAt within last 30 days, createdAt DESC
+    // - deadline: active (>= now) first, expired (< now) next, NULL last; within group recruitmentEndDate ASC
+    if (sort === 'new') {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      qb.andWhere('seminar.createdAt >= :thirtyDaysAgo', { thirtyDaysAgo });
+      qb.orderBy('seminar.createdAt', 'DESC');
+    } else if (sort === 'deadline') {
+      // Deadline sorting: active (>= now) first, expired (< now) next, NULL last
+      // Use raw SQL with proper alias reference
+      qb.addSelect(
+        `(CASE
+          WHEN seminar.recruitmentEndDate IS NULL THEN 2
+          WHEN seminar.recruitmentEndDate < NOW() THEN 1
+          ELSE 0
+        END)`,
+        'deadline_priority',
+      );
+      qb.orderBy('deadline_priority', 'ASC');
+      qb.addOrderBy('seminar.recruitmentEndDate', 'ASC');
+      qb.addOrderBy('seminar.createdAt', 'DESC');
     } else {
-      // 최신순/오래된순 정렬
-      qb.orderBy('seminar.createdAt', sort === 'latest' ? 'DESC' : 'ASC');
+      qb.orderBy('seminar.createdAt', sort === 'oldest' ? 'ASC' : 'DESC');
     }
 
     // 페이지네이션
@@ -745,24 +763,6 @@ export class TrainingSeminarService {
       const recruitmentEndDate = seminar?.recruitmentEndDate
         ? new Date(seminar.recruitmentEndDate)
         : null;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      // 신청 마감일까지 남은 일수 계산
-      let deadlineDays: number | null = null;
-      let deadlineLabel: string | null = null;
-      if (recruitmentEndDate) {
-        const diffTime = recruitmentEndDate.getTime() - today.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays > 0) {
-          deadlineDays = diffDays;
-          deadlineLabel = `신청마감 D-${diffDays}`;
-        } else if (diffDays === 0) {
-          deadlineLabel = '신청마감 D-day';
-        } else {
-          deadlineLabel = '신청마감';
-        }
-      }
 
       // 상태에 따른 라벨
       const statusLabel = item.status === ApplicationStatus.CONFIRMED
@@ -791,8 +791,7 @@ export class TrainingSeminarService {
         return {
           ...base,
           typeLabel: this.getTypeLabel(seminar?.type || TrainingSeminarType.SEMINAR),
-          deadlineLabel,
-          deadlineDays,
+          recruitmentEndDate: recruitmentEndDate,
           statusLabel,
         };
       }

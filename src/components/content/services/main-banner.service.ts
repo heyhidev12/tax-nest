@@ -68,7 +68,7 @@ export class MainBannerService {
     const where = includeInactive ? {} : { isActive: true };
     return this.bannerRepo.find({
       where,
-      order: { displayOrder: 'ASC', createdAt: 'DESC' },
+      order: { displayOrder: 'DESC', createdAt: 'DESC' },
     });
   }
 
@@ -78,7 +78,7 @@ export class MainBannerService {
 
     const [items, total] = await this.bannerRepo.findAndCount({
       where,
-      order: { displayOrder: 'ASC', createdAt: 'DESC' },
+      order: { displayOrder: 'DESC', createdAt: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,
     });

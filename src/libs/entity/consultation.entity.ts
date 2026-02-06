@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, UpdateDateColumn } from 'typeorm';
 import { ConsultationStatus } from '../enums/consultations.enum';
 import { MemberFlag } from '../enums/members.enum';
 import { Member } from './member.entity';
@@ -72,6 +72,12 @@ export class Consultation {
   @Column({ type: 'text', nullable: true })
   answer: string;
 
+  @Column({ type: 'timestamp', nullable: true })
+  answeredAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

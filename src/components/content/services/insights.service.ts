@@ -738,8 +738,10 @@ export class InsightsService {
   async getPublicInsights(options: {
     page?: number;
     limit?: number;
+    search?: string;
     categoryId?: number;
     subcategoryId?: number;
+    subMinorCategoryId?: number;
     dataRoom?: string;
     memberType?: string; // 'GENERAL' | 'OTHER' | 'INSURANCE' | null
     isApproved?: boolean;
@@ -766,6 +768,17 @@ export class InsightsService {
       qb.andWhere('item.subcategoryId = :subcategoryId', { subcategoryId: options.subcategoryId });
     }
 
+    if (options.subMinorCategoryId) {
+      qb.andWhere('item.subMinorCategoryId = :subMinorCategoryId', { subMinorCategoryId: options.subMinorCategoryId });
+    }
+
+    // Search in title and content
+    if (options.search && options.search.trim() !== '') {
+      qb.andWhere('(item.title LIKE :search OR item.content LIKE :search)', {
+        search: `%${options.search.trim()}%`,
+      });
+    }
+
     if (options.dataRoom) {
       qb.andWhere('category.type = :dataRoom', { dataRoom: options.dataRoom });
     }
@@ -776,16 +789,29 @@ export class InsightsService {
       if (!options.memberType) {
         qb.andWhere('category.targetMemberType = :allType', { allType: TargetMemberType.ALL });
       } else {
-        // For logged-in users: ALL OR (matching memberType AND (not INSURANCE OR isApproved))
-        qb.andWhere(
-          '(category.targetMemberType = :allType OR (category.targetMemberType = :memberType AND (:memberType != :insuranceType OR :isApproved = true)))',
-          {
-            allType: TargetMemberType.ALL,
-            memberType: options.memberType,
-            insuranceType: TargetMemberType.INSURANCE,
-            isApproved: options.isApproved === true,
-          }
-        );
+        // For logged-in users with specific memberType
+        if (options.memberType === TargetMemberType.INSURANCE && options.isApproved === true) {
+          // INSURANCE + approved: Show ALL OR INSURANCE categories
+          qb.andWhere(
+            '(category.targetMemberType = :allType OR category.targetMemberType = :memberType)',
+            {
+              allType: TargetMemberType.ALL,
+              memberType: options.memberType,
+            }
+          );
+        } else if (options.memberType === TargetMemberType.INSURANCE && options.isApproved !== true) {
+          // INSURANCE + not approved: Only show ALL (public-only)
+          qb.andWhere('category.targetMemberType = :allType', { allType: TargetMemberType.ALL });
+        } else {
+          // Other memberTypes (GENERAL, OTHER): Show ALL OR matching memberType
+          qb.andWhere(
+            '(category.targetMemberType = :allType OR category.targetMemberType = :memberType)',
+            {
+              allType: TargetMemberType.ALL,
+              memberType: options.memberType,
+            }
+          );
+        }
       }
     }
 
@@ -863,16 +889,29 @@ export class InsightsService {
       if (!memberType) {
         qb.andWhere('category.targetMemberType = :allType', { allType: TargetMemberType.ALL });
       } else {
-        // For logged-in users: ALL OR (matching memberType AND (not INSURANCE OR isApproved))
-        qb.andWhere(
-          '(category.targetMemberType = :allType OR (category.targetMemberType = :memberType AND (:memberType != :insuranceType OR :isApproved = true)))',
-          {
-            allType: TargetMemberType.ALL,
-            memberType: memberType,
-            insuranceType: TargetMemberType.INSURANCE,
-            isApproved: isApproved === true,
-          }
-        );
+        // For logged-in users with specific memberType
+        if (memberType === TargetMemberType.INSURANCE && isApproved === true) {
+          // INSURANCE + approved: Show ALL OR INSURANCE categories
+          qb.andWhere(
+            '(category.targetMemberType = :allType OR category.targetMemberType = :memberType)',
+            {
+              allType: TargetMemberType.ALL,
+              memberType: memberType,
+            }
+          );
+        } else if (memberType === TargetMemberType.INSURANCE && isApproved !== true) {
+          // INSURANCE + not approved: Only show ALL (public-only)
+          qb.andWhere('category.targetMemberType = :allType', { allType: TargetMemberType.ALL });
+        } else {
+          // Other memberTypes (GENERAL, OTHER): Show ALL OR matching memberType
+          qb.andWhere(
+            '(category.targetMemberType = :allType OR category.targetMemberType = :memberType)',
+            {
+              allType: TargetMemberType.ALL,
+              memberType: memberType,
+            }
+          );
+        }
       }
     }
 

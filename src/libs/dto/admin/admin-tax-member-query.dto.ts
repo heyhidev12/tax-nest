@@ -8,10 +8,11 @@ export class AdminTaxMemberQueryDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ example: '세무조정', description: '업무분야 필터' })
+  @ApiPropertyOptional({ example: 1, description: '카테고리 ID로 필터' })
   @IsOptional()
-  @IsString()
-  workArea?: string;
+  @Type(() => Number)
+  @IsInt()
+  categoryId?: number;
 
   @ApiPropertyOptional({ example: true, description: '노출 여부 필터' })
   @IsOptional()

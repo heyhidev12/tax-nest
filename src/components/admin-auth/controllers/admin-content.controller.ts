@@ -30,10 +30,14 @@ import { CreateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/create
 import { UpdateBusinessAreaCategoryDto } from 'src/libs/dto/business-area/update-category.dto';
 import { CreateBusinessAreaItemDto } from 'src/libs/dto/business-area/create-item.dto';
 import { UpdateBusinessAreaItemDto } from 'src/libs/dto/business-area/update-item.dto';
+import { UpdateCategoryOrderDto } from 'src/libs/dto/business-area/update-category-order.dto';
 import { TrainingSeminarService } from 'src/components/content/services/training-seminar.service';
 import { CategoryService } from 'src/components/content/services/category.service';
 import { TaxMemberService } from 'src/components/content/services/tax-member.service';
 import { ExposureSettingsService } from 'src/components/content/services/exposure-settings.service';
+import { FooterPolicyService } from 'src/components/content/services/footer-policy.service';
+import { FamilySiteService } from 'src/components/content/services/family-site.service';
+import { WorkAreasMigrationService, MigrationResult, ValidationResult } from 'src/components/content/services/work-areas-migration.service';
 import { AdminDeleteManyDto } from 'src/libs/dto/admin/admin-delete-many.dto';
 import { AdminTaxMemberQueryDto } from 'src/libs/dto/admin/admin-tax-member-query.dto';
 import { AdminCreateTaxMemberDto } from 'src/libs/dto/admin/admin-create-tax-member.dto';
@@ -59,6 +63,9 @@ export class AdminContentController extends AdminBaseController {
     private readonly trainingSeminarService: TrainingSeminarService,
     private readonly taxMemberService: TaxMemberService,
     private readonly exposureSettingsService: ExposureSettingsService,
+    private readonly footerPolicyService: FooterPolicyService,
+    private readonly familySiteService: FamilySiteService,
+    private readonly workAreasMigrationService: WorkAreasMigrationService,
   ) {
     super();
   }
@@ -694,9 +701,10 @@ export class AdminContentController extends AdminBaseController {
       required: ['logoUrl'],
       properties: {
         logoUrl: { type: 'string', description: '로고 이미지 URL (필수)' },
-        name: {
+        websiteUrl: {
           type: 'string',
-          description: '고객사 이름 (선택, 내부 관리용)',
+          maxLength: 255,
+          description: '고객사 웹사이트 URL (선택)',
         },
         displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
         isMainExposed: {
@@ -745,7 +753,11 @@ export class AdminContentController extends AdminBaseController {
       type: 'object',
       properties: {
         logoUrl: { type: 'string', description: '로고 이미지 URL' },
-        name: { type: 'string', description: '고객사 이름 (내부 관리용)' },
+        websiteUrl: {
+          type: 'string',
+          maxLength: 255,
+          description: '고객사 웹사이트 URL (내부 관리용)',
+        },
         displayOrder: { type: 'number', description: '표시 순서' },
         isMainExposed: { type: 'boolean', description: '메인 노출 여부' },
         isExposed: { type: 'boolean', description: '노출 여부' },
@@ -809,6 +821,19 @@ export class AdminContentController extends AdminBaseController {
       majorCategoryId,
       includeHidden === 'true',
     );
+  }
+
+  @ApiOperation({
+    summary: 'Business Areas 카테고리 순서 변경',
+    description: 'Major Category 내에서 카테고리 순서를 변경합니다.',
+  })
+  @ApiBody({ type: UpdateCategoryOrderDto })
+  @ApiResponse({ status: 200, description: '순서 변경 성공' })
+  @ApiResponse({ status: 400, description: '카테고리가 해당 Major Category에 속하지 않거나 중복된 순서가 있습니다' })
+  @ApiResponse({ status: 404, description: 'Major Category를 찾을 수 없습니다' })
+  @Patch('business-areas/categories/order')
+  updateBusinessAreaCategoryOrder(@Body() dto: UpdateCategoryOrderDto) {
+    return this.businessAreaService.updateCategoryOrder(dto.majorCategoryId, dto.orders);
   }
 
   @ApiOperation({ summary: 'Business Areas 카테고리 상세 조회' })
@@ -1233,5 +1258,228 @@ export class AdminContentController extends AdminBaseController {
     @Body() body: { value: any },
   ) {
     return this.exposureSettingsService.set(key, body.value);
+  }
+
+  // ===== FOOTER POLICIES =====
+  @ApiOperation({ summary: 'Footer Policy 목록 조회' })
+  @ApiResponse({ status: 200, description: 'Footer Policy 목록 조회 성공' })
+  @Get('footer-policies')
+  listFooterPolicies() {
+    return this.footerPolicyService.findAll();
+  }
+
+  @ApiOperation({ summary: 'Footer Policy 상세 조회' })
+  @ApiResponse({ status: 200, description: 'Footer Policy 상세 조회 성공' })
+  @ApiResponse({ status: 404, description: 'Footer Policy를 찾을 수 없습니다' })
+  @Get('footer-policies/:id')
+  getFooterPolicy(@Param('id', ParseIntPipe) id: number) {
+    return this.footerPolicyService.findById(id);
+  }
+
+  @ApiOperation({ summary: 'Footer Policy 생성' })
+  @ApiBody({
+    description: 'Footer Policy 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['type', 'title', 'content'],
+      properties: {
+        type: { type: 'string', enum: ['TERMS', 'PRIVACY'], description: '정책 유형 (필수)' },
+        title: { type: 'string', description: '제목 (필수)' },
+        content: { type: 'string', description: '내용 (HTML, 필수)' },
+        isActive: { type: 'boolean', description: '활성화 여부 (기본: true)' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Footer Policy 생성 성공' })
+  @ApiResponse({ status: 400, description: '이미 해당 타입의 Footer Policy가 존재합니다' })
+  @Post('footer-policies')
+  createFooterPolicy(
+    @Body() body: { type: 'TERMS' | 'PRIVACY'; title: string; content: string; isActive?: boolean },
+  ) {
+    return this.footerPolicyService.create(body as any);
+  }
+
+  @ApiOperation({ summary: 'Footer Policy 수정' })
+  @ApiBody({
+    description: 'Footer Policy 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', description: '제목' },
+        content: { type: 'string', description: '내용 (HTML)' },
+        isActive: { type: 'boolean', description: '활성화 여부' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Footer Policy 수정 성공' })
+  @ApiResponse({ status: 404, description: 'Footer Policy를 찾을 수 없습니다' })
+  @Patch('footer-policies/:id')
+  updateFooterPolicy(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { title?: string; content?: string; isActive?: boolean },
+  ) {
+    return this.footerPolicyService.update(id, body);
+  }
+
+  // ===== FAMILY SITES =====
+  @ApiOperation({ summary: 'Family Site 목록 조회' })
+  @ApiResponse({ status: 200, description: 'Family Site 목록 조회 성공' })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 50 })
+  @Get('family-sites')
+  listFamilySites(@Query() query: any) {
+    const { page, limit, ...rest } = query;
+    return this.familySiteService.findAll({
+      ...rest,
+      includeHidden: true,
+      page: page !== undefined ? Number(page) : undefined,
+      limit: limit !== undefined ? Number(limit) : undefined,
+    });
+  }
+
+  @ApiOperation({ summary: 'Family Site 순서 변경' })
+  @ApiBody({
+    description: 'Family Site 순서 변경 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              displayOrder: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: '순서 변경 성공' })
+  @Patch('family-sites/order')
+  updateFamilySiteOrder(
+    @Body() body: { items: { id: number; displayOrder: number }[] },
+  ) {
+    return this.familySiteService.updateOrder(body.items);
+  }
+
+  @ApiOperation({ summary: 'Family Site 다중 삭제' })
+  @Delete('family-sites/bulk')
+  deleteFamilySites(@Body() dto: AdminDeleteManyDto) {
+    return this.familySiteService.deleteMany(dto.ids);
+  }
+
+  @ApiOperation({ summary: 'Family Site 상세 조회' })
+  @ApiResponse({ status: 200, description: 'Family Site 상세 조회 성공' })
+  @ApiResponse({ status: 404, description: 'Family Site를 찾을 수 없습니다' })
+  @Get('family-sites/:id')
+  getFamilySite(@Param('id', ParseIntPipe) id: number) {
+    return this.familySiteService.findById(id);
+  }
+
+  @ApiOperation({ summary: 'Family Site 생성' })
+  @ApiBody({
+    description: 'Family Site 생성 정보',
+    schema: {
+      type: 'object',
+      required: ['name', 'url'],
+      properties: {
+        name: { type: 'string', description: '사이트 이름 (필수)' },
+        url: { type: 'string', description: '사이트 URL (필수)' },
+        displayOrder: { type: 'number', description: '표시 순서 (기본: 0)' },
+        isExposed: { type: 'boolean', description: '노출 여부 (기본: true)' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Family Site 생성 성공' })
+  @Post('family-sites')
+  createFamilySite(@Body() body: any) {
+    return this.familySiteService.create(body);
+  }
+
+  @ApiOperation({ summary: 'Family Site 수정' })
+  @ApiBody({
+    description: 'Family Site 수정 정보',
+    schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: '사이트 이름' },
+        url: { type: 'string', description: '사이트 URL' },
+        displayOrder: { type: 'number', description: '표시 순서' },
+        isExposed: { type: 'boolean', description: '노출 여부' },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Family Site 수정 성공' })
+  @ApiResponse({ status: 404, description: 'Family Site를 찾을 수 없습니다' })
+  @Patch('family-sites/:id')
+  updateFamilySite(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+  ) {
+    return this.familySiteService.update(id, body);
+  }
+
+  @ApiOperation({ summary: 'Family Site 삭제' })
+  @ApiResponse({ status: 200, description: 'Family Site 삭제 성공' })
+  @ApiResponse({ status: 404, description: 'Family Site를 찾을 수 없습니다' })
+  @Delete('family-sites/:id')
+  deleteFamilySite(@Param('id', ParseIntPipe) id: number) {
+    return this.familySiteService.delete(id);
+  }
+
+  @ApiOperation({ summary: 'Family Site 노출 토글' })
+  @Patch('family-sites/:id/toggle-exposure')
+  toggleFamilySiteExposure(@Param('id', ParseIntPipe) id: number) {
+    return this.familySiteService.toggleExposure(id);
+  }
+
+  // ===== WORK AREAS MIGRATION =====
+  @ApiOperation({
+    summary: 'Work Areas 마이그레이션 상태 조회',
+    description: 'Legacy workAreas에서 member_work_categories로의 마이그레이션 상태를 확인합니다.',
+  })
+  @ApiResponse({ status: 200, description: '마이그레이션 상태 조회 성공' })
+  @Get('migration/work-areas/status')
+  getMigrationStatus(): Promise<{
+    legacyDataExists: boolean;
+    totalMembers: number;
+    membersWithLegacyWorkAreas: number;
+    membersWithNewCategories: number;
+    totalNewMappings: number;
+    migrationNeeded: boolean;
+  }> {
+    return this.workAreasMigrationService.getStatus();
+  }
+
+  @ApiOperation({
+    summary: 'Work Areas 마이그레이션 실행 (Dry Run)',
+    description: '실제 데이터를 변경하지 않고 마이그레이션 결과를 미리 확인합니다.',
+  })
+  @ApiResponse({ status: 200, description: '마이그레이션 Dry Run 완료' })
+  @Post('migration/work-areas/dry-run')
+  runMigrationDryRun(): Promise<MigrationResult> {
+    return this.workAreasMigrationService.migrate(true);
+  }
+
+  @ApiOperation({
+    summary: 'Work Areas 마이그레이션 실행',
+    description: 'Legacy workAreas 데이터를 member_work_categories 테이블로 마이그레이션합니다. 이미 마이그레이션된 회원은 건너뜁니다.',
+  })
+  @ApiResponse({ status: 200, description: '마이그레이션 완료' })
+  @Post('migration/work-areas/execute')
+  runMigration(): Promise<MigrationResult> {
+    return this.workAreasMigrationService.migrate(false);
+  }
+
+  @ApiOperation({
+    summary: 'Work Areas 마이그레이션 검증',
+    description: '마이그레이션이 올바르게 완료되었는지 검증합니다.',
+  })
+  @ApiResponse({ status: 200, description: '검증 완료' })
+  @Get('migration/work-areas/validate')
+  validateMigration(): Promise<ValidationResult> {
+    return this.workAreasMigrationService.validate();
   }
 }

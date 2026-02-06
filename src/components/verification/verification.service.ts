@@ -40,7 +40,7 @@ export class VerificationService {
     const rateLimitKey = `verification:rate_limit:${purpose}:${target}`;
     const isRateLimited = await this.redisService.get(rateLimitKey);
     if (isRateLimited) {
-      throw new BadRequestException('잠시 후 다시 요청해주세요.');
+      throw new BadRequestException('1분 후 다시 요청해주세요.');
     }
 
     // const isSignupOrChangePhone = purpose === 'SIGNUP' || purpose === 'CHANGE_PHONE';

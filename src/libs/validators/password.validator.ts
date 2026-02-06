@@ -15,29 +15,24 @@ export class IsStrongPasswordConstraint implements ValidatorConstraintInterface 
     if (!password || typeof password !== 'string') {
       return false;
     }
-
+  
+    // length check
+    if (password.length < 6 || password.length > 12) {
+      return false;
+    }
+  
     let criteriaCount = 0;
-
-    // 영문자 포함
-    if (/[a-zA-Z]/.test(password)) {
-      criteriaCount++;
-    }
-
-    // 숫자 포함
-    if (/[0-9]/.test(password)) {
-      criteriaCount++;
-    }
-
-    // 특수문자 포함
-    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
-      criteriaCount++;
-    }
-
+  
+    if (/[a-zA-Z]/.test(password)) criteriaCount++;
+    if (/[0-9]/.test(password)) criteriaCount++;
+    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) criteriaCount++;
+  
     return criteriaCount >= 2;
   }
+  
 
   defaultMessage(): string {
-    return '비밀번호는 영문, 숫자, 특수문자 중 2가지 이상을 조합해야 합니다.';
+    return '비밀번호는 6~12자이며 영문, 숫자, 특수문자 중 2가지 이상을 조합해야 합니다.';
   }
 }
 

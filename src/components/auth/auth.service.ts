@@ -146,23 +146,28 @@ export class AuthService {
     };
 
     // Generate access token (short-lived)
+    const accessTokenExpiresIn = dto.autoLogin ? '7d' : '15m';
     const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: '15m', // 15 minutes
+      expiresIn: accessTokenExpiresIn,
     });
 
-    // Generate refresh token if autoLogin is true
     let refreshToken: string | null = null;
+    let refreshTokenExpiresIn: number | null = null;
+
     if (dto.autoLogin) {
       refreshToken = crypto.randomBytes(64).toString('hex');
-      
-      // Store refresh token in Redis with 7 days expiration
-      // Key: refresh_token:{token} -> Value: userId
+      refreshTokenExpiresIn = dto.autoLogin
+        ? 60 * 60 * 24 * 7  // 7 days for autoLogin = true
+        : 60 * 15;          // 15 minutes for autoLogin = false
+
+      // Store refresh token in Redis
       const refreshTokenKey = `refresh_token:${refreshToken}`;
       await this.redisService.set(refreshTokenKey, JSON.stringify({
         userId: member.id,
         loginId: member.loginId,
         createdAt: new Date().toISOString(),
-      }), 60 * 60 * 24 * 7); // 7 days
+        autoLogin: dto.autoLogin, // Store autoLogin status
+      }), refreshTokenExpiresIn);
     }
 
     const safeMember = {
@@ -174,12 +179,13 @@ export class AuthService {
       status: member.status,
       isApproved: member.isApproved,
     };
-    
-    return { 
-      accessToken, 
-      refreshToken, 
+
+    return {
+      accessToken,
+      refreshToken,
+      refreshTokenExpiresIn,
       autoLogin: dto.autoLogin || false,
-      member: safeMember 
+      member: safeMember
     };
   }
 
@@ -194,13 +200,14 @@ export class AuthService {
     // Find user by refresh token in Redis
     const refreshTokenKey = `refresh_token:${refreshToken}`;
     const tokenData = await this.redisService.get(refreshTokenKey);
-    
+
     if (!tokenData) {
       throw new UnauthorizedException('유효하지 않거나 만료된 리프레시 토큰입니다.');
     }
 
     const parsedData = JSON.parse(tokenData);
     const userId = parsedData.userId;
+    const autoLogin = parsedData.autoLogin || false; // Get autoLogin status
 
     // Verify user still exists and is active
     const member = await this.membersService.findById(userId);
@@ -210,15 +217,16 @@ export class AuthService {
       throw new UnauthorizedException('사용자를 찾을 수 없거나 탈퇴한 회원입니다.');
     }
 
-    // Generate new access token
+    // Generate new access token with same autoLogin duration
     const payload = {
       sub: member.id,
       loginId: member.loginId,
       memberType: member.memberType,
     };
 
+    const accessTokenExpiresIn = autoLogin ? '7d' : '15m';
     const accessToken = await this.jwtService.signAsync(payload, {
-      expiresIn: '15m', // 15 minutes
+      expiresIn: accessTokenExpiresIn,
     });
 
     const safeMember = {
@@ -243,7 +251,7 @@ export class AuthService {
       const refreshTokenKey = `refresh_token:${refreshToken}`;
       await this.redisService.del(refreshTokenKey);
     }
-    
+
     return { success: true, message: '로그아웃 되었습니다.' };
   }
 
@@ -267,10 +275,10 @@ export class AuthService {
 
   async verifyPhoneCode(dto, isAuthenticated: boolean) {
     const purpose = isAuthenticated ? 'CHANGE_PHONE' : 'SIGNUP';
-    
+
     // Verify the code first
     await this.verification.verifyCode(dto.phone, purpose, dto.code);
-    
+
     // For signup flow, check if phone number is already registered (only check ACTIVE users)
     if (purpose === 'SIGNUP') {
       const existingPhone = await this.membersService.findActiveByPhoneNumber(dto.phone);
@@ -282,7 +290,7 @@ export class AuthService {
         });
       }
     }
-    
+
     return { verified: true };
   }
 

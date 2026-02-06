@@ -86,6 +86,8 @@ export class ConsultationsService {
       answer: c.answer,
       status: c.status,
       createdAt: c.createdAt,
+      answeredAt: c.answeredAt,
+      updatedAt: c.updatedAt,
     }));
 
     return { items: mapped, total, page, limit };
@@ -175,6 +177,8 @@ export class ConsultationsService {
       memberFlag: c.memberFlag,
       status: c.status,
       createdAt: c.createdAt,
+      answeredAt: c.answeredAt,
+      updatedAt: c.updatedAt,
     }));
 
     return {
@@ -212,6 +216,7 @@ export class ConsultationsService {
 
     entity.answer = answer;
     entity.status = status;
+    entity.answeredAt = new Date();
     const saved = await this.consultationRepo.save(entity);
 
     // passwordHash 제외하고 반환
@@ -293,6 +298,10 @@ export class ConsultationsService {
         statusLabel: item.status === ConsultationStatus.PENDING ? '신청완료' : '상담완료',
         createdAt: item.createdAt,
         createdAtFormatted: this.formatDateTime(item.createdAt),
+        answeredAt: item.answeredAt ?? null,
+        answeredAtFormatted: item.answeredAt ? this.formatDateTime(item.answeredAt) : null,
+        updatedAt: item.updatedAt,
+        updatedAtFormatted: item.updatedAt ? this.formatDateTime(item.updatedAt) : null,
       };
     });
 

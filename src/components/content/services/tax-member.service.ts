@@ -4,18 +4,24 @@ import { Repository, In, DataSource } from 'typeorm';
 import { TaxMember } from 'src/libs/entity/tax-member.entity';
 import { BusinessArea } from 'src/libs/entity/business-area.entity';
 import { BusinessAreaCategory } from 'src/libs/entity/business-area-category.entity';
+import { MemberWorkCategory } from 'src/libs/entity/member-work-category.entity';
 import { UploadService } from 'src/libs/upload/upload.service';
 
 interface TaxMemberListOptions {
   search?: string; // Search by insurance company name (affiliation) or member name
-  workArea?: string;
-  businessAreaId?: number; // Filter by business area item ID (matches minorCategory.name)
+  businessAreaId?: number; // Filter by business area item ID (maps to categoryId)
+  categoryId?: number; // Filter by category ID (many-to-many relationship)
   isExposed?: boolean;
   sort?: 'latest' | 'oldest' | 'order';
   page?: number;
   limit?: number;
   includeHidden?: boolean;
   isPublic?: boolean;
+}
+
+interface CategoryAssignment {
+  categoryId: number;
+  displayOrder: number;
 }
 
 @Injectable()
@@ -27,14 +33,18 @@ export class TaxMemberService {
     private readonly businessAreaRepo: Repository<BusinessArea>,
     @InjectRepository(BusinessAreaCategory)
     private readonly categoryRepo: Repository<BusinessAreaCategory>,
+    @InjectRepository(MemberWorkCategory)
+    private readonly memberWorkCategoryRepo: Repository<MemberWorkCategory>,
     private readonly uploadService: UploadService,
     private readonly dataSource: DataSource,
   ) { }
 
-  async create(data: Partial<TaxMember>) {
+  async create(data: Partial<TaxMember> & { categories?: CategoryAssignment[] }) {
+    const { categories, ...memberData } = data;
+
     const allMembers = await this.memberRepo.find({ order: { displayOrder: 'ASC' } });
     const currentCount = allMembers.length;
-    const targetOrder = data.displayOrder ?? currentCount + 1;
+    const targetOrder = memberData.displayOrder ?? currentCount + 1;
 
     // Range Validation
     if (targetOrder < 1 || targetOrder > currentCount + 1 || !Number.isInteger(targetOrder)) {
@@ -44,16 +54,47 @@ export class TaxMemberService {
       });
     }
 
-    const member = this.memberRepo.create(data);
+    // Validate categories exist
+    if (categories && categories.length > 0) {
+      const categoryIds = categories.map(c => c.categoryId);
+      const existingCategories = await this.categoryRepo.find({
+        where: { id: In(categoryIds) },
+      });
+      if (existingCategories.length !== categoryIds.length) {
+        throw new BadRequestException('일부 카테고리가 존재하지 않습니다.');
+      }
+
+      // Check for duplicate categoryIds
+      const uniqueIds = new Set(categoryIds);
+      if (uniqueIds.size !== categoryIds.length) {
+        throw new BadRequestException('중복된 카테고리가 있습니다.');
+      }
+    }
+
+    const member = this.memberRepo.create(memberData);
     member.displayOrder = targetOrder;
+
+    let savedMember: TaxMember;
 
     await this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(TaxMember);
-      const saved = await repo.save(member);
+      const mwcRepo = manager.getRepository(MemberWorkCategory);
+
+      savedMember = await repo.save(member);
+
+      // Create category mappings
+      if (categories && categories.length > 0) {
+        const mappings = categories.map(cat => mwcRepo.create({
+          memberId: savedMember.id,
+          categoryId: cat.categoryId,
+          displayOrder: cat.displayOrder,
+        }));
+        await mwcRepo.save(mappings);
+      }
 
       // Rebuild the list with the new item at target position
       const newList = [...allMembers];
-      newList.splice(targetOrder - 1, 0, saved);
+      newList.splice(targetOrder - 1, 0, savedMember);
 
       for (let i = 0; i < newList.length; i++) {
         const order = i + 1;
@@ -61,14 +102,14 @@ export class TaxMemberService {
       }
     });
 
-    return this.findById(member.id);
+    return this.findById(savedMember!.id);
   }
 
   async findAll(options: TaxMemberListOptions = {}) {
     const {
       search,
-      workArea,
       businessAreaId,
+      categoryId,
       isExposed,
       sort = 'order',
       page = 1,
@@ -98,8 +139,11 @@ export class TaxMemberService {
       params.search = `%${search}%`;
     }
 
-    // Filter by businessAreaId: Get the business area item, then filter by its minorCategory.name
-    if (businessAreaId) {
+    // Determine effective categoryId (from direct categoryId or from businessAreaId)
+    let effectiveCategoryId = categoryId;
+
+    // Filter by businessAreaId: Get the business area item's minorCategoryId and use it as categoryId
+    if (businessAreaId && !categoryId) {
       const businessArea = await this.businessAreaRepo.findOne({
         where: { id: businessAreaId },
         relations: ['minorCategory'],
@@ -114,14 +158,14 @@ export class TaxMemberService {
         throw new NotFoundException('업무분야의 카테고리 정보를 찾을 수 없습니다.');
       }
 
-      // Filter members where workAreas array contains the minorCategoryId as string
-      conditions.push('JSON_CONTAINS(member.workAreas, :minorCategoryId)');
-      params.minorCategoryId = JSON.stringify(String(minorCategoryId));
+      effectiveCategoryId = minorCategoryId;
     }
 
-    if (workArea) {
-      conditions.push('JSON_CONTAINS(member.workAreas, :workArea)');
-      params.workArea = JSON.stringify(workArea);
+    // Filter by categoryId (using member_work_categories mapping table)
+    if (effectiveCategoryId) {
+      qb.innerJoin('member.memberWorkCategories', 'mwc', 'mwc.categoryId = :categoryId', { categoryId: effectiveCategoryId });
+      // Add select for the ordering column to avoid TypeORM bug with getManyAndCount
+      qb.addSelect('mwc.displayOrder');
     }
 
     // 조건 적용
@@ -130,8 +174,12 @@ export class TaxMemberService {
     }
 
     // 정렬
-    if (sort === 'order') {
-      qb.orderBy('member.displayOrder', 'ASC').addOrderBy('member.createdAt', 'DESC');
+    // If filtering by categoryId, use category-specific displayOrder with random fallback
+    if (effectiveCategoryId) {
+      qb.orderBy('mwc.displayOrder', 'ASC');
+      qb.addOrderBy('member.id', 'ASC'); // Use deterministic secondary sort instead of RAND() for pagination
+    } else if (sort === 'order') {
+      qb.orderBy('member.displayOrder', 'DESC').addOrderBy('member.createdAt', 'DESC');
     } else if (sort === 'latest') {
       qb.orderBy('member.createdAt', 'DESC');
     } else {
@@ -142,24 +190,44 @@ export class TaxMemberService {
 
     const [items, total] = await qb.getManyAndCount();
 
-    // Get all categories for mapping
-    const allCategories = await this.categoryRepo.find();
+    // Get member work categories for each member
+    const memberIds = items.map(item => item.id);
+    const memberWorkCategories = memberIds.length > 0
+      ? await this.memberWorkCategoryRepo.find({
+          where: { memberId: In(memberIds) },
+          relations: ['category'],
+          order: { displayOrder: 'ASC' },
+        })
+      : [];
 
-    const formattedItems = await Promise.all(items.map(async (item) => {
-      const workAreasFormatted = this.mapWorkAreas(item.workAreas, allCategories);
+    // Group work categories by memberId
+    const categoriesByMemberId = memberWorkCategories.reduce((acc, mwc) => {
+      if (!acc[mwc.memberId]) {
+        acc[mwc.memberId] = [];
+      }
+      acc[mwc.memberId].push({
+        categoryId: mwc.categoryId,
+        categoryName: mwc.category?.name || '',
+        displayOrder: mwc.displayOrder,
+      });
+      return acc;
+    }, {} as Record<number, Array<{ categoryId: number; categoryName: string; displayOrder: number }>>);
+
+    const formattedItems = items.map((item) => {
+      const categories = categoriesByMemberId[item.id] || [];
 
       if (isPublic) {
         const { createdAt, updatedAt, ...rest } = item;
         return {
           ...rest,
-          workAreas: workAreasFormatted,
+          categories,
         };
       }
       return {
         ...item,
-        workAreas: workAreasFormatted,
+        categories,
       };
-    }));
+    });
 
     return { items: formattedItems, total, page, limit };
   }
@@ -174,14 +242,36 @@ export class TaxMemberService {
       .limit(limit)
       .getMany();
 
-    // Format workAreas and remove internal fields for public API
-    const allCategories = await this.categoryRepo.find();
+    // Get categories for the random members
+    const memberIds = members.map(m => m.id);
+    const memberWorkCategories = memberIds.length > 0
+      ? await this.memberWorkCategoryRepo.find({
+          where: { memberId: In(memberIds) },
+          relations: ['category'],
+          order: { displayOrder: 'ASC' },
+        })
+      : [];
+
+    // Group work categories by memberId
+    const categoriesByMemberId = memberWorkCategories.reduce((acc, mwc) => {
+      if (!acc[mwc.memberId]) {
+        acc[mwc.memberId] = [];
+      }
+      acc[mwc.memberId].push({
+        categoryId: mwc.categoryId,
+        categoryName: mwc.category?.name || '',
+        displayOrder: mwc.displayOrder,
+      });
+      return acc;
+    }, {} as Record<number, Array<{ categoryId: number; categoryName: string; displayOrder: number }>>);
+
+    // Remove internal fields for public API
     return members.map(member => {
-      const workAreasFormatted = this.mapWorkAreas(member.workAreas, allCategories);
+      const categories = categoriesByMemberId[member.id] || [];
       const { createdAt, updatedAt, ...rest } = member;
       return {
         ...rest,
-        workAreas: workAreasFormatted,
+        categories,
       };
     });
   }
@@ -190,59 +280,145 @@ export class TaxMemberService {
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
 
-    const allCategories = await this.categoryRepo.find();
-    const workAreasFormatted = this.mapWorkAreas(member.workAreas, allCategories);
+    // Get categories from mapping table
+    const memberWorkCategories = await this.memberWorkCategoryRepo.find({
+      where: { memberId: id },
+      relations: ['category'],
+      order: { displayOrder: 'ASC' },
+    });
+
+    const categories = memberWorkCategories.map(mwc => ({
+      categoryId: mwc.categoryId,
+      categoryName: mwc.category?.name || '',
+      displayOrder: mwc.displayOrder,
+    }));
 
     if (isPublic) {
       const { createdAt, updatedAt, ...rest } = member;
       return {
         ...rest,
-        workAreas: workAreasFormatted,
+        categories,
       };
     }
     return {
       ...member,
-      workAreas: workAreasFormatted,
+      categories,
     };
   }
 
-  private mapWorkAreas(workAreas: string[], allCategories: BusinessAreaCategory[]) {
-    if (!workAreas || !Array.isArray(workAreas)) return [];
-
-    return workAreas.map(val => {
-      // Try to find by ID (val could be ID string)
-      const idNum = parseInt(val, 10);
-      const catById = !isNaN(idNum) ? allCategories.find(c => c.id === idNum) : null;
-
-      if (catById) {
-        return { id: catById.id, value: catById.name };
-      }
-
-      // If not found by ID, try to find by Name (backward compatibility if names are stored)
-      const catByName = allCategories.find(c => c.name === val);
-      if (catByName) {
-        return { id: catByName.id, value: catByName.name };
-      }
-
-      // Fallback: If it's a number string but no category found
-      if (!isNaN(idNum)) {
-        return { id: idNum, value: '' };
-      }
-
-      // Last fallback
-      return { id: 0, value: val || '' };
-    });
-  }
-
-  async update(id: number, data: Partial<TaxMember>) {
+  /**
+   * Find related experts based on shared categories
+   * Used for "Related Experts" section on expert detail page
+   */
+  async findRelated(id: number, limit: number = 6) {
+    // 1. Verify the member exists
     const member = await this.memberRepo.findOne({ where: { id } });
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
 
+    // 2. Get all category IDs for the current member
+    const memberCategories = await this.memberWorkCategoryRepo.find({
+      where: { memberId: id },
+      select: ['categoryId'],
+    });
+
+    if (memberCategories.length === 0) {
+      return []; // No categories = no related experts
+    }
+
+    const categoryIds = memberCategories.map(mc => mc.categoryId);
+
+    // 3. Find other members who share any of these categories
+    // Use raw query for proper random ordering and deduplication
+    const relatedMemberIds = await this.dataSource
+      .createQueryBuilder()
+      .select('DISTINCT mwc.memberId', 'memberId')
+      .addSelect('MIN(mwc.displayOrder)', 'minDisplayOrder')
+      .from('member_work_categories', 'mwc')
+      .innerJoin('tax_members', 'm', 'm.id = mwc.memberId')
+      .where('mwc.categoryId IN (:...categoryIds)', { categoryIds })
+      .andWhere('mwc.memberId != :currentMemberId', { currentMemberId: id })
+      .andWhere('m.isExposed = :isExposed', { isExposed: true })
+      .groupBy('mwc.memberId')
+      .orderBy('minDisplayOrder', 'ASC')
+      .addOrderBy('RAND()')
+      .limit(limit)
+      .getRawMany();
+
+    if (relatedMemberIds.length === 0) {
+      return [];
+    }
+
+    const memberIds = relatedMemberIds.map(r => r.memberId);
+
+    // 4. Fetch full member data
+    const members = await this.memberRepo.find({
+      where: { id: In(memberIds), isExposed: true },
+    });
+
+    // 5. Get categories for each related member
+    const memberWorkCategories = await this.memberWorkCategoryRepo.find({
+      where: { memberId: In(memberIds) },
+      relations: ['category'],
+      order: { displayOrder: 'ASC' },
+    });
+
+    // Group categories by memberId
+    const categoriesByMemberId = memberWorkCategories.reduce((acc, mwc) => {
+      if (!acc[mwc.memberId]) {
+        acc[mwc.memberId] = [];
+      }
+      acc[mwc.memberId].push({
+        categoryId: mwc.categoryId,
+        categoryName: mwc.category?.name || '',
+        displayOrder: mwc.displayOrder,
+      });
+      return acc;
+    }, {} as Record<number, Array<{ categoryId: number; categoryName: string; displayOrder: number }>>);
+
+    // 6. Maintain the order from the query (sorted by displayOrder ASC, then random)
+    const orderedMembers = memberIds
+      .map(memberId => members.find(m => m.id === memberId))
+      .filter((m): m is TaxMember => m !== undefined);
+
+    // 7. Format response (public API format)
+    return orderedMembers.map(member => {
+      const categories = categoriesByMemberId[member.id] || [];
+      const { createdAt, updatedAt, ...rest } = member;
+      return {
+        ...rest,
+        categories,
+      };
+    });
+  }
+
+  async update(id: number, data: Partial<TaxMember> & { categories?: CategoryAssignment[] }) {
+    const { categories, ...memberData } = data;
+
+    const member = await this.memberRepo.findOne({ where: { id } });
+    if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
+
+    // Validate categories if provided
+    if (categories && categories.length > 0) {
+      const categoryIds = categories.map(c => c.categoryId);
+      const existingCategories = await this.categoryRepo.find({
+        where: { id: In(categoryIds) },
+      });
+      if (existingCategories.length !== categoryIds.length) {
+        throw new BadRequestException('일부 카테고리가 존재하지 않습니다.');
+      }
+
+      // Check for duplicate categoryIds
+      const uniqueIds = new Set(categoryIds);
+      if (uniqueIds.size !== categoryIds.length) {
+        throw new BadRequestException('중복된 카테고리가 있습니다.');
+      }
+    }
+
     // 1. Handle DisplayOrder Reordering (Drag & Drop Style)
-    if (data.displayOrder !== undefined && data.displayOrder !== member.displayOrder) {
+    if (memberData.displayOrder !== undefined && memberData.displayOrder !== member.displayOrder) {
       const allMembers = await this.memberRepo.find({ order: { displayOrder: 'ASC' } });
       const currentCount = allMembers.length;
-      const targetOrder = data.displayOrder;
+      const targetOrder = memberData.displayOrder;
 
       // Range Validation
       if (targetOrder < 1 || targetOrder > currentCount || !Number.isInteger(targetOrder)) {
@@ -267,8 +443,28 @@ export class TaxMemberService {
       member.displayOrder = targetOrder;
     }
 
-    // 2. Handle Other Field Updates
-    const updatedData = { ...data };
+    // 2. Handle Category Updates (transactional)
+    if (categories !== undefined) {
+      await this.dataSource.transaction(async (manager) => {
+        const mwcRepo = manager.getRepository(MemberWorkCategory);
+
+        // Remove existing category mappings
+        await mwcRepo.delete({ memberId: id });
+
+        // Insert new category mappings
+        if (categories.length > 0) {
+          const mappings = categories.map(cat => mwcRepo.create({
+            memberId: id,
+            categoryId: cat.categoryId,
+            displayOrder: cat.displayOrder,
+          }));
+          await mwcRepo.save(mappings);
+        }
+      });
+    }
+
+    // 3. Handle Other Field Updates
+    const updatedData = { ...memberData };
     delete updatedData.displayOrder;
 
     if (Object.keys(updatedData).length > 0) {
