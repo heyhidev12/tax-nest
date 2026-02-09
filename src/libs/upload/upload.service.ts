@@ -39,7 +39,7 @@ export class UploadService {
 
   constructor() {
     // Support both old and new env var names for backward compatibility
-    this.region = (process.env.AWS_S3_REGION || process.env.AWS_REGION) as string;
+    this.region = (process.env.AWS_REGION) as string;
     this.bucketName = (process.env.AWS_S3_BUCKET || process.env.AWS_BUCKET) as string;
 
     const accessKeyId = (process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY) as string;
@@ -47,7 +47,7 @@ export class UploadService {
 
     if (!this.region || !this.bucketName || !accessKeyId || !secretAccessKey) {
       console.warn(
-        '⚠️  AWS S3 credentials not fully configured. Upload features will not work until AWS_S3_REGION (or AWS_REGION), AWS_S3_BUCKET (or AWS_BUCKET), AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY), and AWS_SECRET_ACCESS_KEY (or AWS_SECRET_KEY) are set.',
+        '⚠️  AWS S3 credentials not fully configured. Upload features will not work until AWS_REGION, AWS_S3_BUCKET (or AWS_BUCKET), AWS_ACCESS_KEY_ID (or AWS_ACCESS_KEY), and AWS_SECRET_ACCESS_KEY (or AWS_SECRET_KEY) are set.',
       );
       // Don't throw error, but S3 operations will fail with a more descriptive error
       this.s3 = null;

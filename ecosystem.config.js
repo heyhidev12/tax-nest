@@ -1,7 +1,7 @@
 module.exports = {
     apps: [
       {
-        name: 'tax-backend',
+        name: 'tax-nest',
         script: 'dist/main.js',
   
         instances: 1,

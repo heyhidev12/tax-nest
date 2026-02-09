@@ -242,7 +242,7 @@ export class AttachmentService {
       mimeType: attachment.mimeType,
       size: attachment.size,
       s3Key: attachment.s3Key,
-      url: `https://${process.env.AWS_S3_BUCKET || process.env.AWS_BUCKET}.s3.${process.env.AWS_S3_REGION || process.env.AWS_REGION}.amazonaws.com/${attachment.s3Key}`,
+      url: `https://${process.env.AWS_S3_BUCKET || process.env.AWS_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${attachment.s3Key}`,
       createdAt: attachment.createdAt,
     };
   }
