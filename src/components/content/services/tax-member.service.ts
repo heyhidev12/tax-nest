@@ -173,13 +173,13 @@ export class TaxMemberService {
       qb.where(conditions.join(' AND '), params);
     }
 
-    // 정렬
-    // If filtering by categoryId, use category-specific displayOrder with random fallback
+    // 정렬 — deterministic DB ordering (member.id as tiebreaker for stable pagination)
+    // Application-level shuffle is applied after fetching to randomize within same displayOrder groups
     if (effectiveCategoryId) {
-      qb.orderBy('mwc.displayOrder', 'ASC');
-      qb.addOrderBy('member.id', 'ASC'); // Use deterministic secondary sort instead of RAND() for pagination
+      qb.orderBy('mwc.displayOrder', 'DESC');
+      qb.addOrderBy('member.id', 'DESC');
     } else if (sort === 'order') {
-      qb.orderBy('member.displayOrder', 'DESC').addOrderBy('member.createdAt', 'DESC');
+      qb.orderBy('member.displayOrder', 'DESC').addOrderBy('member.id', 'DESC');
     } else if (sort === 'latest') {
       qb.orderBy('member.createdAt', 'DESC');
     } else {
@@ -213,18 +213,32 @@ export class TaxMemberService {
       return acc;
     }, {} as Record<number, Array<{ categoryId: number; categoryName: string; displayOrder: number }>>);
 
+    // Shuffle items within same displayOrder groups (randomizes on each request)
+    if (effectiveCategoryId) {
+      // Group by mwc.displayOrder (category-specific order)
+      this.shuffleWithinGroups(items, (item) => {
+        const cats = categoriesByMemberId[item.id] || [];
+        const match = cats.find(c => c.categoryId === effectiveCategoryId);
+        return match?.displayOrder ?? 0;
+      });
+    } else if (sort === 'order') {
+      // Group by member.displayOrder
+      this.shuffleWithinGroups(items, (item) => item.displayOrder);
+    }
+
     const formattedItems = items.map((item) => {
       const categories = categoriesByMemberId[item.id] || [];
 
       if (isPublic) {
-        const { createdAt, updatedAt, ...rest } = item;
+        const { createdAt, updatedAt, memberWorkCategories, ...rest } = item as any;
         return {
           ...rest,
           categories,
         };
       }
+      const { memberWorkCategories, ...itemWithoutMwc } = item as any;
       return {
-        ...item,
+        ...itemWithoutMwc,
         categories,
       };
     });
@@ -268,7 +282,7 @@ export class TaxMemberService {
     // Remove internal fields for public API
     return members.map(member => {
       const categories = categoriesByMemberId[member.id] || [];
-      const { createdAt, updatedAt, ...rest } = member;
+      const { createdAt, updatedAt, memberWorkCategories, ...rest } = member as any;
       return {
         ...rest,
         categories,
@@ -281,27 +295,28 @@ export class TaxMemberService {
     if (!member) throw new NotFoundException('세무사 회원을 찾을 수 없습니다.');
 
     // Get categories from mapping table
-    const memberWorkCategories = await this.memberWorkCategoryRepo.find({
+    const workCategories = await this.memberWorkCategoryRepo.find({
       where: { memberId: id },
       relations: ['category'],
       order: { displayOrder: 'ASC' },
     });
 
-    const categories = memberWorkCategories.map(mwc => ({
+    const categories = workCategories.map(mwc => ({
       categoryId: mwc.categoryId,
       categoryName: mwc.category?.name || '',
       displayOrder: mwc.displayOrder,
     }));
 
     if (isPublic) {
-      const { createdAt, updatedAt, ...rest } = member;
+      const { createdAt, updatedAt, memberWorkCategories, ...rest } = member as any;
       return {
         ...rest,
         categories,
       };
     }
+    const { memberWorkCategories, ...memberWithoutMwc } = member as any;
     return {
-      ...member,
+      ...memberWithoutMwc,
       categories,
     };
   }
@@ -383,7 +398,7 @@ export class TaxMemberService {
     // 7. Format response (public API format)
     return orderedMembers.map(member => {
       const categories = categoriesByMemberId[member.id] || [];
-      const { createdAt, updatedAt, ...rest } = member;
+      const { createdAt, updatedAt, memberWorkCategories, ...rest } = member as any;
       return {
         ...rest,
         categories,
@@ -576,6 +591,35 @@ export class TaxMemberService {
           displayOrder: targetOrder,
         });
       }
+    }
+  }
+
+  /**
+   * Shuffle items in-place within groups that share the same displayOrder.
+   * Items must already be sorted by the group key (displayOrder) so that
+   * same-key items are contiguous. Uses Fisher-Yates shuffle per group.
+   */
+  private shuffleWithinGroups<T>(items: T[], getGroupKey: (item: T) => number): void {
+    if (items.length <= 1) return;
+
+    let i = 0;
+    while (i < items.length) {
+      const groupKey = getGroupKey(items[i]);
+      let j = i + 1;
+      while (j < items.length && getGroupKey(items[j]) === groupKey) {
+        j++;
+      }
+      // Shuffle items[i..j-1] (Fisher-Yates)
+      const groupLen = j - i;
+      if (groupLen > 1) {
+        for (let k = groupLen - 1; k > 0; k--) {
+          const r = Math.floor(Math.random() * (k + 1));
+          const temp = items[i + k];
+          items[i + k] = items[i + r];
+          items[i + r] = temp;
+        }
+      }
+      i = j;
     }
   }
 
