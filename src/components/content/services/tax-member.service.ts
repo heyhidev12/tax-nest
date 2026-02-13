@@ -176,8 +176,8 @@ export class TaxMemberService {
     // 정렬 — deterministic DB ordering (member.id as tiebreaker for stable pagination)
     // Application-level shuffle is applied after fetching to randomize within same displayOrder groups
     if (effectiveCategoryId) {
-      qb.orderBy('mwc.displayOrder', 'DESC');
-      qb.addOrderBy('member.id', 'DESC');
+      qb.orderBy('mwc.displayOrder', 'ASC');
+      qb.addOrderBy('member.id', 'ASC');
     } else if (sort === 'order') {
       qb.orderBy('member.displayOrder', 'DESC').addOrderBy('member.id', 'DESC');
     } else if (sort === 'latest') {

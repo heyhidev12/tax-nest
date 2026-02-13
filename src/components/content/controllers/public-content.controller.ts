@@ -25,6 +25,7 @@ import { BusinessAreaService } from '../services/business-area.service';
 import { HistoryService } from '../services/history.service';
 import { InsightsService } from '../services/insights.service';
 import { ApplySeminarDto } from 'src/libs/dto/training-seminar/apply-seminar.dto';
+import { ApplicationStatus } from 'src/libs/entity/training-seminar.entity';
 import { ExposureSettingsService } from '../services/exposure-settings.service';
 import { FooterPolicyService } from '../services/footer-policy.service';
 import { FamilySiteService } from '../services/family-site.service';
@@ -241,6 +242,7 @@ export class PublicContentController {
     // Get viewer context: memberType and isApproved (nullable for guests)
     let memberType: string | null = null;
     let isApproved: boolean | null = null;
+    let applicationStatus: ApplicationStatus | null = null;
 
     if (req.user?.sub) {
       // Fetch member to get memberType and isApproved from database
@@ -248,11 +250,20 @@ export class PublicContentController {
       if (user) {
         memberType = user.memberType;
         isApproved = user.isApproved;
+
+        // Check user's application status for this seminar
+        const application = await this.trainingSeminarService.getUserApplication(id, user.email);
+        if (application) {
+          applicationStatus = application.status;
+        }
       }
     }
 
-    // Authorization logic: Only INSURANCE + approved can view video
-    const canViewVideo = memberType === 'INSURANCE' && isApproved === true;
+    // Authorization logic: Only INSURANCE + approved + CONFIRMED application can view video
+    const canViewVideo =
+      memberType === 'INSURANCE' &&
+      isApproved === true &&
+      applicationStatus === ApplicationStatus.CONFIRMED;
 
     // Response mapping: Return vimeoVideoUrl only if user can view, otherwise null
     return {
@@ -533,6 +544,7 @@ export class PublicContentController {
   @ApiQuery({ name: 'categoryId', required: false, type: Number, description: '카테고리 ID 필터링' })
   @ApiQuery({ name: 'subcategoryId', required: false, type: Number, description: '서브카테고리 ID 필터링' })
   @ApiQuery({ name: 'subMinorCategoryId', required: false, type: Number, description: '서브마이너카테고리 ID 필터링' })
+  @ApiQuery({ name: 'isMainExposed', required: false, type: Boolean, description: '메인 노출 여부로 필터링' })
   @ApiQuery({ name: 'dataRoom', required: false, enum: ['A', 'B', 'C'], description: '데이터룸 유형 필터링 (A, B, C)' })
   @ApiQuery({ name: 'memberType', required: false, enum: ['GENERAL', 'OTHER', 'INSURANCE'], description: '회원 유형 (접근 제어용)' })
   @ApiQuery({ name: 'isApproved', required: false, type: Boolean, description: '승인 여부 (보험사 회원용, 접근 제어용)' })
@@ -544,6 +556,7 @@ export class PublicContentController {
     @Query('categoryId') categoryId?: string,
     @Query('subcategoryId') subcategoryId?: string,
     @Query('subMinorCategoryId') subMinorCategoryId?: string,
+    @Query('isMainExposed') isMainExposed?: string,
     @Query('dataRoom') dataRoom?: string,
     @Query('memberType') memberType?: string,
     @Query('isApproved') isApproved?: string,
@@ -553,6 +566,7 @@ export class PublicContentController {
     const categoryIdNum = categoryId ? parseInt(categoryId, 10) : undefined;
     const subcategoryIdNum = subcategoryId ? parseInt(subcategoryId, 10) : undefined;
     const subMinorCategoryIdNum = subMinorCategoryId ? parseInt(subMinorCategoryId, 10) : undefined;
+    const isMainExposedBool = isMainExposed === 'true' ? true : isMainExposed === 'false' ? false : undefined;
     const isApprovedBool = isApproved === 'true' ? true : isApproved === 'false' ? false : undefined;
 
     return this.insightsService.getPublicInsights({
@@ -562,6 +576,7 @@ export class PublicContentController {
       categoryId: categoryIdNum,
       subcategoryId: subcategoryIdNum,
       subMinorCategoryId: subMinorCategoryIdNum,
+      isMainExposed: isMainExposedBool,
       dataRoom,
       memberType: memberType || undefined,
       isApproved: isApprovedBool,

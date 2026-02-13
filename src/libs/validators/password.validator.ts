@@ -17,7 +17,7 @@ export class IsStrongPasswordConstraint implements ValidatorConstraintInterface 
     }
   
     // length check
-    if (password.length < 6 || password.length > 12) {
+    if (password.length < 8 || password.length > 16) {
       return false;
     }
   
@@ -32,7 +32,7 @@ export class IsStrongPasswordConstraint implements ValidatorConstraintInterface 
   
 
   defaultMessage(): string {
-    return '비밀번호는 6~12자이며 영문, 숫자, 특수문자 중 2가지 이상을 조합해야 합니다.';
+    return '비밀번호는 8~16자이며 영문, 숫자, 특수문자 중 2가지 이상을 조합해야 합니다.';
   }
 }
 

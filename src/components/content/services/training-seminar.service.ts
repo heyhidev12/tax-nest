@@ -899,6 +899,8 @@ export class TrainingSeminarService {
     return {
       id: app.id,
       status: app.status,
+      participationDate: app.participationDate,
+      participationTime: app.participationTime,
     };
   }
 

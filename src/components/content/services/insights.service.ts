@@ -742,6 +742,7 @@ export class InsightsService {
     categoryId?: number;
     subcategoryId?: number;
     subMinorCategoryId?: number;
+    isMainExposed?: boolean;
     dataRoom?: string;
     memberType?: string; // 'GENERAL' | 'OTHER' | 'INSURANCE' | null
     isApproved?: boolean;
@@ -770,6 +771,10 @@ export class InsightsService {
 
     if (options.subMinorCategoryId) {
       qb.andWhere('item.subMinorCategoryId = :subMinorCategoryId', { subMinorCategoryId: options.subMinorCategoryId });
+    }
+
+    if (options.isMainExposed !== undefined) {
+      qb.andWhere('item.isMainExposed = :isMainExposed', { isMainExposed: options.isMainExposed });
     }
 
     // Search in title and content
