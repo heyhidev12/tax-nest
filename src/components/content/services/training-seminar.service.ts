@@ -885,12 +885,18 @@ export class TrainingSeminarService {
    * Returns application with id and status, or null if not applied
    */
   async getUserApplication(trainingSeminarId: number, userEmail: string) {
-    const app = await this.appRepo.findOne({
-      where: {
-        trainingSeminarId,
-        email: userEmail,
-      },
-    });
+    // Prefer the most recent active (non-cancelled) application;
+    // fall back to the most recent cancelled one if no active exists.
+    const app = await this.appRepo
+      .createQueryBuilder('app')
+      .where('app.trainingSeminarId = :trainingSeminarId', { trainingSeminarId })
+      .andWhere('app.email = :email', { email: userEmail })
+      .orderBy(
+        `CASE WHEN app.status = '${ApplicationStatus.CANCELLED}' THEN 1 ELSE 0 END`,
+        'ASC',
+      )
+      .addOrderBy('app.appliedAt', 'DESC')
+      .getOne();
 
     if (!app) {
       return null;
@@ -954,11 +960,12 @@ export class TrainingSeminarService {
   }
 
   async cancelApplication(trainingSeminarId: number, userEmail: string) {
-    // Find the application for this seminar and user
+    // Find the active (non-cancelled) application for this seminar and user
     const app = await this.appRepo.findOne({
       where: {
         trainingSeminarId,
         email: userEmail,
+        status: In([ApplicationStatus.CONFIRMED, ApplicationStatus.WAITING]),
       },
       relations: ['trainingSeminar'],
     });
@@ -1001,8 +1008,8 @@ export class TrainingSeminarService {
     }
     
 
-    // Cancel allowed - delete the application (allows user to apply again)
-    await this.appRepo.remove(app);
+    app.status = ApplicationStatus.CANCELLED;
+    await this.appRepo.save(app);
 
     return {
       success: true,
@@ -1079,21 +1086,5 @@ export class TrainingSeminarService {
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${year}.${month}.${day}`;
-  }
-
-  // 날짜 비교용 포맷: yyyy.MM.dd (educationDates와 비교하기 위해)
-  private formatDateForComparison(date: Date): string {
-    return this.formatDate(date);
-  }
-
-  private formatDateTime(date: Date): string {
-    const d = new Date(date);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    const seconds = String(d.getSeconds()).padStart(2, '0');
-    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
   }
 }
